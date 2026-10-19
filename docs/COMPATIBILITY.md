@@ -26,7 +26,8 @@ The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
 `Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream candidates**
 workflow (`.github/workflows/candidate.yml`, weekly and on demand) resolves
-the latest dnp3 crate, builds the stepfunc adapter on it when it differs,
+the latest dnp3 crate, go-dnp3 and dnp3py, builds the adapter on each that
+differs from its pin,
 runs the smoke and cross-stack self-tests and writes a pin-vs-latest decision
 table to its job summary. It never changes a pin. opendnp3's repository is
 archived, so there is nothing to probe.

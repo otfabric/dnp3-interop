@@ -179,8 +179,9 @@ make candidate-dscsystems GODNP3_CANDIDATE=latest  # the same for go-dnp3
 ```
 
 The **Upstream candidates** workflow runs that probe weekly against the
-latest dnp3 crate on crates.io and reports pin versus latest in its job
-summary. opendnp3 is archived and not probed.
+latest dnp3 crate on crates.io, go-dnp3 on the Go module proxy and dnp3py on
+PyPI, and reports pin versus latest in its job summary. opendnp3 is archived
+and not probed.
 
 `make smoke ADAPTERS=opendnp3` and `VERBOSE=1 make interop` narrow and
 expand what is run and shown; `DNP3_INTEROP_DEBUG=1` in a container's

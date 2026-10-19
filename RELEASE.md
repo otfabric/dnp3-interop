@@ -39,7 +39,7 @@ outstation, and a fourth as master, behind container contract 1.0.
 - **Client operations** — `integrity-poll`, `event-poll`, `read`, `operate` (g12v1, g41v1..v4; direct and select-before-operate), `time-sync` (LAN and non-LAN), `restart` (cold, warm), `enable-unsolicited`, `disable-unsolicited`, `assign-class`, `freeze` (with and without clear), `monitor`.
 - **Self-tests** — `make smoke` (32 contract checks per server adapter, 28 for the master-only dnp3py) and `make interop` (48 cases over all twelve client/server pairings requiring identical result documents, plus value checks of controls, events, freezes, unsolicited responses, class assignment and time synchronization: 1115 checks on linux/arm64, none failed, 18 hits of known upstream bugs).
 - **Schemas** for the capability and client result documents, validated against every document the self-tests produce.
-- **`versions.yaml`** with every upstream pin and base image digest, checked against the build files; an upstream candidates workflow for the dnp3 crate and go-dnp3.
+- **`versions.yaml`** with every upstream pin and base image digest, checked against the build files; an upstream candidates workflow for the dnp3 crate, go-dnp3 and dnp3py.
 
 ### Upstream notes
 

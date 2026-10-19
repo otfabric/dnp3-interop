@@ -6,8 +6,9 @@ run-name: "Candidate upstream probe by @${{ github.actor }}"
 # publishes a pin-vs-latest decision table in the workflow Job Summary. Release
 # pins (Dockerfiles, Cargo.toml, Cargo.lock, versions.yaml) are never mutated.
 #
-# The same for go-dnp3, resolved through the Go module proxy. opendnp3 is
-# archived: 3.1.2 is its last release and it is not probed.
+# The same for go-dnp3 (resolved through the Go module proxy) and for dnp3py
+# (resolved on PyPI). opendnp3 is archived: 3.1.2 is its last release and it
+# is not probed.
 #
 # A candidate is tested like a release: smoke test plus the cross-stack
 # self-test against the pinned other stacks. Bugs of a specific upstream
@@ -107,4 +108,37 @@ jobs:
         run: |
           {
             echo "| dscsystems (go-dnp3) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | ${{ steps.test.outputs.result || 'not needed' }} | ${{ steps.resolve.outputs.update != 'true' && 'pin is latest' || (steps.test.outcome == 'success' && 'move the pin' || 'stay; record the bug') }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  candidate-dnp3py:
+    name: dnp3py
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve the dnp3py pin vs PyPI
+        id: resolve
+        run: |
+          pin=$(sed -nE 's/^ARG DNP3PY_VERSION=(.*)$/\1/p' adapters/dnp3py/Dockerfile | head -1)
+          latest=$(scripts/retry.sh curl -fsS https://pypi.org/pypi/dnp3py/json | jq -r '.info.version')
+          echo "pin=${pin}" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          if [[ "${latest}" != "${pin}" ]]; then echo "update=true" >> "$GITHUB_OUTPUT"; else echo "update=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build and self-test the candidate
+        id: test
+        if: steps.resolve.outputs.update == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make candidate-dnp3py DNP3PY_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
+          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Decision table
+        if: always()
+        run: |
+          {
+            echo "| dnp3py | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | ${{ steps.test.outputs.result || 'not needed' }} | ${{ steps.resolve.outputs.update != 'true' && 'pin is latest' || (steps.test.outcome == 'success' && 'move the pin' || 'stay; record the bug') }} |"
           } >> "$GITHUB_STEP_SUMMARY"

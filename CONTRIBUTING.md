@@ -34,7 +34,7 @@ Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except 
 
 The rule is the latest upstream release. A newer release that fails the self-tests is not adopted as the pin, but it is not dropped either: list its bug in [tests/known-bugs.tsv](tests/known-bugs.tsv), build it as a candidate (`make candidate-stepfunc` is the model) and record in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) what the older pin costs. When the candidate run reports that the known bug no longer reproduces, move the pin.
 
-The **Upstream candidates** workflow probes the dnp3 crate and go-dnp3 every week; `make candidate-stepfunc STEPFUNC_CANDIDATE=<version>`, `make candidate-dscsystems GODNP3_CANDIDATE=<version>` and `make candidate-dnp3py DNP3PY_CANDIDATE=<version>` run the same locally. opendnp3 is archived, so its pin does not move.
+The **Upstream candidates** workflow probes the dnp3 crate, go-dnp3 and dnp3py every week; `make candidate-stepfunc STEPFUNC_CANDIDATE=<version>`, `make candidate-dscsystems GODNP3_CANDIDATE=<version>` and `make candidate-dnp3py DNP3PY_CANDIDATE=<version>` run the same locally. opendnp3 is archived, so its pin does not move.
 
 ## Registries and retries
 
