@@ -12,9 +12,11 @@ next to the licence texts.
 | `adapters/opendnp3/` (links opendnp3) | MIT |
 | `adapters/stepfunc/` (links the Step Function I/O dnp3 crate) | MIT |
 | `adapters/dscsystems/` (links DSC Systems go-dnp3) | GPL-3.0-or-later |
+| `adapters/dnp3py/` (imports dnp3py) | MIT |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
 | Image `dnp3-interop-stepfunc` | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
 | Image `dnp3-interop-dscsystems` | GPL-3.0 (it contains go-dnp3) |
+| Image `dnp3-interop-dnp3py` | MIT (and the Python licence) |
 
 Each adapter is a separate program in a separate image; no image contains two
 implementations. Nothing in this repository is linked into a consumer: a
@@ -74,6 +76,17 @@ For any other use, obtain a commercial licence from Step Function I/O
 Licence texts in the image: `/licenses/go-dnp3/LICENSE`,
 `/licenses/go-dnp3/NOTICE` and `/licenses/GPL-3.0.txt`.
 
+## Image `dnp3-interop-dnp3py`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| dnp3py | 0.6.0 (PyPI wheel, hash in `adapters/dnp3py/requirements.txt`), tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d` | MIT | https://github.com/craigpnnl/dnp3py |
+| CPython and its standard library | 3.14.8 | PSF-2.0 | https://www.python.org |
+| Adapter | this repository, `adapters/dnp3py/` | MIT | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim (python:3.14.8-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+Licence in the image: `/licenses/dnp3py/LICENSE`.
+
 ## Corresponding source
 
 For every published image the complete corresponding source is:
@@ -83,7 +96,8 @@ For every published image the complete corresponding source is:
    (`adapterVersion`), which contains the adapter source and the build
    instructions (the Dockerfile); and
 2. the upstream sources at exactly the versions pinned by that Dockerfile,
-   `adapters/stepfunc/Cargo.lock` and `adapters/dscsystems/go.mod`, recorded in [versions.yaml](versions.yaml)
+   `adapters/stepfunc/Cargo.lock`, `adapters/dscsystems/go.mod` and
+   `adapters/dnp3py/requirements.txt`, recorded in [versions.yaml](versions.yaml)
    and in the `manifest.json` of the release.
 
 `docker build -f adapters/<adapter>/Dockerfile .` at the release tag

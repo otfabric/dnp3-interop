@@ -109,8 +109,7 @@ func printCapabilities() int {
 			// The master has no call for ASSIGN CLASS.
 			{"assignClassClient", false},
 			{"freeze", true},
-			// Served, but no master in the self-tests can send it.
-			{"freezeNoAckServer", false},
+			{"freezeNoAckServer", true},
 			{"freezeNoAckClient", false},
 			{"octetStrings", true},
 			{"tcp", true},

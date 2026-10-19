@@ -117,6 +117,9 @@ jobs:
             --arg godnp3_version "$(arg adapters/dscsystems/Dockerfile GODNP3_VERSION)" \
             --arg godnp3_sha "$(arg adapters/dscsystems/Dockerfile GODNP3_SHA)" \
             --arg dscsystems_digest "${{ steps.digests.outputs.dscsystems }}" \
+            --arg dnp3py_version "$(arg adapters/dnp3py/Dockerfile DNP3PY_VERSION)" \
+            --arg dnp3py_sha "$(arg adapters/dnp3py/Dockerfile DNP3PY_SHA)" \
+            --arg dnp3py_digest "${{ steps.digests.outputs.dnp3py }}" \
             '{
               version: $version,
               commit: $commit,
@@ -126,12 +129,14 @@ jobs:
               upstream: {
                 "stepfunc/dnp3": { version: $sf_version, revision: $sf_sha },
                 opendnp3: { version: $odnp3_version, revision: $odnp3_sha },
-                "dscsystems/go-dnp3": { version: $godnp3_version, revision: $godnp3_sha }
+                "dscsystems/go-dnp3": { version: $godnp3_version, revision: $godnp3_sha },
+                dnp3py: { version: $dnp3py_version, revision: $dnp3py_sha }
               },
               images: {
                 stepfunc: ("ghcr.io/otfabric/dnp3-interop-stepfunc@" + $stepfunc_digest),
                 opendnp3: ("ghcr.io/otfabric/dnp3-interop-opendnp3@" + $opendnp3_digest),
-                dscsystems: ("ghcr.io/otfabric/dnp3-interop-dscsystems@" + $dscsystems_digest)
+                dscsystems: ("ghcr.io/otfabric/dnp3-interop-dscsystems@" + $dscsystems_digest),
+                dnp3py: ("ghcr.io/otfabric/dnp3-interop-dnp3py@" + $dnp3py_digest)
               }
             }' > manifest.json
           cat manifest.json
@@ -148,6 +153,7 @@ jobs:
             | `ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }}` | `${{ steps.digests.outputs.stepfunc }}` |
             | `ghcr.io/otfabric/dnp3-interop-opendnp3:${{ github.ref_name }}` | `${{ steps.digests.outputs.opendnp3 }}` |
             | `ghcr.io/otfabric/dnp3-interop-dscsystems:${{ github.ref_name }}` | `${{ steps.digests.outputs.dscsystems }}` |
+            | `ghcr.io/otfabric/dnp3-interop-dnp3py:${{ github.ref_name }}` (master only) | `${{ steps.digests.outputs.dnp3py }}` |
 
             ## Pinning in a consumer
 
@@ -155,6 +161,7 @@ jobs:
             DNP3_INTEROP_STEPFUNC_IMAGE=ghcr.io/otfabric/dnp3-interop-stepfunc@${{ steps.digests.outputs.stepfunc }}
             DNP3_INTEROP_OPENDNP3_IMAGE=ghcr.io/otfabric/dnp3-interop-opendnp3@${{ steps.digests.outputs.opendnp3 }}
             DNP3_INTEROP_DSCSYSTEMS_IMAGE=ghcr.io/otfabric/dnp3-interop-dscsystems@${{ steps.digests.outputs.dscsystems }}
+            DNP3_INTEROP_DNP3PY_IMAGE=ghcr.io/otfabric/dnp3-interop-dnp3py@${{ steps.digests.outputs.dnp3py }}
             ```
 
             `manifest.json` records the upstream revisions these images were built from. The images contain Apache-2.0 and GPL-3.0 software and the Step Function I/O dnp3 crate, whose licence permits non-commercial, non-production use only; these images are for interoperability testing. See `THIRD_PARTY_NOTICES.md`. Notes: `RELEASE.md`.

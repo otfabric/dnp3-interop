@@ -12,7 +12,8 @@ self-test covers between the reference stacks.
 | Static data | Groups 1, 3, 10, 20, 21, 30, 40, 110 in the static variations of the fixture format, including the variations without flags and the 16-bit ones; all objects, ranges, and a specific variation | yes |
 | Event data | Groups 2, 4, 11, 22, 23, 32, 42 with and without time, caused by controls and freezes, in classes 1..3; confirmed events are not sent again | yes |
 | Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED (with PARAMETER_ERROR) and OUT_OF_RANGE; select-required points | yes; on the stepfunc outstation the first SELECT after start fails (see COMPATIBILITY.md) |
-| DIRECT OPERATE NO ACK | Served by every outstation; sent by the go-dnp3 master | yes, go-dnp3 master against every outstation |
+| DIRECT OPERATE NO ACK | Served by every outstation; sent by the go-dnp3 and dnp3py masters | yes |
+| Freeze without acknowledgement | Served by every outstation; sent by the dnp3py master | yes |
 | Time synchronization | LAN (RECORD CURRENT TIME, g50v3) and non-LAN (DELAY MEASURE, g50v1); NEED_TIME until the time is written; the written time in the server's event stream | yes |
 | Restart | Cold and warm restart with the delay in g52v2; the outstation does not actually restart | yes |
 | Unsolicited responses | Null unsolicited response at connection; ENABLE and DISABLE UNSOLICITED per class; buffered and new events sent unsolicited and confirmed | yes |
@@ -31,17 +32,19 @@ injector; a library tests these with scripted peers of its own.
 
 ## Per adapter
 
-| | stepfunc | opendnp3 | dscsystems |
-|---|:---:|:---:|:---:|
-| Everything above except the rows below | yes | yes | yes |
-| Assign class, outstation | no | yes | yes |
-| Assign class, master | yes | yes | no |
-| All-objects read and restart delay, master | yes | yes | no |
-| DIRECT OPERATE NO ACK, master | no | no | yes |
-| SELECT as the first request after the outstation started | no | yes | yes |
-| Time synchronization when the outstation does not ask for it | yes | no | yes |
-| FREEZE AND CLEAR of a counter without frozen counter | yes | yes | no |
-| Fixtures with gaps in indexes, or without NEED_TIME at start | yes | yes | no |
+| | stepfunc | opendnp3 | dscsystems | dnp3py |
+|---|:---:|:---:|:---:|:---:|
+| Outstation (server role) | yes | yes | yes | no |
+| Everything above except the rows below, as master | yes | yes | yes | yes |
+| Assign class, outstation | no | yes | yes | — |
+| Assign class, master | yes | yes | no | yes |
+| All-objects read and restart delay, master | yes | yes | no | yes |
+| DIRECT OPERATE NO ACK, master | no | no | yes | yes |
+| Freeze without acknowledgement, master | no | no | no | yes |
+| SELECT as the first request after the outstation started | no | yes | yes | — |
+| Time synchronization when the outstation does not ask for it | yes | no | yes | yes |
+| FREEZE AND CLEAR of a counter without frozen counter | yes | yes | no | — |
+| Fixtures with gaps in indexes, or without NEED_TIME at start | yes | yes | no | — |
 
 The reasons are in [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and
 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). Read them from the image

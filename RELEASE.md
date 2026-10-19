@@ -21,8 +21,8 @@ Tags are immutable. A fix is a new version.
 
 ## Summary
 
-First version: three independent reference implementations, as master and
-as outstation, behind container contract 1.0.
+First version: three independent reference implementations as master and as
+outstation, and a fourth as master, behind container contract 1.0.
 
 ## Changes
 
@@ -32,6 +32,7 @@ as outstation, behind container contract 1.0.
 - **Fixture format 1.0** with JSON Schema, cross-field validation and the **baseline** fixture: 22 points of eight types in all three event classes, controls on binary and analog outputs with targets, select-required points and ranges, counters with frozen counters, an octet string, restart delays, NEED_TIME at start.
 - **`stepfunc` adapter** — Step Function I/O dnp3 1.7.0, Rust.
 - **`opendnp3` adapter** — opendnp3 3.1.2 (commit `26b4c01e`), C++.
+- **`dnp3py` adapter** — dnp3py 0.6.0, Python, client (master) role only; it sends the freezes without acknowledgement and DIRECT OPERATE NO ACK.
 - **`dscsystems` adapter** — DSC Systems go-dnp3 v0.8.1, Go, experimental upstream. GPL-3.0-or-later; its master is the one that sends DIRECT OPERATE NO ACK.
 - **Client operations** — `integrity-poll`, `event-poll`, `read`, `operate` (g12v1, g41v1..v4; direct and select-before-operate), `time-sync` (LAN and non-LAN), `restart` (cold, warm), `enable-unsolicited`, `disable-unsolicited`, `assign-class`, `freeze` (with and without clear), `monitor`.
 - **Self-tests** — `make smoke` (contract checks per adapter) and `make interop` (cases over all client/server pairings requiring identical result documents, plus value checks of controls, events, freezes, unsolicited responses, class assignment and time synchronization).
@@ -48,5 +49,5 @@ as outstation, behind container contract 1.0.
 
 ### Not in this release
 
-- dnp3py and Triangle MicroWorks adapters.
+- The Triangle MicroWorks adapter, and dnp3py as outstation.
 - UDP, TLS and serial links, file transfer, secure authentication.

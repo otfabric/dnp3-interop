@@ -245,6 +245,17 @@ for server in "${ADAPTERS[@]}"; do
             "$(run_client "${client}" integrity-poll --host "${name}" | jq -r '[.objects[] | select((.group == 10 and .index == 1) or (.group == 40 and .index == 1)) | "g\(.group)v\(.variation):\(.index)=\(.value)"] | sort | join(" ")')"
         stop_server "${name}"
 
+        # A freeze without acknowledgement still freezes.
+        if supported "${client}" "${server}" "server:freezeNoAckServer,client:freezeNoAckClient"; then
+            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            run_client "${client}" freeze --no-ack --host "${name}" >/dev/null
+            check "${pair}" "a freeze without acknowledgement copies the counters" "g21v1:0=123456 g21v2:1=65535" \
+                "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+            stop_server "${name}"
+        else
+            skip "${pair}: freeze without acknowledgement"
+        fi
+
         # Direct operate without acknowledgement still operates.
         if supported "${client}" "${server}" "server:directOperateNoAckServer,client:directOperateNoAckClient"; then
             name=$(start_server "${server}"); wait_ready "${name}" || exit 1

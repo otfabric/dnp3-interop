@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+#
+# The dnp3py pin, installed with --require-hashes. versions.yaml mirrors it and
+# scripts/check-versions.sh keeps them in step. dnp3py has no dependencies.
+dnp3py==0.6.0 \
+    --hash=sha256:6721e1167d83f99e5a5a3a13bb51b05b23cf7c83f3c6d3b6873611ef64b5d6ab

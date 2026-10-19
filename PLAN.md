@@ -8,7 +8,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
 | 4 | First published images; consumption from a library's tests | not started |
-| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py in progress; Triangle MicroWorks waiting for its source |
+| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py done as master; Triangle MicroWorks waiting for its source |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | not started |
 | 7 | Release qualification | workflow written, not exercised |
 
@@ -75,7 +75,7 @@ bugs of go-dnp3 v0.8.1 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
 of a counter without frozen counter, freeze events for unchanged values, link
 address filtering). Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-### dnp3py (in progress)
+### dnp3py (done as master)
 
 Pin dnp3py 0.6.0 (PyPI, commit `c00d5df2`, MIT). Client role only: its
 outstation cannot serve the baseline fixture (no double-bit inputs, octet
@@ -88,7 +88,14 @@ decoders; the requests its master has no call for (all-objects and range
 reads, controls of every g41 variation, time synchronization, restart, ASSIGN
 CLASS, freezes with and without acknowledgement, DIRECT OPERATE NO ACK) are
 built with its application-layer types. Its master does not clear the restart
-bit.
+bit. It sends the freezes without acknowledgement, which makes
+`freezeNoAckServer` testable and now declared for every outstation.
+
+**Gate:** smoke test and cross-stack self-test for the role it declares. Met
+on linux/arm64 (2026-10-20): 28 of 28 smoke checks (checked against the
+opendnp3 server); the four-adapter run has 1115 checks passed, none failed,
+18 known-bug hits, 309 skipped. Open: the outstation role, which needs a
+second fixture within dnp3py's limits and cases for it.
 
 ### Triangle MicroWorks DNP3 SCL (waiting)
 
@@ -109,7 +116,6 @@ each other (REQUIREMENTS.md R8.3):
 - Serial: both P0 libraries have it; needs a virtual serial link between two containers (socat pty pair).
 - File transfer (g70): stepfunc master against the go-dnp3 outstation, and go-dnp3 in both roles.
 - Secure authentication v5 (g120): go-dnp3 in both roles; a second stack only with Triangle MicroWorks.
-- The `_NR` freezes: with the dnp3py master against every outstation.
 - Further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
 
 ## Phase 7 - Release qualification (open)

@@ -16,10 +16,11 @@ self-tested as a candidate.
 |---------|----------|--------|--------|-----|--------|
 | `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.7.0 | 1.7.0 | crate `dnp3 =1.7.0` from crates.io, checksum in `Cargo.lock` (tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca`) | independent, Rust |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
+| `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (client role) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.1 | v0.8.1 | Go module `github.com/dscsystems/go-dnp3@v0.8.1` (commit `70ff72bb09755db183d1bd69859adc72cd663aec`), checksum in `go.sum` | independent, Go |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
-(trixie), Rust 1.99.1, Go 1.27.2.
+(trixie), Rust 1.99.1, Go 1.27.2, Python 3.14.8.
 
 The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
 `Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
@@ -49,26 +50,30 @@ does not declare is skipped for that pairing and counted as such.
 | **stepfunc** | pass ¹ ² | pass | pass ⁴ |
 | **opendnp3** | pass ¹ ² | pass | pass ⁴ |
 | **dscsystems** | pass ¹ ³ | pass ³ | pass ³ ⁴ ⁵ |
+| **dnp3py** | pass ¹ ² ⁶ | pass ⁶ | pass ⁴ ⁶ |
 
 ¹ without class assignment: the stepfunc outstation does not implement it.
 ² the first select-before-operate on a freshly started stepfunc outstation
 can fail (known bug below); select-before-operate after that is checked
 separately and passes.
 ³ without all-objects reads, restart delays and class assignment, which the
-go-dnp3 master cannot send or report; with direct operate no ack, which only
-it can send.
+go-dnp3 master cannot send or report; with direct operate no ack, which it
+can send.
 ⁴ with two known bugs of the go-dnp3 outstation's freeze, below.
 ⁵ with the known address-filtering bug below.
+⁶ with direct operate no ack and the freezes without acknowledgement, which
+the dnp3py master sends. dnp3py has no server column: it is a master only.
 
-Verified on linux/arm64 with the pins above on 2026-10-20: 46 cases, the
-value checks over 9 pairings; 789 checks passed, none failed, 14 known-bug
-hits, 81 skipped for a capability a pairing does not declare. The known-bug
-hits: the first SELECT on a fresh stepfunc outstation, 7 (with the stepfunc
-and opendnp3 masters; it depends on timing, a run before had 6); the go-dnp3
-freeze, 6 (two checks with each master); go-dnp3 against itself with a wrong
-master address, 1. The 347 documents the run kept validate against
-`schemas/`. `make smoke`: 32 of 32 checks for each adapter. linux/amd64 is
-built and tested by CI, not yet run.
+Verified on linux/arm64 with the pins above on 2026-10-20: 48 cases, the
+value checks over 12 pairings; 1115 checks passed, none failed, 18 known-bug
+hits, 309 skipped (a capability a pairing does not declare, mostly every
+case against dnp3py as a server). The known-bug hits: the first SELECT on a
+fresh stepfunc outstation, 11 (stepfunc, opendnp3 and dnp3py masters; for the
+first two it depends on timing); the go-dnp3 freeze, 6; go-dnp3 against
+itself with a wrong master address, 1. The 484 documents the run kept
+validate against `schemas/`. `make smoke`: 32 of 32 checks for each server
+adapter, 28 of 28 for dnp3py. linux/amd64 is built and tested by CI, not yet
+run.
 
 Covered by every pairing: integrity poll (values and flags against the
 fixture), event polls per class, reads of every point type (all objects, a
@@ -83,10 +88,11 @@ restart with the delay; immediate freeze and freeze-and-clear with their
 events; enable and disable unsolicited, and buffered events delivered
 unsolicited and not polled again; monitor.
 
-Covered where declared: class assignment (stepfunc and opendnp3 masters;
-opendnp3 and go-dnp3 outstations); direct operate no ack (go-dnp3 master,
-all outstations); all-objects reads and restart delays (stepfunc and opendnp3
-masters).
+Covered where declared: class assignment (stepfunc, opendnp3 and dnp3py
+masters; opendnp3 and go-dnp3 outstations); direct operate no ack (go-dnp3
+and dnp3py masters, all outstations); freezes without acknowledgement
+(dnp3py master, all outstations); all-objects reads and restart delays
+(stepfunc, opendnp3 and dnp3py masters).
 
 ## Findings
 
@@ -245,3 +251,29 @@ database holds the indexes 0..n-1 of each type, and it asserts NEED_TIME until
 a master writes the time; the adapter refuses fixtures with gaps or with
 `needTime` false (exit 4). It defers a READ until its null unsolicited
 response is confirmed, as IEEE 1815 allows.
+
+### dnp3py: a master library to build on, not a complete master
+
+dnp3py 0.6.0's master has calls for integrity and class polls and for
+unsolicited responses; it has none for range or all-objects reads, controls
+other than g12v1 and g41v1, time synchronization, restarts, freezes or
+ASSIGN CLASS, and its SOE handler receives neither the group and variation of
+a value nor the status echo of a control. The adapter builds those requests
+with dnp3py's application-layer types (`RequestHeader`, `ObjectHeader`,
+`ObjectBlock`), sends them through its runner, and decodes responses with the
+master's own decoders, which are module-private (`_decode_binary` and
+others); the exact pin keeps them in place and the image build fails if they
+move. Its master does not clear the outstation's restart bit, and the adapter
+connects without a link reset (`LinkResetPolicy.NEVER`), so that connected
+means the TCP connection as for every adapter.
+
+Like the stepfunc and opendnp3 masters, it confirms the null unsolicited
+response only after its first request's response, so it trips the stepfunc
+outstation's first-SELECT bug every time.
+
+### dnp3py's outstation cannot serve the baseline fixture
+
+It has no double-bit inputs, octet strings or per-point variations (analog
+inputs are always g30v1), no analog output events, and its TCP runner does
+not appear to send unsolicited responses. The adapter has the client role
+only; serving dnp3py would need a second fixture within those limits.

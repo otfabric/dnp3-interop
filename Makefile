@@ -31,7 +31,7 @@ BUILDER ?= dnp3-interop
 
 # Adapters with a published image, in priority order. The self-tests run over
 # all of them; override to work on one: make smoke ADAPTERS=opendnp3
-ADAPTERS ?= stepfunc opendnp3 dscsystems
+ADAPTERS ?= stepfunc opendnp3 dscsystems dnp3py
 
 image = $(REGISTRY)/dnp3-interop-$(1)
 
@@ -39,7 +39,7 @@ export REGISTRY VERSION
 
 # image-% and smoke-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc candidate-dscsystems \
+.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc candidate-dscsystems candidate-dnp3py \
         buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
@@ -141,6 +141,20 @@ candidate-dscsystems: image-stepfunc image-opendnp3 ## Build dscsystems on go-dn
 	@docker tag $(call image,opendnp3):$(VERSION) $(call image,opendnp3):candidate
 	@VERSION=candidate scripts/smoke.sh dscsystems
 	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems
+
+DNP3PY_CANDIDATE ?=
+
+candidate-dnp3py: image-stepfunc image-opendnp3 image-dscsystems ## Build dnp3py on DNP3PY_CANDIDATE (a PyPI version) and self-test it (release pin untouched)
+	@test -n "$(DNP3PY_CANDIDATE)" || { echo "Error: DNP3PY_CANDIDATE=<version> is required"; exit 1; }
+	@echo "Building dnp3py candidate on dnp3py $(DNP3PY_CANDIDATE)..."
+	@$(RETRY) docker build \
+		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
+		--build-arg DNP3PY_VERSION=$(DNP3PY_CANDIDATE) --build-arg DNP3PY_SHA=candidate \
+		--tag $(call image,dnp3py):candidate \
+		--file adapters/dnp3py/Dockerfile .
+	@for a in stepfunc opendnp3 dscsystems; do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate; done
+	@VERSION=candidate scripts/smoke.sh dnp3py
+	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py
 
 capabilities: ## Print the capability document of every adapter
 	@for a in $(ADAPTERS); do docker run --rm $(call image,$$a):$(VERSION) print-capabilities; done

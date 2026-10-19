@@ -89,8 +89,7 @@ int print_capabilities()
           {"assignClassServer", true},
           {"assignClassClient", true},
           {"freeze", true},
-          // As for DIRECT OPERATE NO ACK: served, not exercised.
-          {"freezeNoAckServer", false},
+          {"freezeNoAckServer", true},
           // The master always waits for a response to a freeze.
           {"freezeNoAckClient", false},
           {"octetStrings", true},

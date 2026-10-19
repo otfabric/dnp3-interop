@@ -7,8 +7,12 @@
 # adapter: the command surface, capabilities, the baked fixture, readiness,
 # the server event stream, exit codes and a clean stop on SIGTERM.
 #
+# An adapter without the server role is checked against the server of
+# SMOKE_SERVER (default opendnp3), and its "server" command must exit 2.
+#
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
-#              REPORT_DIR (keeps the capability document when set).
+#              REPORT_DIR (keeps the capability document when set),
+#              SMOKE_SERVER.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,6 +51,13 @@ if jq -e --arg a "${ADAPTER}" '
         and (.clientOperations | type == "array")' <<<"${caps}" >/dev/null 2>&1
 then ok "print-capabilities"; else fail "print-capabilities is not a valid capability document: ${caps}"; fi
 if [[ $(wc -l <<<"${caps}") -eq 1 ]]; then ok "print-capabilities is one line"; else fail "print-capabilities printed more than one line"; fi
+serves=false
+jq -e '.roles.server == true' <<<"${caps}" >/dev/null 2>&1 && serves=true
+SERVER_ADAPTER="${ADAPTER}"
+if [[ "${serves}" == false ]]; then
+    SERVER_ADAPTER="${SMOKE_SERVER:-opendnp3}"
+    log "no server role: client checks against $(image_of "${SERVER_ADAPTER}")"
+fi
 version=$(docker run --rm "${IMAGE}" version 2>/dev/null)
 if [[ "${version}" == "dnp3-interop ${ADAPTER} "* ]]; then ok "version"; else fail "version printed: ${version}"; fi
 
@@ -69,14 +80,18 @@ expect_exit 2 "a link address out of range" "${IMAGE}" client integrity-poll --h
 expect_exit 2 "server with an unknown flag" "${IMAGE}" server --frobnicate
 expect_exit 2 "server with a link address out of range" "${IMAGE}" server --local-addr 70000
 
-# ---- an invalid fixture stops the server before it listens ----
-bad=$(mktemp -d)
-trap 'rm -rf "${bad}"; cleanup' EXIT
-chmod 755 "${bad}"
-jq '.binaryOutputs[0].target = 9' "${ROOT}/fixtures/baseline/fixture.json" > "${bad}/fixture.json"
-chmod 644 "${bad}/fixture.json"
-expect_exit 4 "server with an invalid fixture" -v "${bad}:/bad:ro" "${IMAGE}" server --fixture /bad/fixture.json
-expect_exit 4 "server with a missing fixture" "${IMAGE}" server --fixture /no/such/fixture.json
+if [[ "${serves}" == true ]]; then
+    # ---- an invalid fixture stops the server before it listens ----
+    bad=$(mktemp -d)
+    trap 'rm -rf "${bad}"; cleanup' EXIT
+    chmod 755 "${bad}"
+    jq '.binaryOutputs[0].target = 9' "${ROOT}/fixtures/baseline/fixture.json" > "${bad}/fixture.json"
+    chmod 644 "${bad}/fixture.json"
+    expect_exit 4 "server with an invalid fixture" -v "${bad}:/bad:ro" "${IMAGE}" server --fixture /bad/fixture.json
+    expect_exit 4 "server with a missing fixture" "${IMAGE}" server --fixture /no/such/fixture.json
+else
+    expect_exit 2 "server of an adapter without the server role" "${IMAGE}" server
+fi
 
 # ---- a connection that cannot be made ----
 doc=$(run_client "${ADAPTER}" integrity-poll --host "no-such-host-${RUN_ID}" --connect-timeout-ms 1500); CLIENT_EXIT=$?
@@ -84,10 +99,10 @@ if [[ "${CLIENT_EXIT}" == 3 ]] && jq -e '.ok == false and .error.code == "connec
 then ok "connect failure: exit 3 and a result document"; else fail "connect failure: exit ${CLIENT_EXIT}, ${doc}"; fi
 
 # ---- server: readiness, events, operations, clean stop ----
-name=$(start_server "${ADAPTER}")
+name=$(start_server "${SERVER_ADAPTER}")
 if wait_ready "${name}"; then ok "server becomes ready"; else fail "server did not become ready"; finish; exit 1; fi
 first=$(docker logs "${name}" 2>/dev/null | head -1)
-if jq -e --arg a "${ADAPTER}" '.event == "ready" and .adapter == $a and .fixture == "baseline"
+if jq -e --arg a "${SERVER_ADAPTER}" '.event == "ready" and .adapter == $a and .fixture == "baseline"
         and .linkAddress == 1024 and .masterAddress == 1 and (.address | type == "string")' <<<"${first}" >/dev/null 2>&1
 then ok "ready event"; else fail "first stdout line is not the ready event: ${first}"; fi
 
@@ -115,6 +130,12 @@ for want in \
 do
     if jq -e -s "map(select(${want})) | length > 0" <<<"${events}" >/dev/null 2>&1; then ok "event: ${want}"; else fail "no server event with ${want}"; fi
 done
+
+if [[ "${serves}" == false ]]; then
+    stop_server "${name}"
+    finish
+    exit
+fi
 
 docker stop -t 10 "${name}" >/dev/null
 code=$(docker inspect --format '{{.State.ExitCode}}' "${name}")

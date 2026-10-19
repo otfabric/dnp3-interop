@@ -107,8 +107,7 @@ fn print_capabilities() -> i32 {
             "assignClassServer": false,
             "assignClassClient": true,
             "freeze": true,
-            // As for DIRECT OPERATE NO ACK: served, not exercised.
-            "freezeNoAckServer": false,
+            "freezeNoAckServer": true,
             // The master always expects a response.
             "freezeNoAckClient": false,
             "octetStrings": true,

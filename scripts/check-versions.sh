@@ -50,4 +50,12 @@ need "go-dnp3 revision"  "$(arg adapters/dscsystems/Dockerfile GODNP3_SHA)"
 need "golang digest"     "$(arg adapters/dscsystems/Dockerfile GOLANG_DIGEST)"
 need "dscsystems debian" "$(arg adapters/dscsystems/Dockerfile DEBIAN_DIGEST)"
 
+# dnp3py: the Dockerfile and requirements.txt name the same version
+dockerfile_dnp3py="$(arg adapters/dnp3py/Dockerfile DNP3PY_VERSION)"
+requirements_dnp3py="$(sed -nE 's/^dnp3py==([^ ]+).*$/\1/p' adapters/dnp3py/requirements.txt)"
+need "dnp3py version"    "version: \"${dockerfile_dnp3py}\""
+same "dnp3py in Dockerfile and requirements.txt" "${dockerfile_dnp3py}" "${requirements_dnp3py}"
+need "dnp3py revision"   "$(arg adapters/dnp3py/Dockerfile DNP3PY_SHA)"
+need "python digest"     "$(arg adapters/dnp3py/Dockerfile PYTHON_DIGEST)"
+
 exit "${status}"

@@ -61,6 +61,8 @@ rw	0	ok=true error=- status=- delay=- iin= objects=	-	time-sync
 rw	0	ok=true error=- status=- delay=- iin= objects=	-	time-sync --procedure non-lan
 rw	0	ok=true error=- status=- delay=- iin= objects=	-	freeze
 rw	0	ok=true error=- status=- delay=- iin= objects=	-	freeze --clear
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:freezeNoAckServer,client:freezeNoAckClient	freeze --no-ack
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:freezeNoAckServer,client:freezeNoAckClient	freeze --clear --no-ack
 rw	0	ok=true error=- status=- delay=- iin= objects=	-	enable-unsolicited
 rw	0	ok=true error=- status=- delay=- iin= objects=	server:assignClassServer,client:assignClassClient	assign-class --class 2 --group 1
 rw	0	ok=true error=- status=- delay=- iin= objects=	server:assignClassServer,client:assignClassClient	assign-class --class 0 --group 30 --start 0 --stop 1

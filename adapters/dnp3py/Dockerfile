@@ -1,0 +1,58 @@
+# dnp3-interop adapter for dnp3py (client role only).
+#
+# Build from the repository root:
+#   docker build -f adapters/dnp3py/Dockerfile -t dnp3-interop-dnp3py:dev .
+#
+# dnp3py is MIT, like the adapter. It is installed from PyPI at the version
+# and hash in requirements.txt, mirrored in versions.yaml. See
+# THIRD_PARTY_NOTICES.md.
+
+# Where the base images come from. They are pinned by digest, so a mirror of
+# Docker Hub serves exactly the same images; CI uses one to stay clear of
+# Docker Hub's pull rate limit (see the Makefile).
+ARG BASE_REGISTRY=docker.io/library
+ARG PYTHON_DIGEST=sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+
+FROM ${BASE_REGISTRY}/python:3.14.8-slim-trixie@${PYTHON_DIGEST}
+
+# The release pin. "make candidate-dnp3py" overrides it to try another
+# version without touching the pin (installed without a hash then).
+ARG DNP3PY_VERSION=0.6.0
+# The commit of the release tag in https://github.com/craigpnnl/dnp3py, for
+# print-capabilities (PyPI has no commit; requirements.txt has the hash).
+ARG DNP3PY_SHA=c00d5df22e779df72f7caa4402c3f34957eb276d
+ARG ADAPTER_VERSION=dev
+
+ENV PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 \
+    DNP3_INTEROP_ADAPTER_VERSION=${ADAPTER_VERSION} DNP3_INTEROP_UPSTREAM_REVISION=${DNP3PY_SHA}
+
+COPY adapters/dnp3py/requirements.txt /opt/adapter/requirements.txt
+RUN if grep -q "^dnp3py==${DNP3PY_VERSION} " /opt/adapter/requirements.txt; then \
+         pip install --require-hashes --only-binary=:all: -r /opt/adapter/requirements.txt; \
+       else \
+         pip install --only-binary=:all: "dnp3py==${DNP3PY_VERSION}"; \
+       fi \
+    && mkdir -p /licenses/dnp3py \
+    && cp "$(python -c 'import importlib.metadata as m; d=m.distribution("dnp3py"); print([str(d.locate_file(f)) for f in d.files if f.name == "LICENSE"][0])')" \
+          /licenses/dnp3py/LICENSE
+
+COPY adapters/dnp3py/dnp3_interop.py /opt/adapter/dnp3_interop.py
+# Compile-check the adapter, and fail the build if the dnp3py internals it uses moved.
+RUN python -I -c "import sys; sys.path.insert(0, '/opt/adapter'); import dnp3_interop" \
+    && printf '#!/bin/sh\nexec python3 -I /opt/adapter/dnp3_interop.py "$@"\n' > /usr/local/bin/dnp3-interop \
+    && chmod 755 /usr/local/bin/dnp3-interop \
+    && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop
+
+COPY THIRD_PARTY_NOTICES.md /licenses/THIRD_PARTY_NOTICES.md
+COPY fixtures /fixtures
+
+LABEL org.opencontainers.image.title="dnp3-interop-dnp3py" \
+      org.opencontainers.image.description="DNP3 reference master built on dnp3py" \
+      org.opencontainers.image.source="https://github.com/otfabric/dnp3-interop" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${ADAPTER_VERSION}"
+
+USER interop
+
+ENTRYPOINT ["/usr/local/bin/dnp3-interop"]
+CMD ["help"]

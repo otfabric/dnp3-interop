@@ -50,7 +50,7 @@ implementations:
 
   dnp3py:
     priority: P1
-    status: planned
+    status: implemented
     upstream: "dnp3py"
     repository: "https://github.com/craigpnnl/dnp3py"
     package: "dnp3py"
@@ -59,6 +59,10 @@ implementations:
     license: "MIT"
     language: "Python"
     independent_engine: true
+    roles: [client]
+    note: >-
+      Client role only: the outstation cannot serve the baseline fixture (no
+      double-bit inputs, octet strings or per-point variations).
 
   dscsystems:
     priority: P1
@@ -91,6 +95,7 @@ dependencies:
 base_images:
   # Digests recorded 2026-10-19; the Dockerfiles pin these by digest.
   debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
+  python_3_14_8_slim_trixie: "docker.io/library/python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170"
   golang_1_27_2_trixie: "docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
   rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d"
 
@@ -98,6 +103,7 @@ images:
   stepfunc: "ghcr.io/otfabric/dnp3-interop-stepfunc"
   opendnp3: "ghcr.io/otfabric/dnp3-interop-opendnp3"
   dscsystems: "ghcr.io/otfabric/dnp3-interop-dscsystems"
+  dnp3py: "ghcr.io/otfabric/dnp3-interop-dnp3py"
 
 platforms:
   - "linux/amd64"
