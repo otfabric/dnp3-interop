@@ -1,14 +1,18 @@
 name: Upstream candidates
 run-name: "Candidate upstream probe by @${{ github.actor }}"
 
-# Resolves the latest release of the Step Function I/O dnp3 crate, builds the
-# stepfunc adapter on it when it differs from the pin, runs the self-tests and
-# publishes a pin-vs-latest decision table in the workflow Job Summary. Release
-# pins (Dockerfiles, Cargo.toml, Cargo.lock, versions.yaml) are never mutated.
+# Resolves the latest upstream of every stack, builds the adapter on it when it
+# differs from the pin, runs the self-tests on it and publishes one
+# pin-vs-latest decision table, with a row per stack, in the Job Summary.
+# Release pins (Dockerfiles, Cargo.toml, Cargo.lock, go.mod, requirements.txt,
+# versions.yaml) are never mutated.
 #
-# The same for go-dnp3 (resolved through the Go module proxy) and for dnp3py
-# (resolved on PyPI). opendnp3 is archived: 3.1.2 is its last release and it
-# is not probed.
+#   stepfunc    the dnp3 crate on crates.io
+#   opendnp3    the latest tag and the tip of the default branch on GitHub
+#               (the repository is archived: the tip is probed for
+#               information, the pin follows releases only)
+#   dscsystems  go-dnp3 on the Go module proxy
+#   dnp3py      dnp3py on PyPI
 #
 # A candidate is tested like a release: smoke test plus the cross-stack
 # self-test against the pinned other stacks. Bugs of a specific upstream
@@ -31,13 +35,14 @@ env:
   TOOLS_REGISTRY: mirror.gcr.io
 
 jobs:
-  candidate-stepfunc:
+  stepfunc:
     name: stepfunc
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      row: ${{ steps.decide.outputs.row }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
       - name: Resolve the dnp3 crate pin vs crates.io
         id: resolve
@@ -47,43 +52,115 @@ jobs:
             https://crates.io/api/v1/crates/dnp3 | jq -r '.crate.max_stable_version')
           echo "pin=${pin}" >> "$GITHUB_OUTPUT"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
-          if [[ "${latest}" != "${pin}" ]]; then echo "update=true" >> "$GITHUB_OUTPUT"; else echo "update=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Build and self-test the candidate
         id: test
-        if: steps.resolve.outputs.update == 'true'
+        if: steps.resolve.outputs.latest != steps.resolve.outputs.pin
         continue-on-error: true
         run: |
           set -o pipefail
-          make image-opendnp3
           make candidate-stepfunc STEPFUNC_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
           echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
 
-      - name: Decision table
+      - name: Decide
+        id: decide
         if: always()
+        env:
+          PIN: ${{ steps.resolve.outputs.pin }}
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          OUTCOME: ${{ steps.test.outcome }}
+          RESULT: ${{ steps.test.outputs.result }}
         run: |
-          {
-            echo "## Upstream candidates"
-            echo ""
-            echo "| Stack | Pin | Latest | Candidate self-test | Decision |"
-            echo "|-------|-----|--------|---------------------|----------|"
-            if [[ "${{ steps.resolve.outputs.update }}" != "true" ]]; then
-              echo "| stepfunc (dnp3 crate) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | not needed | pin is latest |"
-            elif [[ "${{ steps.test.outcome }}" == "success" ]]; then
-              echo "| stepfunc (dnp3 crate) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | ${{ steps.test.outputs.result }} | move the pin |"
-            else
-              echo "| stepfunc (dnp3 crate) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | failed: ${{ steps.test.outputs.result }} | stay; record the bug in tests/known-bugs.tsv and docs/COMPATIBILITY.md |"
-            fi
-            echo "| opendnp3 | 3.1.2 | 3.1.2 (archived) | not probed | no newer release possible |"
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "${LATEST}" ]]; then row="| stepfunc (dnp3 crate) | ${PIN} | ? | could not resolve | check the job log |"
+          elif [[ "${LATEST}" == "${PIN}" ]]; then row="| stepfunc (dnp3 crate) | ${PIN} | ${LATEST} | not needed | pin is latest |"
+          elif [[ "${OUTCOME}" == "success" ]]; then row="| stepfunc (dnp3 crate) | ${PIN} | ${LATEST} | ${RESULT} | move the pin |"
+          else row="| stepfunc (dnp3 crate) | ${PIN} | ${LATEST} | failed: ${RESULT:-see the job log} | stay; record the bug in tests/known-bugs.tsv |"; fi
+          echo "row=${row}" >> "$GITHUB_OUTPUT"
 
-  candidate-dscsystems:
+  opendnp3:
+    name: opendnp3
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      row: ${{ steps.decide.outputs.row }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve the opendnp3 pin vs its latest tag and tip
+        id: resolve
+        run: |
+          repo=https://github.com/dnp3/opendnp3.git
+          pin=$(sed -nE 's/^ARG OPENDNP3_VERSION=(.*)$/\1/p' adapters/opendnp3/Dockerfile | head -1)
+          pin_sha=$(sed -nE 's/^ARG OPENDNP3_SHA=(.*)$/\1/p' adapters/opendnp3/Dockerfile | head -1)
+          refs=$(scripts/retry.sh git ls-remote --tags "${repo}")
+          latest=$(awk '{print $2}' <<<"${refs}" | grep -v '\^{}$' | sed 's#^refs/tags/##' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          latest_sha=$(awk -v t="refs/tags/${latest}^{}" '$2 == t {print $1}' <<<"${refs}")
+          [[ -n "${latest_sha}" ]] || latest_sha=$(awk -v t="refs/tags/${latest}" '$2 == t {print $1}' <<<"${refs}")
+          tip_sha=$(scripts/retry.sh git ls-remote "${repo}" HEAD | awk '{print $1}')
+          archived=$(scripts/retry.sh curl -fsS https://api.github.com/repos/dnp3/opendnp3 | jq -r '.archived')
+          {
+            echo "pin=${pin}"
+            echo "pin_sha=${pin_sha}"
+            echo "latest=${latest}"
+            echo "latest_sha=${latest_sha}"
+            echo "tip_sha=${tip_sha}"
+            echo "archived=${archived}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and self-test the latest tag
+        id: tag
+        if: steps.resolve.outputs.latest_sha != steps.resolve.outputs.pin_sha
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make candidate-opendnp3 OPENDNP3_CANDIDATE_SHA=${{ steps.resolve.outputs.latest_sha }} \
+            OPENDNP3_CANDIDATE_NAME=${{ steps.resolve.outputs.latest }} 2>&1 | tee tag.log
+          echo "result=$(grep -E 'passed, [0-9]+ failed' tag.log | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and self-test the tip of the default branch
+        id: tip
+        if: steps.resolve.outputs.tip_sha != steps.resolve.outputs.pin_sha && steps.resolve.outputs.tip_sha != steps.resolve.outputs.latest_sha
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make candidate-opendnp3 OPENDNP3_CANDIDATE_SHA=${{ steps.resolve.outputs.tip_sha }} \
+            OPENDNP3_CANDIDATE_NAME=tip 2>&1 | tee tip.log
+          echo "result=$(grep -E 'passed, [0-9]+ failed' tip.log | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Decide
+        id: decide
+        if: always()
+        env:
+          PIN: ${{ steps.resolve.outputs.pin }}
+          PIN_SHA: ${{ steps.resolve.outputs.pin_sha }}
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          LATEST_SHA: ${{ steps.resolve.outputs.latest_sha }}
+          TIP_SHA: ${{ steps.resolve.outputs.tip_sha }}
+          ARCHIVED: ${{ steps.resolve.outputs.archived }}
+          TAG_OUTCOME: ${{ steps.tag.outcome }}
+          TAG_RESULT: ${{ steps.tag.outputs.result }}
+          TIP_OUTCOME: ${{ steps.tip.outcome }}
+          TIP_RESULT: ${{ steps.tip.outputs.result }}
+        run: |
+          state=""; [[ "${ARCHIVED}" == "true" ]] && state=" (archived)"
+          if [[ "${TIP_SHA}" == "${PIN_SHA}" || "${TIP_SHA}" == "${LATEST_SHA}" ]]; then tip="tip is the tag"
+          elif [[ "${TIP_OUTCOME}" == "success" ]]; then tip="untagged tip ${TIP_SHA:0:8}: ${TIP_RESULT}"
+          else tip="untagged tip ${TIP_SHA:0:8} failed: ${TIP_RESULT:-see the job log}"; fi
+          if [[ -z "${LATEST}" ]]; then row="| opendnp3 | ${PIN} | ? | could not resolve | check the job log |"
+          elif [[ "${LATEST_SHA}" == "${PIN_SHA}" ]]; then row="| opendnp3 | ${PIN} | ${LATEST}${state} | ${tip} | pin is the latest release; an untagged tip does not move it |"
+          elif [[ "${TAG_OUTCOME}" == "success" ]]; then row="| opendnp3 | ${PIN} | ${LATEST}${state} | ${TAG_RESULT}; ${tip} | move the pin |"
+          else row="| opendnp3 | ${PIN} | ${LATEST}${state} | failed: ${TAG_RESULT:-see the job log}; ${tip} | stay; record the bug in tests/known-bugs.tsv |"; fi
+          echo "row=${row}" >> "$GITHUB_OUTPUT"
+
+  dscsystems:
     name: dscsystems
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      row: ${{ steps.decide.outputs.row }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
       - name: Resolve the go-dnp3 pin vs the module proxy
         id: resolve
@@ -92,31 +169,39 @@ jobs:
           latest=$(scripts/retry.sh curl -fsS https://proxy.golang.org/github.com/dscsystems/go-dnp3/@latest | jq -r '.Version')
           echo "pin=${pin}" >> "$GITHUB_OUTPUT"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
-          if [[ "${latest}" != "${pin}" ]]; then echo "update=true" >> "$GITHUB_OUTPUT"; else echo "update=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Build and self-test the candidate
         id: test
-        if: steps.resolve.outputs.update == 'true'
+        if: steps.resolve.outputs.latest != steps.resolve.outputs.pin
         continue-on-error: true
         run: |
           set -o pipefail
           make candidate-dscsystems GODNP3_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
           echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
 
-      - name: Decision table
+      - name: Decide
+        id: decide
         if: always()
+        env:
+          PIN: ${{ steps.resolve.outputs.pin }}
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          OUTCOME: ${{ steps.test.outcome }}
+          RESULT: ${{ steps.test.outputs.result }}
         run: |
-          {
-            echo "| dscsystems (go-dnp3) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | ${{ steps.test.outputs.result || 'not needed' }} | ${{ steps.resolve.outputs.update != 'true' && 'pin is latest' || (steps.test.outcome == 'success' && 'move the pin' || 'stay; record the bug') }} |"
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "${LATEST}" ]]; then row="| dscsystems (go-dnp3) | ${PIN} | ? | could not resolve | check the job log |"
+          elif [[ "${LATEST}" == "${PIN}" ]]; then row="| dscsystems (go-dnp3) | ${PIN} | ${LATEST} | not needed | pin is latest |"
+          elif [[ "${OUTCOME}" == "success" ]]; then row="| dscsystems (go-dnp3) | ${PIN} | ${LATEST} | ${RESULT} | move the pin |"
+          else row="| dscsystems (go-dnp3) | ${PIN} | ${LATEST} | failed: ${RESULT:-see the job log} | stay; record the bug in tests/known-bugs.tsv |"; fi
+          echo "row=${row}" >> "$GITHUB_OUTPUT"
 
-  candidate-dnp3py:
+  dnp3py:
     name: dnp3py
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      row: ${{ steps.decide.outputs.row }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
       - name: Resolve the dnp3py pin vs PyPI
         id: resolve
@@ -125,20 +210,52 @@ jobs:
           latest=$(scripts/retry.sh curl -fsS https://pypi.org/pypi/dnp3py/json | jq -r '.info.version')
           echo "pin=${pin}" >> "$GITHUB_OUTPUT"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
-          if [[ "${latest}" != "${pin}" ]]; then echo "update=true" >> "$GITHUB_OUTPUT"; else echo "update=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Build and self-test the candidate
         id: test
-        if: steps.resolve.outputs.update == 'true'
+        if: steps.resolve.outputs.latest != steps.resolve.outputs.pin
         continue-on-error: true
         run: |
           set -o pipefail
           make candidate-dnp3py DNP3PY_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
           echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
 
-      - name: Decision table
+      - name: Decide
+        id: decide
         if: always()
+        env:
+          PIN: ${{ steps.resolve.outputs.pin }}
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          OUTCOME: ${{ steps.test.outcome }}
+          RESULT: ${{ steps.test.outputs.result }}
+        run: |
+          if [[ -z "${LATEST}" ]]; then row="| dnp3py | ${PIN} | ? | could not resolve | check the job log |"
+          elif [[ "${LATEST}" == "${PIN}" ]]; then row="| dnp3py | ${PIN} | ${LATEST} | not needed | pin is latest |"
+          elif [[ "${OUTCOME}" == "success" ]]; then row="| dnp3py | ${PIN} | ${LATEST} | ${RESULT} | move the pin |"
+          else row="| dnp3py | ${PIN} | ${LATEST} | failed: ${RESULT:-see the job log} | stay; record the bug in tests/known-bugs.tsv |"; fi
+          echo "row=${row}" >> "$GITHUB_OUTPUT"
+
+  # One table for all four stacks, whatever happened to the probes.
+  summary:
+    name: Decision table
+    runs-on: ubuntu-latest
+    needs: [stepfunc, opendnp3, dscsystems, dnp3py]
+    if: always()
+    steps:
+      - name: Write the decision table
+        env:
+          STEPFUNC: ${{ needs.stepfunc.outputs.row }}
+          OPENDNP3: ${{ needs.opendnp3.outputs.row }}
+          DSCSYSTEMS: ${{ needs.dscsystems.outputs.row }}
+          DNP3PY: ${{ needs.dnp3py.outputs.row }}
         run: |
           {
-            echo "| dnp3py | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | ${{ steps.test.outputs.result || 'not needed' }} | ${{ steps.resolve.outputs.update != 'true' && 'pin is latest' || (steps.test.outcome == 'success' && 'move the pin' || 'stay; record the bug') }} |"
+            echo "## Upstream candidates"
+            echo ""
+            echo "| Stack | Pin | Latest | Candidate self-test | Decision |"
+            echo "|-------|-----|--------|---------------------|----------|"
+            echo "${STEPFUNC:-| stepfunc | ? | ? | the job did not report | check the job log |}"
+            echo "${OPENDNP3:-| opendnp3 | ? | ? | the job did not report | check the job log |}"
+            echo "${DSCSYSTEMS:-| dscsystems | ? | ? | the job did not report | check the job log |}"
+            echo "${DNP3PY:-| dnp3py | ? | ? | the job did not report | check the job log |}"
           } >> "$GITHUB_STEP_SUMMARY"

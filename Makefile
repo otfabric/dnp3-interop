@@ -39,7 +39,7 @@ export REGISTRY VERSION
 
 # image-% and smoke-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc candidate-dscsystems candidate-dnp3py \
+.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc candidate-opendnp3 candidate-dscsystems candidate-dnp3py \
         buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
@@ -110,7 +110,6 @@ interop: ## Cross-stack self-test: every client against every server
 # Builds an adapter on another upstream version than the release pin and runs
 # the self-tests on it. Bugs of that version listed in tests/known-bugs.tsv
 # are reported as known, so the run shows whether everything else still works.
-# opendnp3 is archived: its pin does not move and it has no candidate.
 
 STEPFUNC_CANDIDATE ?=
 
@@ -125,6 +124,24 @@ candidate-stepfunc: image-opendnp3 ## Build stepfunc on dnp3 crate STEPFUNC_CAND
 	@docker tag $(call image,opendnp3):$(VERSION) $(call image,opendnp3):candidate
 	@VERSION=candidate scripts/smoke.sh stepfunc
 	@VERSION=candidate scripts/interop.sh stepfunc opendnp3
+
+# An opendnp3 candidate is a commit: a newer tag, or the tip of the default
+# branch (the repository is archived; its tip is later than 3.1.2 but
+# untagged).
+OPENDNP3_CANDIDATE_SHA  ?=
+OPENDNP3_CANDIDATE_NAME ?= candidate
+
+candidate-opendnp3: image-stepfunc image-dscsystems image-dnp3py ## Build opendnp3 at OPENDNP3_CANDIDATE_SHA and self-test it (release pin untouched)
+	@test -n "$(OPENDNP3_CANDIDATE_SHA)" || { echo "Error: OPENDNP3_CANDIDATE_SHA=<commit> is required"; exit 1; }
+	@echo "Building opendnp3 candidate at $(OPENDNP3_CANDIDATE_SHA)..."
+	@$(RETRY) docker build \
+		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
+		--build-arg OPENDNP3_SHA=$(OPENDNP3_CANDIDATE_SHA) --build-arg OPENDNP3_VERSION=$(OPENDNP3_CANDIDATE_NAME) \
+		--tag $(call image,opendnp3):candidate \
+		--file adapters/opendnp3/Dockerfile .
+	@for a in stepfunc dscsystems dnp3py; do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate; done
+	@VERSION=candidate scripts/smoke.sh opendnp3
+	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py
 
 # A dscsystems candidate is a version of go-dnp3 as "go get" takes it: a tag
 # or a commit.

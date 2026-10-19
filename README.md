@@ -178,10 +178,10 @@ make candidate-stepfunc STEPFUNC_CANDIDATE=1.7.1   # self-test the adapter on an
 make candidate-dscsystems GODNP3_CANDIDATE=latest  # the same for go-dnp3
 ```
 
-The **Upstream candidates** workflow runs that probe weekly against the
-latest dnp3 crate on crates.io, go-dnp3 on the Go module proxy and dnp3py on
-PyPI, and reports pin versus latest in its job summary. opendnp3 is archived
-and not probed.
+The **Upstream candidates** workflow runs that probe weekly for all four
+stacks (the dnp3 crate on crates.io, opendnp3's latest tag and the tip of its
+archived repository, go-dnp3 on the Go module proxy, dnp3py on PyPI) and
+reports pin versus latest in one table in its job summary.
 
 `make smoke ADAPTERS=opendnp3` and `VERBOSE=1 make interop` narrow and
 expand what is run and shown; `DNP3_INTEROP_DEBUG=1` in a container's

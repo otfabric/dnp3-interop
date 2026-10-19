@@ -26,11 +26,14 @@ The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
 `Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream candidates**
 workflow (`.github/workflows/candidate.yml`, weekly and on demand) resolves
-the latest dnp3 crate, go-dnp3 and dnp3py, builds the adapter on each that
-differs from its pin,
-runs the smoke and cross-stack self-tests and writes a pin-vs-latest decision
-table to its job summary. It never changes a pin. opendnp3's repository is
-archived, so there is nothing to probe.
+the latest release of every stack: the dnp3 crate on crates.io, opendnp3's
+latest tag on GitHub, go-dnp3 on the Go module proxy and dnp3py on PyPI. It
+builds the adapter on each that differs from its pin, runs the smoke and
+cross-stack self-tests and writes one pin-vs-latest decision table, a row per
+stack, to its job summary. It never changes a pin. opendnp3's repository is
+archived and its default branch has commits after 3.1.2 that were never
+tagged; the workflow builds and self-tests that tip as information, but the
+pin follows releases.
 
 opendnp3's configure step downloads its own dependencies (asio 1.16.0 and two
 Automatak helper libraries at fixed commits) and checks them against the SHA-1
