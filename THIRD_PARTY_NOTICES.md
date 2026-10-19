@@ -1,0 +1,78 @@
+# Third-party notices
+
+The images published from this repository contain third-party software.
+This file is copied into every image as `/licenses/THIRD_PARTY_NOTICES.md`,
+next to the licence texts.
+
+## What is licensed how
+
+| Part | Licence |
+|------|---------|
+| Repository tooling, fixtures, schemas, scripts, documentation | MIT ([LICENSE](LICENSE)) |
+| `adapters/opendnp3/` (links opendnp3) | MIT |
+| `adapters/stepfunc/` (links the Step Function I/O dnp3 crate) | MIT |
+| Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
+| Image `dnp3-interop-stepfunc` | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
+
+Each adapter is a separate program in a separate image; no image contains two
+implementations. Nothing in this repository is linked into a consumer: a
+library that tests against the images talks to them over TCP and reads their
+output, and is not affected by their licences.
+
+Adapters planned later are listed in [PLAN.md](PLAN.md); the one for DSC
+Systems go-dnp3 links a GPL-3.0 library and will be GPL-3.0-or-later.
+
+## Image `dnp3-interop-opendnp3`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| opendnp3 (Green Energy Corp, Automatak LLC) | 3.1.2, commit `26b4c01e4839bbbda8866655e086471c4917ee53` | Apache-2.0 | https://github.com/dnp3/opendnp3 |
+| asio (Christopher M. Kohlhoff), header-only, compiled into opendnp3 | 1.16.0 | BSL-1.0 | https://github.com/chriskohlhoff/asio |
+| exe4cpp (Automatak), compiled into opendnp3 | commit `fb878a4de598ba9d6e4338afebf83f96e03af1b8` | Apache-2.0 | https://github.com/automatak/exe4cpp |
+| ser4cpp (Automatak), compiled into opendnp3 | commit `3c449734dc530a8f465eb0982de29165cc4e23d5` | Apache-2.0 | https://github.com/automatak/ser4cpp |
+| JSON for Modern C++ (Niels Lohmann), header-only (Debian `nlohmann-json3-dev`) | Debian trixie | MIT | https://github.com/nlohmann/json |
+| GNU C++ library, linked statically (Debian `libstdc++`) | Debian trixie | GPL-3.0 with the GCC Runtime Library Exception | https://gcc.gnu.org |
+| Adapter | this repository, `adapters/opendnp3/` | MIT | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+Licence and notice in the image: `/licenses/opendnp3/LICENSE` and
+`/licenses/opendnp3/NOTICE`. The opendnp3 repository is archived; 3.1.2 is its
+last release.
+
+## Image `dnp3-interop-stepfunc`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| dnp3 (Step Function I/O LLC) | 1.7.0 (crates.io), tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
+| Rust crates the adapter and dnp3 depend on (tokio, serde_json, tracing, chrono, ...) | the versions in `adapters/stepfunc/Cargo.lock` | MIT and/or Apache-2.0 | https://crates.io |
+| Rust standard library | 1.99.1 | MIT or Apache-2.0 | https://www.rust-lang.org |
+| Adapter | this repository, `adapters/stepfunc/` | MIT | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+Licence in the image: `/licenses/dnp3/LICENSE.txt`, the licence agreement the
+crate is distributed with.
+
+**The dnp3 crate is not open source.** Its licence agreement permits
+non-commercial, non-production use only. This image exists for
+interoperability testing of other DNP3 implementations and is published for
+that purpose only; it is not a product and must not be used in production.
+For any other use, obtain a commercial licence from Step Function I/O
+(https://stepfunc.io).
+
+## Corresponding source
+
+For every published image the complete corresponding source is:
+
+1. this repository at the release tag named by the image's
+   `org.opencontainers.image.version` label and by `print-capabilities`
+   (`adapterVersion`), which contains the adapter source and the build
+   instructions (the Dockerfile); and
+2. the upstream sources at exactly the versions pinned by that Dockerfile and
+   `adapters/stepfunc/Cargo.lock`, recorded in [versions.yaml](versions.yaml)
+   and in the `manifest.json` of the release.
+
+`docker build -f adapters/<adapter>/Dockerfile .` at the release tag
+reproduces the image from those sources.
+
+Each GitHub release of this repository records the upstream revisions and
+image digests it was built from.

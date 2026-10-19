@@ -1,0 +1,31 @@
+# Reference outstations for local work. Ports are published on loopback only:
+# these are unauthenticated DNP3 outstations and must not be reachable from a
+# plant network.
+#
+#   docker compose up -d --wait        # every server, waits for readiness
+#   docker compose down
+#
+# DNP3_INTEROP_VERSION selects the image tag (default: dev, the local build).
+
+x-server: &server
+  command: ["server", "--fixture", "/fixtures/${DNP3_INTEROP_FIXTURE:-baseline}/fixture.json"]
+  healthcheck:
+    test: ["CMD", "test", "-f", "/run/dnp3-interop/ready"]
+    interval: 2s
+    timeout: 2s
+    retries: 15
+    start_period: 10s
+  stop_grace_period: 10s
+
+services:
+  stepfunc:
+    <<: *server
+    image: ghcr.io/otfabric/dnp3-interop-stepfunc:${DNP3_INTEROP_VERSION:-dev}
+    ports:
+      - "127.0.0.1:20000:20000"
+
+  opendnp3:
+    <<: *server
+    image: ghcr.io/otfabric/dnp3-interop-opendnp3:${DNP3_INTEROP_VERSION:-dev}
+    ports:
+      - "127.0.0.1:20001:20000"

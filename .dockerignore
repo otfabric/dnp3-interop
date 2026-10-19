@@ -1,0 +1,6 @@
+.git
+.github
+reports
+**/target
+**/build
+adapters/tmw/vendor

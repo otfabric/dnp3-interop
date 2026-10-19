@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/otfabric/dnp3-interop/fixtures/schema/dnp3-fixture.schema.json",
+  "title": "dnp3-interop fixture",
+  "description": "A simulated DNP3 outstation: its link addresses, its point database and what controls do to it. See docs/FIXTURES.md for the behaviour every server adapter derives from it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "outstation"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "description": { "type": "string" },
+    "outstation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "masterAddress"],
+      "properties": {
+        "address": { "$ref": "#/$defs/linkAddress" },
+        "masterAddress": { "$ref": "#/$defs/linkAddress" },
+        "unsolicited": { "type": "boolean" },
+        "needTime": { "type": "boolean" },
+        "coldRestartDelayMs": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "warmRestartDelayMs": { "type": "integer", "minimum": 0, "maximum": 65535 }
+      }
+    },
+    "binaryInputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "boolean" },
+        "flags": { "$ref": "#/$defs/binaryFlags" },
+        "staticVariation": { "enum": [1, 2] },
+        "eventVariation": { "enum": [1, 2] } }, "unevaluatedProperties": false }
+    },
+    "doubleBitInputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "flags": { "$ref": "#/$defs/binaryFlags" },
+        "staticVariation": { "enum": [2] },
+        "eventVariation": { "enum": [1, 2] } }, "unevaluatedProperties": false }
+    },
+    "binaryOutputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "boolean" },
+        "flags": { "$ref": "#/$defs/outputFlags" },
+        "staticVariation": { "enum": [2] },
+        "eventVariation": { "enum": [1, 2] },
+        "target": { "$ref": "#/$defs/index" },
+        "selectRequired": { "type": "boolean" } }, "unevaluatedProperties": false }
+    },
+    "counters": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "flags": { "$ref": "#/$defs/counterFlags" },
+        "staticVariation": { "enum": [1, 2, 5, 6] },
+        "eventVariation": { "enum": [1, 2, 5, 6] } }, "unevaluatedProperties": false }
+    },
+    "frozenCounters": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "flags": { "$ref": "#/$defs/counterFlags" },
+        "staticVariation": { "enum": [1, 2, 5, 6, 9, 10] },
+        "eventVariation": { "enum": [1, 2, 5, 6] } }, "unevaluatedProperties": false }
+    },
+    "analogInputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "number" },
+        "flags": { "$ref": "#/$defs/analogFlags" },
+        "staticVariation": { "enum": [1, 2, 3, 4, 5, 6] },
+        "eventVariation": { "enum": [1, 2, 3, 4, 5, 6, 7, 8] } }, "unevaluatedProperties": false }
+    },
+    "analogOutputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "number" },
+        "flags": { "$ref": "#/$defs/analogFlags" },
+        "staticVariation": { "enum": [1, 2, 3, 4] },
+        "eventVariation": { "enum": [1, 2, 3, 4, 5, 6, 7, 8] },
+        "target": { "$ref": "#/$defs/index" },
+        "selectRequired": { "type": "boolean" },
+        "min": { "type": "number" },
+        "max": { "type": "number" } }, "unevaluatedProperties": false }
+    },
+    "octetStrings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "string", "pattern": "^([0-9a-f]{2}){1,255}$" } }, "unevaluatedProperties": false }
+    }
+  },
+  "$defs": {
+    "linkAddress": { "type": "integer", "minimum": 0, "maximum": 65519 },
+    "index": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "point": {
+      "type": "object",
+      "required": ["index", "value"],
+      "properties": {
+        "index": { "$ref": "#/$defs/index" },
+        "value": true,
+        "class": { "enum": [0, 1, 2, 3] }
+      }
+    },
+    "binaryFlags": {
+      "type": "array", "uniqueItems": true,
+      "items": { "enum": ["ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED", "CHATTER_FILTER"] }
+    },
+    "outputFlags": {
+      "type": "array", "uniqueItems": true,
+      "items": { "enum": ["ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED"] }
+    },
+    "counterFlags": {
+      "type": "array", "uniqueItems": true,
+      "items": { "enum": ["ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED", "DISCONTINUITY"] }
+    },
+    "analogFlags": {
+      "type": "array", "uniqueItems": true,
+      "items": { "enum": ["ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED", "OVER_RANGE", "REFERENCE_ERR"] }
+    }
+  }
+}

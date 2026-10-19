@@ -1,0 +1,76 @@
+name: Upstream candidates
+run-name: "Candidate upstream probe by @${{ github.actor }}"
+
+# Resolves the latest release of the Step Function I/O dnp3 crate, builds the
+# stepfunc adapter on it when it differs from the pin, runs the self-tests and
+# publishes a pin-vs-latest decision table in the workflow Job Summary. Release
+# pins (Dockerfiles, Cargo.toml, Cargo.lock, versions.yaml) are never mutated.
+#
+# opendnp3 is archived: 3.1.2 is its last release and it is not probed.
+#
+# A candidate is tested like a release: smoke test plus the cross-stack
+# self-test against the pinned other stacks. Bugs of a specific upstream
+# version listed in tests/known-bugs.tsv are reported as known rather than as
+# failures, so one upstream bug does not hide whether everything else works.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Nothing is pulled from Docker Hub: anonymous pulls are rate limited per
+  # runner address and its token service times out under load. Base images
+  # (pinned by digest) and build tooling come from Google's mirror of it, and
+  # every registry operation is retried on transient failures (scripts/retry.sh).
+  BASE_REGISTRY: mirror.gcr.io/library
+  TOOLS_REGISTRY: mirror.gcr.io
+
+jobs:
+  candidate-stepfunc:
+    name: stepfunc
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve the dnp3 crate pin vs crates.io
+        id: resolve
+        run: |
+          pin=$(sed -nE 's/^ARG DNP3_VERSION=(.*)$/\1/p' adapters/stepfunc/Dockerfile | head -1)
+          latest=$(scripts/retry.sh curl -fsS -A "otfabric-dnp3-interop (candidate probe)" \
+            https://crates.io/api/v1/crates/dnp3 | jq -r '.crate.max_stable_version')
+          echo "pin=${pin}" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          if [[ "${latest}" != "${pin}" ]]; then echo "update=true" >> "$GITHUB_OUTPUT"; else echo "update=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build and self-test the candidate
+        id: test
+        if: steps.resolve.outputs.update == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make image-opendnp3
+          make candidate-stepfunc STEPFUNC_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
+          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Decision table
+        if: always()
+        run: |
+          {
+            echo "## Upstream candidates"
+            echo ""
+            echo "| Stack | Pin | Latest | Candidate self-test | Decision |"
+            echo "|-------|-----|--------|---------------------|----------|"
+            if [[ "${{ steps.resolve.outputs.update }}" != "true" ]]; then
+              echo "| stepfunc (dnp3 crate) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | not needed | pin is latest |"
+            elif [[ "${{ steps.test.outcome }}" == "success" ]]; then
+              echo "| stepfunc (dnp3 crate) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | ${{ steps.test.outputs.result }} | move the pin |"
+            else
+              echo "| stepfunc (dnp3 crate) | ${{ steps.resolve.outputs.pin }} | ${{ steps.resolve.outputs.latest }} | failed: ${{ steps.test.outputs.result }} | stay; record the bug in tests/known-bugs.tsv and docs/COMPATIBILITY.md |"
+            fi
+            echo "| opendnp3 | 3.1.2 | 3.1.2 (archived) | not probed | no newer release possible |"
+          } >> "$GITHUB_STEP_SUMMARY"

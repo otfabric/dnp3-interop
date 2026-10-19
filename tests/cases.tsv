@@ -1,0 +1,61 @@
+# Self-test cases for scripts/interop.sh, against the baseline fixture.
+#
+# Columns, separated by tabs:
+#   1  state   "ro" (the case does not change the outstation; servers are shared)
+#              "rw" (the case gets a freshly started server)
+#   2  exit    expected exit code of the client
+#   3  summary expected outcome: ok, error code, command status, restart delay,
+#              IIN of the last solicited response (without DEVICE_RESTART,
+#              which depends on what ran before), and the received objects
+#              counted per group and variation ("u": unsolicited)
+#   4  needs   "-", or features the pairing must declare in print-capabilities,
+#              separated by commas: "server:<feature>" and "client:<feature>".
+#              A pairing that lacks one skips the case.
+#   5  operation and its flags, as passed to "client"
+#
+# Every case runs for every client/server pairing. Besides matching the
+# expectation, all pairings must produce the same result document. What
+# controls, freezes, unsolicited responses and class assignments do to the
+# outstation is checked by value in scripts/interop.sh.
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g10v2x2,g110v5x1,g1v1x1,g1v2x4,g20v1x1,g20v2x1,g20v5x1,g21v1x1,g21v2x1,g30v1x3,g30v2x1,g30v5x1,g3v2x2,g40v1x1,g40v3x1	-	integrity-poll
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=	-	event-poll
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=	-	event-poll --classes 2
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g10v2x2,g110v5x1,g1v1x1,g1v2x4,g20v1x1,g20v2x1,g20v5x1,g21v1x1,g21v2x1,g30v1x3,g30v2x1,g30v5x1,g3v2x2,g40v1x1,g40v3x1	-	read --group 60 --variation 1
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g1v1x1,g1v2x4	-	read --group 1 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g1v2x3	-	read --group 1 --variation 2 --start 0 --stop 2
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g3v2x2	-	read --group 3 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g10v2x2	-	read --group 10 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g20v1x1,g20v2x1,g20v5x1	-	read --group 20 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g21v1x1,g21v2x1	-	read --group 21 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g30v1x1,g30v5x1	-	read --group 30 --variation 0 --start 0 --stop 1
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g30v5x5	-	read --group 30 --variation 5
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g40v1x1,g40v3x1	-	read --group 40 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g110v5x1	-	read --group 110 --variation 0
+ro	1	ok=false error=timeout status=- delay=- iin= objects=	-	integrity-poll --remote-addr 99 --timeout-ms 1000
+ro	1	ok=false error=timeout status=- delay=- iin= objects=	-	integrity-poll --local-addr 7 --timeout-ms 1000
+ro	1	ok=false error=command-failed status=NOT_SUPPORTED delay=- iin= objects=	-	operate --type g12v1 --index 9 --code LATCH_ON
+ro	1	ok=false error=command-failed status=NOT_SUPPORTED delay=- iin= objects=	-	operate --type g12v1 --index 0 --code PULSE_ON
+ro	1	ok=false error=command-failed status=NOT_SUPPORTED delay=- iin= objects=	-	operate --type g12v1 --index 1 --code LATCH_ON
+ro	1	ok=false error=command-failed status=OUT_OF_RANGE delay=- iin= objects=	-	operate --type g41v1 --index 0 --value 2000000
+ro	1	ok=false error=command-failed status=OUT_OF_RANGE delay=- iin= objects=	-	operate --type g41v3 --index 1 --value 500 --mode sbo
+ro	1	ok=false error=command-failed status=NOT_SUPPORTED delay=- iin= objects=	-	operate --type g41v2 --index 5 --value 1
+ro	0	ok=true error=- status=- delay=5000 iin= objects=	-	restart --type cold
+ro	0	ok=true error=- status=- delay=1000 iin= objects=	-	restart --type warm
+ro	0	ok=true error=- status=- delay=- iin= objects=	-	disable-unsolicited
+ro	0	ok=true error=- status=- delay=- iin= objects=	-	monitor --duration-ms 300
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code LATCH_ON
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code LATCH_OFF
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code CLOSE
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code TRIP --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 1 --code LATCH_ON --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v1 --index 0 --value -12345
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v2 --index 0 --value 42 --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v3 --index 1 --value 49.5 --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v4 --index 0 --value 1000
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	time-sync
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	time-sync --procedure non-lan
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	freeze
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	freeze --clear
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	enable-unsolicited
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:assignClassServer,client:assignClassClient	assign-class --class 2 --group 1
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:assignClassServer,client:assignClassClient	assign-class --class 0 --group 30 --start 0 --stop 1

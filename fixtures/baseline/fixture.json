@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0",
+  "name": "baseline",
+  "description": "One outstation with points of every basic type, all three event classes, controls on binary and analog outputs, counters to freeze and an octet string.",
+  "outstation": {
+    "address": 1024,
+    "masterAddress": 1,
+    "unsolicited": true,
+    "needTime": true,
+    "coldRestartDelayMs": 5000,
+    "warmRestartDelayMs": 1000
+  },
+  "binaryInputs": [
+    { "index": 0, "value": true, "class": 1 },
+    { "index": 1, "value": false, "class": 1 },
+    { "index": 2, "value": true, "flags": ["ONLINE", "LOCAL_FORCED"], "class": 2, "eventVariation": 1 },
+    { "index": 3, "value": false, "flags": [] },
+    { "index": 4, "value": true, "staticVariation": 1 }
+  ],
+  "doubleBitInputs": [
+    { "index": 0, "value": 2, "class": 1 },
+    { "index": 1, "value": 0, "flags": ["ONLINE", "COMM_LOST"] }
+  ],
+  "binaryOutputs": [
+    { "index": 0, "value": false, "class": 1, "target": 1 },
+    { "index": 1, "value": false, "class": 1, "selectRequired": true }
+  ],
+  "counters": [
+    { "index": 0, "value": 123456, "class": 3 },
+    { "index": 1, "value": 65535, "class": 3, "staticVariation": 2, "eventVariation": 2 },
+    { "index": 2, "value": 4294967295, "staticVariation": 5 }
+  ],
+  "frozenCounters": [
+    { "index": 0, "value": 0, "class": 3 },
+    { "index": 1, "value": 0, "class": 3, "staticVariation": 2, "eventVariation": 2 }
+  ],
+  "analogInputs": [
+    { "index": 0, "value": 230.5, "class": 2, "staticVariation": 5, "eventVariation": 7 },
+    { "index": 1, "value": -1234, "class": 2, "eventVariation": 3 },
+    { "index": 2, "value": 32767, "staticVariation": 2 },
+    { "index": 3, "value": 0, "flags": ["OVER_RANGE"] },
+    { "index": 4, "value": 0, "class": 2 }
+  ],
+  "analogOutputs": [
+    { "index": 0, "value": 0, "class": 1, "target": 4, "min": -1000000, "max": 1000000 },
+    { "index": 1, "value": 0, "class": 1, "staticVariation": 3, "eventVariation": 3, "selectRequired": true, "min": -100, "max": 100 }
+  ],
+  "octetStrings": [
+    { "index": 0, "value": "48656c6c6f" }
+  ]
+}

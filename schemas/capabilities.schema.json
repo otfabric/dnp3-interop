@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/otfabric/dnp3-interop/schemas/capabilities.schema.json",
+  "title": "dnp3-interop capability document",
+  "description": "Output of 'print-capabilities'. See docs/CAPABILITIES.md.",
+  "type": "object",
+  "required": ["schemaVersion", "adapter", "adapterVersion", "protocol", "upstream", "roles", "features",
+               "pointTypes", "commandTypes", "clientOperations"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "adapter": { "type": "string", "pattern": "^[a-z0-9]+$" },
+    "adapterVersion": { "type": "string", "minLength": 1 },
+    "protocol": { "const": "dnp3" },
+    "upstream": {
+      "type": "object",
+      "required": ["name", "version", "revision", "license", "language", "independentEngine"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "revision": { "type": "string" },
+        "license": { "type": "string" },
+        "language": { "type": "string" },
+        "independentEngine": { "type": "boolean" }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "required": ["server", "client"],
+      "properties": { "server": { "type": "boolean" }, "client": { "type": "boolean" } }
+    },
+    "features": {
+      "type": "object",
+      "required": ["integrityPoll", "eventPoll", "read", "directOperate", "selectBeforeOperate", "directOperateNoAckServer", "directOperateNoAckClient",
+                   "timeSyncLan", "timeSyncNonLan", "timeSyncOnDemand", "restart", "unsolicited", "assignClassServer", "assignClassClient",
+                   "freeze", "freezeNoAckServer", "freezeNoAckClient", "octetStrings", "tcp", "udp", "tls", "serial", "fileTransfer",
+                   "secureAuthentication"],
+      "additionalProperties": { "type": "boolean" }
+    },
+    "pointTypes": {
+      "type": "array",
+      "items": { "enum": ["binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters",
+                          "analogInputs", "analogOutputs", "octetStrings"] }
+    },
+    "commandTypes": { "type": "array", "items": { "enum": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"] } },
+    "clientOperations": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/otfabric/dnp3-interop/schemas/client-result.schema.json",
+  "title": "dnp3-interop client result document",
+  "description": "The single line a 'client' operation prints. See docs/CONTAINER_CONTRACT.md.",
+  "type": "object",
+  "required": ["schemaVersion", "adapter", "operation", "ok", "error", "connected", "iin", "objects", "elapsedMs"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "adapter": { "type": "string" },
+    "operation": {
+      "enum": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
+               "disable-unsolicited", "assign-class", "freeze", "monitor"]
+    },
+    "ok": { "type": "boolean" },
+    "error": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "enum": ["connect-failed", "timeout", "rejected", "command-failed", "connection-lost", "failed"] },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "connected": { "type": "boolean" },
+    "iin": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "array", "uniqueItems": true, "items": { "enum": [
+          "BROADCAST", "CLASS_1_EVENTS", "CLASS_2_EVENTS", "CLASS_3_EVENTS", "NEED_TIME", "LOCAL_CONTROL",
+          "DEVICE_TROUBLE", "DEVICE_RESTART", "NO_FUNC_CODE_SUPPORT", "OBJECT_UNKNOWN", "PARAMETER_ERROR",
+          "EVENT_BUFFER_OVERFLOW", "ALREADY_EXECUTING", "CONFIG_CORRUPT", "RESERVED_2", "RESERVED_1"] } }
+      ]
+    },
+    "objects": { "type": "array", "items": { "$ref": "#/$defs/object" } },
+    "commandStatus": {
+      "oneOf": [
+        { "type": "null" },
+        { "enum": ["SUCCESS", "TIMEOUT", "NO_SELECT", "FORMAT_ERROR", "NOT_SUPPORTED", "ALREADY_ACTIVE",
+                   "HARDWARE_ERROR", "LOCAL", "TOO_MANY_OPS", "NOT_AUTHORIZED", "AUTOMATION_INHIBIT",
+                   "PROCESSING_LIMITED", "OUT_OF_RANGE", "DOWNSTREAM_LOCAL", "ALREADY_COMPLETE", "BLOCKED",
+                   "CANCELLED", "BLOCKED_OTHER_MASTER", "DOWNSTREAM_FAIL", "NON_PARTICIPATING", "UNDEFINED"] }
+      ]
+    },
+    "restartDelayMs": { "type": ["integer", "null"], "minimum": 0 },
+    "elapsedMs": { "type": "number", "minimum": 0 }
+  },
+  "allOf": [
+    { "if": { "properties": { "operation": { "const": "operate" } } }, "then": { "required": ["commandStatus"] } },
+    { "if": { "properties": { "operation": { "const": "restart" } } }, "then": { "required": ["restartDelayMs"] } },
+    { "if": { "properties": { "operation": { "enum": ["integrity-poll", "event-poll", "read"] } } },
+      "else": { "properties": { "iin": { "type": "null" } } } },
+    { "if": { "properties": { "ok": { "const": true } } }, "then": { "properties": { "error": { "type": "null" } } },
+      "else": { "properties": { "error": { "type": "object" } } } }
+  ],
+  "$defs": {
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group", "variation", "index", "value", "unsolicited"],
+      "properties": {
+        "group": { "enum": [1, 2, 3, 4, 10, 11, 20, 21, 22, 23, 30, 32, 40, 42, 110, 111] },
+        "variation": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "index": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "value": { "type": ["boolean", "number", "string"] },
+        "flags": { "type": "array", "uniqueItems": true, "items": { "enum": [
+          "ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED", "CHATTER_FILTER", "ROLLOVER",
+          "DISCONTINUITY", "OVER_RANGE", "REFERENCE_ERR"] } },
+        "time": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+        "unsolicited": { "type": "boolean" }
+      },
+      "allOf": [
+        { "if": { "properties": { "group": { "enum": [1, 2, 10, 11] } } }, "then": { "properties": { "value": { "type": "boolean" } }, "required": ["flags"] } },
+        { "if": { "properties": { "group": { "enum": [3, 4] } } }, "then": { "properties": { "value": { "enum": [0, 1, 2, 3] } }, "required": ["flags"] } },
+        { "if": { "properties": { "group": { "enum": [20, 21, 22, 23] } } }, "then": { "properties": { "value": { "type": "integer", "minimum": 0, "maximum": 4294967295 } }, "required": ["flags"] } },
+        { "if": { "properties": { "group": { "enum": [30, 32, 40, 42] } } }, "then": { "properties": { "value": { "type": "number" } }, "required": ["flags"] } },
+        { "if": { "properties": { "group": { "enum": [110, 111] } } }, "then": { "properties": { "value": { "type": "string", "pattern": "^([0-9a-f]{2})*$" } }, "not": { "required": ["flags"] } } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,101 @@
+# Machine-readable version manifest for dnp3-interop.
+# Upstream pins and base image digests are release inputs; nothing floats.
+# The Dockerfiles, adapters/stepfunc/Cargo.toml (with Cargo.lock),
+# adapters/dnp3py/requirements.txt and adapters/dscsystems/go.mod are the
+# source of truth for a build: scripts/check-versions.sh fails when this file
+# disagrees with them.
+
+interop_version: "0.1.0"
+contract_version: "1.0"        # docs/CONTAINER_CONTRACT.md, schemaVersion of every document
+fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
+
+protocol:
+  name: "DNP3 (IEEE 1815)"
+  default_port: 20000
+
+implementations:
+  stepfunc:
+    priority: P0
+    status: implemented
+    upstream: "Step Function I/O dnp3"
+    repository: "https://github.com/stepfunc/dnp3"
+    crate: "dnp3"
+    version: "1.7.0"             # latest release (crates.io, 2026-09-21)
+    revision: "d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca"   # tag 1.7.0
+    license: "Step Function I/O non-commercial licence (LICENSE.txt of the crate)"
+    language: "Rust"
+    independent_engine: true
+    roles: [server, client]
+    note: >-
+      Non-commercial, non-production licence. The image is published for
+      interoperability testing only, by decision of the repository owner.
+
+  opendnp3:
+    priority: P0
+    status: implemented
+    upstream: "opendnp3"
+    repository: "https://github.com/dnp3/opendnp3"
+    version: "3.1.2"             # last release; the repository is archived (2022)
+    revision: "26b4c01e4839bbbda8866655e086471c4917ee53"
+    license: "Apache-2.0"
+    language: "C++"
+    independent_engine: true
+    roles: [server, client]
+    # Fetched by opendnp3's own CMake (deps/*.cmake) at configure time and
+    # verified there against these SHA-1 hashes.
+    dependencies:
+      asio: "asio-1-16-0.zip SHA1 6BDD33522D5B95B36445ABB2072A481F7CE15402 (Boost Software License 1.0)"
+      exe4cpp: "automatak/exe4cpp fb878a4de598ba9d6e4338afebf83f96e03af1b8 SHA1 18B141E8CF09DC8D28CC62DD5FA2920670D501BD (Apache-2.0)"
+      ser4cpp: "automatak/ser4cpp 3c449734dc530a8f465eb0982de29165cc4e23d5 SHA1 937B759B7CC80180DA26B47037E796B59798A672 (Apache-2.0)"
+
+  dnp3py:
+    priority: P1
+    status: planned
+    upstream: "dnp3py"
+    repository: "https://github.com/craigpnnl/dnp3py"
+    package: "dnp3py"
+    version: "0.6.0"             # latest release (PyPI)
+    revision: "c00d5df22e779df72f7caa4402c3f34957eb276d"
+    license: "MIT"
+    language: "Python"
+    independent_engine: true
+
+  dscsystems:
+    priority: P1
+    status: planned
+    upstream: "DSC Systems go-dnp3"
+    repository: "https://github.com/dscsystems/go-dnp3"
+    module: "github.com/dscsystems/go-dnp3"
+    version: "v0.8.1"            # latest release
+    revision: "70ff72bb09755db183d1bd69859adc72cd663aec"
+    license: "GPL-3.0"
+    language: "Go"
+    independent_engine: true
+    note: "Experimental: the README says the API is not yet stable."
+
+  tmw:
+    priority: P2
+    status: planned
+    upstream: "Triangle MicroWorks DNP3 Source Code Library"
+    repository: "proprietary; source supplied at build time"
+    license: "commercial"
+    language: "C"
+    independent_engine: true
+
+dependencies:
+  nlohmann_json: "debian trixie nlohmann-json3-dev"   # opendnp3 adapter, MIT, header-only
+  # stepfunc adapter: tokio, serde_json, tracing-subscriber at the versions in
+  # adapters/stepfunc/Cargo.lock
+
+base_images:
+  # Digests recorded 2026-10-19; the Dockerfiles pin these by digest.
+  debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
+  rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d"
+
+images:
+  stepfunc: "ghcr.io/otfabric/dnp3-interop-stepfunc"
+  opendnp3: "ghcr.io/otfabric/dnp3-interop-opendnp3"
+
+platforms:
+  - "linux/amd64"
+  - "linux/arm64"

@@ -1,0 +1,11 @@
+The adapter programs in this directory are MIT-licensed like the rest of the
+repository (see ../LICENSE), with one exception: an adapter that links a
+GPL-3.0 library (adapters/dscsystems/, planned) is licensed under the GNU
+General Public License, version 3 or (at your option) any later version, and
+says so in its SPDX-License-Identifier headers. The full text is in
+../licenses/GPL-3.0.txt.
+
+The libraries the adapters link keep their own licences; see
+../THIRD_PARTY_NOTICES.md. In particular the Step Function I/O dnp3 crate
+linked by adapters/stepfunc/ is distributed under a non-commercial,
+non-production licence agreement.

@@ -1,0 +1,11 @@
+# Local build artifacts
+adapters/opendnp3/build/
+adapters/stepfunc/target/
+adapters/dscsystems/dnp3-interop
+adapters/tmw/vendor/
+reports/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
