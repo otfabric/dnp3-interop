@@ -34,7 +34,7 @@ Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except 
 
 The rule is the latest upstream release. A newer release that fails the self-tests is not adopted as the pin, but it is not dropped either: list its bug in [tests/known-bugs.tsv](tests/known-bugs.tsv), build it as a candidate (`make candidate-stepfunc` is the model) and record in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) what the older pin costs. When the candidate run reports that the known bug no longer reproduces, move the pin.
 
-`make candidate-stepfunc STEPFUNC_CANDIDATE=<version>` runs that probe locally. opendnp3 is archived, so its pin does not move.
+The **Upstream candidates** workflow probes the dnp3 crate and go-dnp3 every week; `make candidate-stepfunc STEPFUNC_CANDIDATE=<version>`, `make candidate-dscsystems GODNP3_CANDIDATE=<version>` and `make candidate-dnp3py DNP3PY_CANDIDATE=<version>` run the same locally. opendnp3 is archived, so its pin does not move.
 
 ## Registries and retries
 
@@ -56,7 +56,7 @@ Additive changes bump the contract's minor version; anything a consumer could br
 
 ## Proprietary upstream source
 
-The Triangle MicroWorks adapter builds from a source archive the user supplies at build time (see [adapters/tmw/README.md](adapters/tmw/README.md)). Never commit that source, a part of it or anything derived from it beyond the adapter's own code; `adapters/tmw/vendor/` is ignored by git and by the Docker build context for that reason.
+The Triangle MicroWorks adapter will build from a source archive supplied at build time (see [PLAN.md](PLAN.md#triangle-microworks-dnp3-scl-waiting)). Never commit that source, a part of it or anything derived from it beyond the adapter's own code; `adapters/tmw/vendor/` is ignored by git and by the Docker build context for that reason.
 
 ## Adding a fixture
 
@@ -67,7 +67,7 @@ See [docs/FIXTURES.md](docs/FIXTURES.md#adding-a-fixture).
 1. Evaluate the upstream: does it build from a pinned source on both architectures, which roles does it provide, what is its licence, and is its protocol engine its own? Write the answers into [PLAN.md](PLAN.md) before writing code.
 2. Create `adapters/<name>/` with a Dockerfile built from the repository root, following the existing ones: pinned build stage, minimal runtime stage, non-root user, `/fixtures`, `/licenses`, the readiness file, the health check, `ENTRYPOINT ["/usr/local/bin/dnp3-interop"]`.
 3. Implement the contract. For a role the upstream does not support, the command exits 2 with a message and `roles` says `false`. What the upstream cannot do within a role is a feature declared `false`, and the cases that need it name it in their `needs` column: never fake a behaviour the library does not have.
-4. `scripts/smoke.sh <name>` must pass, then `scripts/interop.sh opendnp3 stepfunc <name>`.
+4. `scripts/smoke.sh <name>` must pass, then `scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py <name>`.
 5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml`, `scripts/check-versions.sh`, the notices and the documentation tables.
 
 Do not build a shared adapter framework. Adapters in different languages share a contract, not code.

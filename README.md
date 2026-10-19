@@ -95,7 +95,7 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
 }
 ```
 
-(abridged). Every image has the same commands:
+(abridged). Every image has the same commands (dnp3py, a master only, refuses `server`):
 
 ```text
 server               an outstation serving a fixture

@@ -17,7 +17,9 @@ Tags are immutable. A fix is a new version.
 
 ---
 
-## Unreleased (planned v0.1.0)
+## v0.1.0
+
+**Date:** 2026-10-20
 
 ## Summary
 
@@ -32,12 +34,12 @@ outstation, and a fourth as master, behind container contract 1.0.
 - **Fixture format 1.0** with JSON Schema, cross-field validation and the **baseline** fixture: 22 points of eight types in all three event classes, controls on binary and analog outputs with targets, select-required points and ranges, counters with frozen counters, an octet string, restart delays, NEED_TIME at start.
 - **`stepfunc` adapter** — Step Function I/O dnp3 1.7.0, Rust.
 - **`opendnp3` adapter** — opendnp3 3.1.2 (commit `26b4c01e`), C++.
-- **`dnp3py` adapter** — dnp3py 0.6.0, Python, client (master) role only; it sends the freezes without acknowledgement and DIRECT OPERATE NO ACK.
-- **`dscsystems` adapter** — DSC Systems go-dnp3 v0.8.1, Go, experimental upstream. GPL-3.0-or-later; its master is the one that sends DIRECT OPERATE NO ACK.
+- **`dnp3py` adapter** — dnp3py 0.6.0, Python, client (master) role only; with go-dnp3 the master that sends DIRECT OPERATE NO ACK, and the one that sends the freezes without acknowledgement.
+- **`dscsystems` adapter** — DSC Systems go-dnp3 v0.8.1, Go, experimental upstream. GPL-3.0-or-later.
 - **Client operations** — `integrity-poll`, `event-poll`, `read`, `operate` (g12v1, g41v1..v4; direct and select-before-operate), `time-sync` (LAN and non-LAN), `restart` (cold, warm), `enable-unsolicited`, `disable-unsolicited`, `assign-class`, `freeze` (with and without clear), `monitor`.
-- **Self-tests** — `make smoke` (contract checks per adapter) and `make interop` (cases over all client/server pairings requiring identical result documents, plus value checks of controls, events, freezes, unsolicited responses, class assignment and time synchronization).
+- **Self-tests** — `make smoke` (32 contract checks per server adapter, 28 for the master-only dnp3py) and `make interop` (48 cases over all twelve client/server pairings requiring identical result documents, plus value checks of controls, events, freezes, unsolicited responses, class assignment and time synchronization: 1115 checks on linux/arm64, none failed, 18 hits of known upstream bugs).
 - **Schemas** for the capability and client result documents, validated against every document the self-tests produce.
-- **`versions.yaml`** with every upstream pin and base image digest, checked against the build files; an upstream candidates workflow for the dnp3 crate.
+- **`versions.yaml`** with every upstream pin and base image digest, checked against the build files; an upstream candidates workflow for the dnp3 crate and go-dnp3.
 
 ### Upstream notes
 
@@ -46,6 +48,12 @@ outstation, and a fourth as master, behind container contract 1.0.
 - The Step Function I/O dnp3 crate is under a non-commercial, non-production licence; its image is published for interoperability testing only.
 
 - go-dnp3 v0.8.1: FREEZE AND CLEAR clears only counters that have a frozen counter; a freeze raises events for unchanged frozen values; neither its master nor its outstation filters link addresses (all three in `tests/known-bugs.tsv`). Its outstation carries out a restart (events discarded, DEVICE_RESTART and NEED_TIME set again), so restart cases run on a fresh outstation.
+
+### For consumers
+
+- Pin the images by digest from the release's `manifest.json`; read `print-fixture baseline` and `print-capabilities` from the image under test.
+- The stepfunc image contains the Step Function I/O dnp3 crate, whose licence permits non-commercial, non-production use only: it is for interoperability testing.
+- Do not make the first request after starting the stepfunc image a SELECT (see `docs/COMPATIBILITY.md`), or expect NO_SELECT for it.
 
 ### Not in this release
 
