@@ -108,17 +108,17 @@ jobs:
             --arg commit "${GITHUB_SHA}" \
             --arg contract "$(sed -nE 's/^contract_version: "([^"]+)".*/\1/p' versions.yaml)" \
             --arg fixture "$(sed -nE 's/^fixture_schema: "([^"]+)".*/\1/p' versions.yaml)" \
-            --arg odnp3_version "$(arg adapters/opendnp3/Dockerfile OPENDNP3_VERSION)" \
-            --arg odnp3_sha "$(arg adapters/opendnp3/Dockerfile OPENDNP3_SHA)" \
-            --arg sf_version "$(arg adapters/stepfunc/Dockerfile DNP3_VERSION)" \
-            --arg sf_sha "$(arg adapters/stepfunc/Dockerfile DNP3_SHA)" \
+            --arg odnp3_version "$(arg adapters/opendnp3/Dockerfile UPSTREAM_VERSION)" \
+            --arg odnp3_sha "$(arg adapters/opendnp3/Dockerfile UPSTREAM_SHA)" \
+            --arg sf_version "$(arg adapters/stepfunc/Dockerfile UPSTREAM_VERSION)" \
+            --arg sf_sha "$(arg adapters/stepfunc/Dockerfile UPSTREAM_SHA)" \
             --arg stepfunc_digest "${{ steps.digests.outputs.stepfunc }}" \
             --arg opendnp3_digest "${{ steps.digests.outputs.opendnp3 }}" \
-            --arg godnp3_version "$(arg adapters/dscsystems/Dockerfile GODNP3_VERSION)" \
-            --arg godnp3_sha "$(arg adapters/dscsystems/Dockerfile GODNP3_SHA)" \
+            --arg godnp3_version "$(arg adapters/dscsystems/Dockerfile UPSTREAM_VERSION)" \
+            --arg godnp3_sha "$(arg adapters/dscsystems/Dockerfile UPSTREAM_SHA)" \
             --arg dscsystems_digest "${{ steps.digests.outputs.dscsystems }}" \
-            --arg dnp3py_version "$(arg adapters/dnp3py/Dockerfile DNP3PY_VERSION)" \
-            --arg dnp3py_sha "$(arg adapters/dnp3py/Dockerfile DNP3PY_SHA)" \
+            --arg dnp3py_version "$(arg adapters/dnp3py/Dockerfile UPSTREAM_VERSION)" \
+            --arg dnp3py_sha "$(arg adapters/dnp3py/Dockerfile UPSTREAM_SHA)" \
             --arg dnp3py_digest "${{ steps.digests.outputs.dnp3py }}" \
             '{
               version: $version,

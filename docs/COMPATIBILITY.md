@@ -26,14 +26,14 @@ The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
 `Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream candidates**
 workflow (`.github/workflows/candidate.yml`, weekly and on demand) resolves
-the latest release of every stack: the dnp3 crate on crates.io, opendnp3's
-latest tag on GitHub, go-dnp3 on the Go module proxy and dnp3py on PyPI. It
-builds the adapter on each that differs from its pin, runs the smoke and
-cross-stack self-tests and writes one pin-vs-latest decision table, a row per
-stack, to its job summary. It never changes a pin. opendnp3's repository is
-archived and its default branch has commits after 3.1.2 that were never
-tagged; the workflow builds and self-tests that tip as information, but the
-pin follows releases.
+the latest stable release of every stack with `scripts/latest-upstream.py`:
+the dnp3 crate on crates.io, opendnp3's tags on GitHub, go-dnp3 on the Go
+module proxy and dnp3py on PyPI. It builds the adapter on each that differs
+from its pin, runs the smoke and cross-stack self-tests, writes one
+pin-vs-latest decision table, a row per stack, to its job summary, and keeps
+an issue open while a pin is behind. It never changes a pin. opendnp3's
+repository is archived: commits after its last tag were never released and
+are not candidates.
 
 opendnp3's configure step downloads its own dependencies (asio 1.16.0 and two
 Automatak helper libraries at fixed commits) and checks them against the SHA-1
@@ -88,9 +88,10 @@ The cross-stack self-test runs one suite per server adapter at the same time
 and checks the agreement of the documents across pairings when all are done;
 on a laptop the smoke and cross-stack tests together take about four minutes.
 
-The untagged tip of opendnp3's archived repository (commit `c1dc7165`) passes
-the smoke test and the cross-stack self-test like 3.1.2 (Upstream candidates
-run 39339958041); the pin stays on the release.
+The untagged tip of opendnp3's archived repository (commit `c1dc7165`) was
+built and self-tested once (Upstream candidates run 39339958041): it passes
+the smoke test and the cross-stack self-test like 3.1.2. It is not a release,
+so the pin stays on 3.1.2.
 
 Covered by every pairing: integrity poll (values and flags against the
 fixture), event polls per class, reads of every point type (all objects, a

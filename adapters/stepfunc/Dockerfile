@@ -21,12 +21,12 @@ ARG DEBIAN_DIGEST=sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46
 # ---------------------------------------------------------------------------
 FROM ${BASE_REGISTRY}/rust:1.99.1-slim-trixie@${RUST_DIGEST} AS build
 
-# The release pin. "make candidate-stepfunc" overrides it to try another
+# The release pin. "make candidate-stepfunc CANDIDATE_VERSION=<version>" overrides it to try another
 # crate version without touching the pin.
-ARG DNP3_VERSION=1.7.0
+ARG UPSTREAM_VERSION=1.7.0
 # The commit of the release tag in https://github.com/stepfunc/dnp3, for
 # print-capabilities (crates.io has no commit; Cargo.lock has the checksum).
-ARG DNP3_SHA=d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca
+ARG UPSTREAM_SHA=d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca
 ARG ADAPTER_VERSION=dev
 
 RUN rustup component add rustfmt clippy
@@ -38,23 +38,23 @@ COPY fixtures /src/fixtures
 
 # At the pin the dependencies must match Cargo.lock; anything else is a
 # candidate.
-RUN if grep -q "^dnp3 = { version = \"=${DNP3_VERSION}\"" Cargo.toml; then \
+RUN if grep -q "^dnp3 = { version = \"=${UPSTREAM_VERSION}\"" Cargo.toml; then \
          cargo fetch --locked; \
        else \
-         sed -i "s/^dnp3 = { version = \"=[^\"]*\"/dnp3 = { version = \"=${DNP3_VERSION}\"/" Cargo.toml \
+         sed -i "s/^dnp3 = { version = \"=[^\"]*\"/dnp3 = { version = \"=${UPSTREAM_VERSION}\"/" Cargo.toml \
          && cargo update -p dnp3; \
        fi
 
 RUN cargo fmt --check \
-    && ADAPTER_VERSION="${ADAPTER_VERSION}" UPSTREAM_VERSION="${DNP3_VERSION}" UPSTREAM_REVISION="${DNP3_SHA}" \
+    && ADAPTER_VERSION="${ADAPTER_VERSION}" UPSTREAM_VERSION="${UPSTREAM_VERSION}" UPSTREAM_REVISION="${UPSTREAM_SHA}" \
        cargo clippy --release --offline -- -D warnings \
-    && ADAPTER_VERSION="${ADAPTER_VERSION}" UPSTREAM_VERSION="${DNP3_VERSION}" UPSTREAM_REVISION="${DNP3_SHA}" \
+    && ADAPTER_VERSION="${ADAPTER_VERSION}" UPSTREAM_VERSION="${UPSTREAM_VERSION}" UPSTREAM_REVISION="${UPSTREAM_SHA}" \
        cargo test --release --offline \
-    && ADAPTER_VERSION="${ADAPTER_VERSION}" UPSTREAM_VERSION="${DNP3_VERSION}" UPSTREAM_REVISION="${DNP3_SHA}" \
+    && ADAPTER_VERSION="${ADAPTER_VERSION}" UPSTREAM_VERSION="${UPSTREAM_VERSION}" UPSTREAM_REVISION="${UPSTREAM_SHA}" \
        cargo build --release --offline \
     && mkdir -p /out/licenses/dnp3 \
     && cp target/release/dnp3-interop /out/dnp3-interop \
-    && cp "$(find "${CARGO_HOME:-/usr/local/cargo}/registry/src" -maxdepth 2 -type d -name "dnp3-${DNP3_VERSION}")/LICENSE.txt" \
+    && cp "$(find "${CARGO_HOME:-/usr/local/cargo}/registry/src" -maxdepth 2 -type d -name "dnp3-${UPSTREAM_VERSION}")/LICENSE.txt" \
           /out/licenses/dnp3/LICENSE.txt
 
 # ---------------------------------------------------------------------------

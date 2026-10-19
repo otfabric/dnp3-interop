@@ -32,9 +32,9 @@ Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except 
 2. `make ci`.
 3. Record the new version, and anything it changed, in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [RELEASE.md](RELEASE.md).
 
-The rule is the latest upstream release. A newer release that fails the self-tests is not adopted as the pin, but it is not dropped either: list its bug in [tests/known-bugs.tsv](tests/known-bugs.tsv), build it as a candidate (`make candidate-stepfunc` is the model) and record in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) what the older pin costs. When the candidate run reports that the known bug no longer reproduces, move the pin.
+The rule is the latest upstream release. A newer release that fails the self-tests is not adopted as the pin, but it is not dropped either: list its bug in [tests/known-bugs.tsv](tests/known-bugs.tsv), build it as a candidate (`make candidate-<adapter> CANDIDATE_VERSION=<version>`) and record in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) what the older pin costs. When the candidate run reports that the known bug no longer reproduces, move the pin.
 
-The **Upstream candidates** workflow probes all four stacks every week and writes one decision table; `make candidate-stepfunc STEPFUNC_CANDIDATE=<version>`, `make candidate-opendnp3 OPENDNP3_CANDIDATE_SHA=<commit>`, `make candidate-dscsystems GODNP3_CANDIDATE=<version>` and `make candidate-dnp3py DNP3PY_CANDIDATE=<version>` run the same locally. opendnp3 is archived: the tip of its default branch is probed for information, but its pin follows releases only.
+Every Dockerfile names its pin `ARG UPSTREAM_VERSION` and `ARG UPSTREAM_SHA`. The **Upstream candidates** workflow resolves the latest release of every stack every week with `scripts/latest-upstream.py`, builds and self-tests each adapter whose pin is behind, writes one decision table and keeps a tracking issue open while a pin is behind. `make candidate-<adapter> CANDIDATE_VERSION=<version>` (opendnp3: also `CANDIDATE_SHA=<commit>`, since it is pinned by commit) runs the same locally. opendnp3 is archived: a commit after its last tag is not a release and is never a candidate.
 
 ## Registries and retries
 

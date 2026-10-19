@@ -174,14 +174,15 @@ make help        # all targets
 make ci          # validate, lint, build, smoke, cross-stack self-test, document schemas
 make validate    # fixtures against the schema and the cross-field rules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
-make candidate-stepfunc STEPFUNC_CANDIDATE=1.7.1   # self-test the adapter on another dnp3 crate
-make candidate-dscsystems GODNP3_CANDIDATE=latest  # the same for go-dnp3
+scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
+make candidate-dnp3py CANDIDATE_VERSION=0.7.0      # self-test an adapter on another upstream release
 ```
 
-The **Upstream candidates** workflow runs that probe weekly for all four
-stacks (the dnp3 crate on crates.io, opendnp3's latest tag and the tip of its
-archived repository, go-dnp3 on the Go module proxy, dnp3py on PyPI) and
-reports pin versus latest in one table in its job summary.
+The **Upstream candidates** workflow resolves the latest release of every
+stack weekly (the dnp3 crate on crates.io, opendnp3's tags, go-dnp3 on the
+Go module proxy, dnp3py on PyPI), builds and self-tests the adapters whose
+pin is behind, reports pin versus latest in one table in its job summary and
+keeps a tracking issue open while a pin is behind.
 
 `make smoke ADAPTERS=opendnp3` and `VERBOSE=1 make interop` narrow and
 expand what is run and shown; `DNP3_INTEROP_DEBUG=1` in a container's

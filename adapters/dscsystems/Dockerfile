@@ -20,12 +20,12 @@ ARG DEBIAN_DIGEST=sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46
 # ---------------------------------------------------------------------------
 FROM ${BASE_REGISTRY}/golang:1.27.2-trixie@${GOLANG_DIGEST} AS build
 
-# The release pin. "make candidate-dscsystems" overrides it to try another
+# The release pin. "make candidate-dscsystems CANDIDATE_VERSION=<version>" overrides it to try another
 # upstream version (a tag or a commit) without touching the pin.
-ARG GODNP3_VERSION=v0.8.1
+ARG UPSTREAM_VERSION=v0.8.1
 # The commit of the release tag, for print-capabilities (the module proxy
 # serves the tag; go.sum has the checksum).
-ARG GODNP3_SHA=70ff72bb09755db183d1bd69859adc72cd663aec
+ARG UPSTREAM_SHA=70ff72bb09755db183d1bd69859adc72cd663aec
 ARG ADAPTER_VERSION=dev
 
 ENV CGO_ENABLED=0 GOFLAGS=-mod=mod
@@ -33,10 +33,10 @@ WORKDIR /src
 COPY adapters/dscsystems/go.mod adapters/dscsystems/go.sum ./
 
 # At the pin the module must match go.sum; anything else is a candidate.
-RUN if [ "$(go list -m -f '{{.Version}}' github.com/dscsystems/go-dnp3)" = "${GODNP3_VERSION}" ]; then \
+RUN if [ "$(go list -m -f '{{.Version}}' github.com/dscsystems/go-dnp3)" = "${UPSTREAM_VERSION}" ]; then \
          GOFLAGS=-mod=readonly go mod download && go mod verify; \
        else \
-         go get "github.com/dscsystems/go-dnp3@${GODNP3_VERSION}"; \
+         go get "github.com/dscsystems/go-dnp3@${UPSTREAM_VERSION}"; \
        fi
 
 COPY adapters/dscsystems/*.go ./
@@ -45,7 +45,7 @@ RUN test -z "$(gofmt -l .)" \
     && go build -trimpath -ldflags "-s -w \
          -X main.adapterVersion=${ADAPTER_VERSION} \
          -X main.upstreamVersion=$(go list -m -f '{{.Version}}' github.com/dscsystems/go-dnp3) \
-         -X main.upstreamRevision=${GODNP3_SHA}" \
+         -X main.upstreamRevision=${UPSTREAM_SHA}" \
          -o /out/dnp3-interop . \
     && mkdir -p /out/licenses/go-dnp3 \
     && cp "$(go list -m -f '{{.Dir}}' github.com/dscsystems/go-dnp3)/LICENSE" \

@@ -19,8 +19,8 @@ ARG DEBIAN_DIGEST=sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46
 FROM ${BASE_REGISTRY}/debian:trixie-slim@${DEBIAN_DIGEST} AS opendnp3-build
 
 ARG OPENDNP3_REPO=https://github.com/dnp3/opendnp3.git
-ARG OPENDNP3_VERSION=3.1.2
-ARG OPENDNP3_SHA=26b4c01e4839bbbda8866655e086471c4917ee53
+ARG UPSTREAM_VERSION=3.1.2
+ARG UPSTREAM_SHA=26b4c01e4839bbbda8866655e086471c4917ee53
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -31,13 +31,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Fetched by commit, so the pin is the hash and not a tag that could move.
-# OPENDNP3_VERSION is the name of that commit, for print-capabilities.
+# UPSTREAM_VERSION is the name of that commit, for print-capabilities. "make
+# candidate-opendnp3 CANDIDATE_VERSION=<tag> CANDIDATE_SHA=<commit>" overrides
+# both to try another commit.
 WORKDIR /src/opendnp3
 RUN git init -q . \
     && git remote add origin "${OPENDNP3_REPO}" \
-    && git fetch -q --depth 1 origin "${OPENDNP3_SHA}" \
+    && git fetch -q --depth 1 origin "${UPSTREAM_SHA}" \
     && git checkout -q --detach FETCH_HEAD \
-    && test "$(git rev-parse HEAD)" = "${OPENDNP3_SHA}"
+    && test "$(git rev-parse HEAD)" = "${UPSTREAM_SHA}"
 
 # Configuring fetches the dependencies opendnp3 pins itself in deps/*.cmake
 # (asio 1.16.0, exe4cpp and ser4cpp at fixed commits). The sources of 2022
@@ -60,8 +62,8 @@ RUN cmake .. \
 # ---------------------------------------------------------------------------
 FROM ${BASE_REGISTRY}/debian:trixie-slim@${DEBIAN_DIGEST} AS adapter-build
 
-ARG OPENDNP3_VERSION=3.1.2
-ARG OPENDNP3_SHA=26b4c01e4839bbbda8866655e086471c4917ee53
+ARG UPSTREAM_VERSION=3.1.2
+ARG UPSTREAM_SHA=26b4c01e4839bbbda8866655e086471c4917ee53
 ARG ADAPTER_VERSION=dev
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -79,8 +81,8 @@ WORKDIR /src/adapter/build
 RUN cmake .. \
       -DCMAKE_BUILD_TYPE=Release \
       -DADAPTER_VERSION="${ADAPTER_VERSION}" \
-      -DUPSTREAM_VERSION="${OPENDNP3_VERSION}" \
-      -DUPSTREAM_REVISION="${OPENDNP3_SHA}" \
+      -DUPSTREAM_VERSION="${UPSTREAM_VERSION}" \
+      -DUPSTREAM_REVISION="${UPSTREAM_SHA}" \
     && make -j"$(nproc)"
 
 # ---------------------------------------------------------------------------

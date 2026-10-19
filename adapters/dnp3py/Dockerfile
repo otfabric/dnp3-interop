@@ -15,22 +15,22 @@ ARG PYTHON_DIGEST=sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013e
 
 FROM ${BASE_REGISTRY}/python:3.14.8-slim-trixie@${PYTHON_DIGEST}
 
-# The release pin. "make candidate-dnp3py" overrides it to try another
+# The release pin. "make candidate-dnp3py CANDIDATE_VERSION=<version>" overrides it to try another
 # version without touching the pin (installed without a hash then).
-ARG DNP3PY_VERSION=0.6.0
+ARG UPSTREAM_VERSION=0.6.0
 # The commit of the release tag in https://github.com/craigpnnl/dnp3py, for
 # print-capabilities (PyPI has no commit; requirements.txt has the hash).
-ARG DNP3PY_SHA=c00d5df22e779df72f7caa4402c3f34957eb276d
+ARG UPSTREAM_SHA=c00d5df22e779df72f7caa4402c3f34957eb276d
 ARG ADAPTER_VERSION=dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 \
-    DNP3_INTEROP_ADAPTER_VERSION=${ADAPTER_VERSION} DNP3_INTEROP_UPSTREAM_REVISION=${DNP3PY_SHA}
+    DNP3_INTEROP_ADAPTER_VERSION=${ADAPTER_VERSION} DNP3_INTEROP_UPSTREAM_REVISION=${UPSTREAM_SHA}
 
 COPY adapters/dnp3py/requirements.txt /opt/adapter/requirements.txt
-RUN if grep -q "^dnp3py==${DNP3PY_VERSION} " /opt/adapter/requirements.txt; then \
+RUN if grep -q "^dnp3py==${UPSTREAM_VERSION} " /opt/adapter/requirements.txt; then \
          pip install --require-hashes --only-binary=:all: -r /opt/adapter/requirements.txt; \
        else \
-         pip install --only-binary=:all: "dnp3py==${DNP3PY_VERSION}"; \
+         pip install --only-binary=:all: "dnp3py==${UPSTREAM_VERSION}"; \
        fi \
     && mkdir -p /licenses/dnp3py \
     && cp "$(python -c 'import importlib.metadata as m; d=m.distribution("dnp3py"); print([str(d.locate_file(f)) for f in d.files if f.name == "LICENSE"][0])')" \

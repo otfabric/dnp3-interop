@@ -41,10 +41,9 @@ image = $(REGISTRY)/dnp3-interop-$(1)
 
 export REGISTRY VERSION
 
-# image-% and smoke-% are pattern rules, which make ignores for .PHONY
+# image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc candidate-opendnp3 candidate-dscsystems candidate-dnp3py \
-        buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint images smoke interop buildx publish buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -113,70 +112,28 @@ interop: ## Cross-stack self-test: every client against every server
 
 # ── Upstream candidates ───────────────────────────────────────────────────────
 # Builds an adapter on another upstream version than the release pin and runs
-# the self-tests on it. Bugs of that version listed in tests/known-bugs.tsv
-# are reported as known, so the run shows whether everything else still works.
+# the self-tests on it against the other adapters at their pins. Bugs of that
+# version listed in tests/known-bugs.tsv are reported as known, so the run
+# shows whether everything else still works. scripts/latest-upstream.py prints
+# the latest release of an adapter's upstream; the Upstream candidates
+# workflow runs this for every adapter whose pin is behind.
 
-STEPFUNC_CANDIDATE ?=
+CANDIDATE_VERSION ?=
+# opendnp3 is pinned by commit: give the commit of CANDIDATE_VERSION.
+CANDIDATE_SHA ?=
 
-candidate-stepfunc: image-opendnp3 ## Build stepfunc on dnp3 crate STEPFUNC_CANDIDATE and self-test it (release pin untouched)
-	@test -n "$(STEPFUNC_CANDIDATE)" || { echo "Error: STEPFUNC_CANDIDATE=<crate version> is required"; exit 1; }
-	@echo "Building stepfunc candidate on dnp3 $(STEPFUNC_CANDIDATE)..."
+candidate-%: FORCE ## Build one adapter on CANDIDATE_VERSION (opendnp3: and CANDIDATE_SHA) and self-test it, e.g. candidate-dnp3py CANDIDATE_VERSION=0.7.0
+	@test -n "$(CANDIDATE_VERSION)" || { echo "Error: CANDIDATE_VERSION=<version> is required"; exit 1; }
+	@if [ "$*" = opendnp3 ] && [ -z "$(CANDIDATE_SHA)" ]; then echo "Error: opendnp3 is pinned by commit: CANDIDATE_SHA=<commit> is required"; exit 1; fi
+	@echo "Building $* candidate on $(CANDIDATE_VERSION) $(CANDIDATE_SHA)..."
 	@$(RETRY) docker build \
 		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
-		--build-arg DNP3_VERSION=$(STEPFUNC_CANDIDATE) --build-arg DNP3_SHA=candidate \
-		--tag $(call image,stepfunc):candidate \
-		--file adapters/stepfunc/Dockerfile .
-	@docker tag $(call image,opendnp3):$(VERSION) $(call image,opendnp3):candidate
-	@VERSION=candidate scripts/smoke.sh stepfunc
-	@VERSION=candidate scripts/interop.sh stepfunc opendnp3
-
-# An opendnp3 candidate is a commit: a newer tag, or the tip of the default
-# branch (the repository is archived; its tip is later than 3.1.2 but
-# untagged).
-OPENDNP3_CANDIDATE_SHA  ?=
-OPENDNP3_CANDIDATE_NAME ?= candidate
-
-candidate-opendnp3: image-stepfunc image-dscsystems image-dnp3py ## Build opendnp3 at OPENDNP3_CANDIDATE_SHA and self-test it (release pin untouched)
-	@test -n "$(OPENDNP3_CANDIDATE_SHA)" || { echo "Error: OPENDNP3_CANDIDATE_SHA=<commit> is required"; exit 1; }
-	@echo "Building opendnp3 candidate at $(OPENDNP3_CANDIDATE_SHA)..."
-	@$(RETRY) docker build \
-		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
-		--build-arg OPENDNP3_SHA=$(OPENDNP3_CANDIDATE_SHA) --build-arg OPENDNP3_VERSION=$(OPENDNP3_CANDIDATE_NAME) \
-		--tag $(call image,opendnp3):candidate \
-		--file adapters/opendnp3/Dockerfile .
-	@for a in stepfunc dscsystems dnp3py; do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate; done
-	@VERSION=candidate scripts/smoke.sh opendnp3
-	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py
-
-# A dscsystems candidate is a version of go-dnp3 as "go get" takes it: a tag
-# or a commit.
-GODNP3_CANDIDATE ?= latest
-
-candidate-dscsystems: image-stepfunc image-opendnp3 ## Build dscsystems on go-dnp3 GODNP3_CANDIDATE and self-test it (release pin untouched)
-	@echo "Building dscsystems candidate on go-dnp3 $(GODNP3_CANDIDATE)..."
-	@$(RETRY) docker build \
-		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
-		--build-arg GODNP3_VERSION=$(GODNP3_CANDIDATE) --build-arg GODNP3_SHA=candidate \
-		--tag $(call image,dscsystems):candidate \
-		--file adapters/dscsystems/Dockerfile .
-	@docker tag $(call image,stepfunc):$(VERSION) $(call image,stepfunc):candidate
-	@docker tag $(call image,opendnp3):$(VERSION) $(call image,opendnp3):candidate
-	@VERSION=candidate scripts/smoke.sh dscsystems
-	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems
-
-DNP3PY_CANDIDATE ?=
-
-candidate-dnp3py: image-stepfunc image-opendnp3 image-dscsystems ## Build dnp3py on DNP3PY_CANDIDATE (a PyPI version) and self-test it (release pin untouched)
-	@test -n "$(DNP3PY_CANDIDATE)" || { echo "Error: DNP3PY_CANDIDATE=<version> is required"; exit 1; }
-	@echo "Building dnp3py candidate on dnp3py $(DNP3PY_CANDIDATE)..."
-	@$(RETRY) docker build \
-		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
-		--build-arg DNP3PY_VERSION=$(DNP3PY_CANDIDATE) --build-arg DNP3PY_SHA=candidate \
-		--tag $(call image,dnp3py):candidate \
-		--file adapters/dnp3py/Dockerfile .
-	@for a in stepfunc opendnp3 dscsystems; do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate; done
-	@VERSION=candidate scripts/smoke.sh dnp3py
-	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py
+		--build-arg UPSTREAM_VERSION=$(CANDIDATE_VERSION) --build-arg UPSTREAM_SHA=$(or $(CANDIDATE_SHA),candidate) \
+		--tag $(call image,$*):candidate \
+		--file adapters/$*/Dockerfile .
+	@for a in $(filter-out $*,$(ADAPTERS)); do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate || exit 1; done
+	@VERSION=candidate scripts/smoke.sh $*
+	@VERSION=candidate scripts/interop.sh $(ADAPTERS)
 
 capabilities: ## Print the capability document of every adapter
 	@for a in $(ADAPTERS); do docker run --rm $(call image,$$a):$(VERSION) print-capabilities; done
