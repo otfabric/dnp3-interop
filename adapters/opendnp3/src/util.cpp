@@ -49,7 +49,8 @@ std::string format_time(uint64_t ms)
     const std::time_t seconds = static_cast<std::time_t>(ms / 1000);
     std::tm tm{};
     gmtime_r(&seconds, &tm);
-    char buffer[40];
+    // Large enough for any int the fields can hold, which GCC checks.
+    char buffer[96];
     std::snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ", tm.tm_year + 1900, tm.tm_mon + 1,
                   tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, static_cast<int>(ms % 1000));
     return buffer;

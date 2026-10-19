@@ -1,12 +1,13 @@
 # Known bugs of upstream versions, for scripts/interop.sh.
 #
-# A released pin has no entry here: an adapter is published on a version that
-# passes every case. Entries exist for versions that are built as candidates
-# (make candidate-stepfunc), so that one upstream bug is reported as such
-# instead of hiding whether everything else works.
+# Entries exist for versions that are built as candidates (make
+# candidate-stepfunc), so that one upstream bug is reported as such instead of
+# hiding whether everything else works, and for a pinned version only when the
+# bug cannot be avoided by an adapter and the behaviour it breaks is covered
+# by another check (docs/COMPATIBILITY.md says which).
 #
 # Columns, separated by tabs:
-#   1  adapter
+#   1  adapter, or adapter:server / adapter:client for a bug of one role
 #   2  upstream version, as print-capabilities reports it
 #   3  extended regular expression matched against the operation and its flags
 #   4  what is wrong (docs/COMPATIBILITY.md has the details)
@@ -15,3 +16,4 @@
 # may fail and is counted as "known bug" rather than as a failure. If no
 # matching case fails any more, the run fails: the entry is stale and the pin
 # can move.
+stepfunc:server	1.7.0	--mode sbo	the first SELECT after start fails with NO_SELECT: the master's confirm of the null unsolicited response arrives between SELECT and OPERATE and the outstation counts it as an intervening request

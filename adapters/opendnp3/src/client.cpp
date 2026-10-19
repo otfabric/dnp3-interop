@@ -603,12 +603,19 @@ int run_client(const std::vector<std::string>& argv)
             std::lock_guard<std::mutex> lock(s.mutex);
             const auto result = *s.done;
             const bool rejected = s.iin && request_error(*s.iin);
-            // An echoed command status says more than the IIN bit some
-            // outstations set along with it.
-            if (op == "operate" && s.commandStatus && *s.commandStatus != 0)
+            // A request error wins over the echo: not every library hands the
+            // echo of a refused request to the application, so the contract
+            // reports neither.
+            if (rejected)
+            {
+                std::string message = "the outstation refused the request (IIN2)";
+                if (op == "operate" && s.commandStatus)
+                    message += "; it echoed " + command_status_name(*s.commandStatus);
+                s.commandStatus.reset();
+                failure = Outcome{"rejected", message};
+            }
+            else if (op == "operate" && s.commandStatus && *s.commandStatus != 0)
                 failure = Outcome{"command-failed", "the outstation answered " + command_status_name(*s.commandStatus)};
-            else if (rejected)
-                failure = Outcome{"rejected", "the outstation refused the request (IIN2)"};
             else if (s.lost || result == TaskCompletion::FAILURE_NO_COMMS)
                 failure = Outcome{"connection-lost", "the connection closed during the operation"};
             else if (result == TaskCompletion::FAILURE_RESPONSE_TIMEOUT || result == TaskCompletion::FAILURE_START_TIMEOUT)

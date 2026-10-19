@@ -233,7 +233,7 @@ past argument parsing, including failures.
 | `connected` | boolean | The TCP connection was established |
 | `iin` | array or null | Read operations (`integrity-poll`, `event-poll`, `read`): the internal indications of the last solicited response, by name. Null for the other operations and when no response arrived |
 | `objects` | array | Every measurement received, solicited and unsolicited, in order: see [Object documents](#object-documents) |
-| `commandStatus` | string or null | `operate` only: the status the outstation echoed, by name; null when no echo arrived or none was expected |
+| `commandStatus` | string or null | `operate` only: the status the outstation echoed, by name; null when no echo arrived, none was expected, or the response carried a [request error](#request-errors) |
 | `restartDelayMs` | number or null | `restart` only: the delay the outstation announced, in milliseconds |
 | `elapsedMs` | number | Wall-clock duration |
 
@@ -252,9 +252,12 @@ The restart bit is set by an outstation until a master clears it, so whether
 
 A response whose IIN2 has `NO_FUNC_CODE_SUPPORT`, `OBJECT_UNKNOWN` or
 `PARAMETER_ERROR` set is a refusal of the request: the error is `rejected`.
-For `operate`, an echoed command status other than SUCCESS takes precedence:
-the error is `command-failed` whatever IIN bit the outstation set with it
-(the opendnp3 outstation sets one along with NOT_SUPPORTED).
+This holds for `operate` too: when the response to a control carries a
+request error, the error is `rejected` and `commandStatus` is null, whatever
+status the outstation echoed. Both P0 outstations set PARAMETER_ERROR along
+with a NOT_SUPPORTED echo, and not every master library hands the echo of
+such a response to the application. `command-failed` is a refusal by the
+echoed status alone (OUT_OF_RANGE, NO_SELECT, ...).
 
 #### Command status
 
@@ -274,7 +277,7 @@ other value.
 | `connect-failed` | No TCP connection within `--connect-timeout-ms` | 3 |
 | `timeout` | The outstation did not answer in time | 1 |
 | `rejected` | A [request error](#request-errors) in the response | 1 |
-| `command-failed` | `operate`: the echoed status is not SUCCESS (`commandStatus` says which) | 1 |
+| `command-failed` | `operate`: the echoed status is not SUCCESS and there is no request error (`commandStatus` says which) | 1 |
 | `connection-lost` | The connection closed during the operation | 1 |
 | `failed` | Anything else; see `message` | 1 |
 

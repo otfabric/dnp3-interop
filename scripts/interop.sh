@@ -51,7 +51,7 @@ for adapter in "${ADAPTERS[@]}"; do
     log "${adapter}: upstream ${version}"
     while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text; do
         [[ -z "${bug_adapter}" || "${bug_adapter}" == \#* ]] && continue
-        if [[ "${bug_adapter}" == "${adapter}" && "${bug_version}" == "${version}" ]]; then
+        if [[ "${bug_adapter%%:*}" == "${adapter}" && "${bug_version}" == "${version}" ]]; then
             printf '%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" >> "${WORK}/active"
             log "known bug in ${adapter} ${version}: ${bug_text}"
         fi
@@ -86,7 +86,8 @@ skip() { SKIPPED=$((SKIPPED + 1)); [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; re
 known_bug() {
     local bug_adapter bug_regex bug_text
     while IFS=$'\t' read -r bug_adapter bug_regex bug_text; do
-        if [[ "${bug_adapter}" == "$1" || "${bug_adapter}" == "$2" ]] && [[ "$3" =~ ${bug_regex} ]]; then
+        if [[ "${bug_adapter}" == "$1" || "${bug_adapter}" == "$2" || "${bug_adapter}" == "$1:client" \
+              || "${bug_adapter}" == "$2:server" ]] && [[ "$3" =~ ${bug_regex} ]]; then
             echo "${bug_text}"
             return 0
         fi
@@ -218,11 +219,23 @@ for server in "${ADAPTERS[@]}"; do
             "$(objects "$(run_client "${client}" event-poll --classes 2 --host "${name}")")"
         check "${pair}" "confirmed events are gone" "" \
             "$(objects "$(run_client "${client}" event-poll --host "${name}")")"
-        check "${pair}" "outputs and targets keep the controlled values" "g1v2:1=true g10v2:0=true g30v1:4=42 g40v1:0=42" \
+        check "${pair}" "outputs and targets keep the controlled values" "g10v2:0=true g1v2:1=true g30v1:4=42 g40v1:0=42" \
             "$(run_client "${client}" integrity-poll --host "${name}" | jq -r '[.objects[] | select((.group == 1 and .index == 1) or (.group == 10 and .index == 0) or (.group == 30 and .index == 4) or (.group == 40 and .index == 0)) | "g\(.group)v\(.variation):\(.index)=\(.value)"] | sort | join(" ")')"
         run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
         check "${pair}" "a control that changes nothing produces no event" "" \
             "$(objects "$(run_client "${client}" event-poll --host "${name}")")"
+        stop_server "${name}"
+
+        # Select-before-operate as the first request after the null unsolicited
+        # response of the outstation was confirmed (see tests/known-bugs.tsv).
+        name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+        run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --collect-ms 500 --host "${name}" >/dev/null
+        check "${pair}" "select-before-operate of a select-required output" "SUCCESS" \
+            "$(run_client "${client}" operate --type g12v1 --index 1 --code LATCH_ON --mode sbo --host "${name}" | jq -r '.commandStatus')"
+        check "${pair}" "select-before-operate of an analog output" "SUCCESS" \
+            "$(run_client "${client}" operate --type g41v3 --index 1 --value 49.5 --mode sbo --host "${name}" | jq -r '.commandStatus')"
+        check "${pair}" "the operated values are reported" "g10v2:1=true g40v3:1=49.5" \
+            "$(run_client "${client}" integrity-poll --host "${name}" | jq -r '[.objects[] | select((.group == 10 and .index == 1) or (.group == 40 and .index == 1)) | "g\(.group)v\(.variation):\(.index)=\(.value)"] | sort | join(" ")')"
         stop_server "${name}"
 
         # Freeze, then freeze and clear.

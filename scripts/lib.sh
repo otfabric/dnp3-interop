@@ -81,13 +81,14 @@ run_client() {
 }
 
 # What two adapters must agree on: everything except who answered, how long it
-# took, the wall-clock time stamps, the restart bit (set until the first master
+# took, the error message (for people, not part of the contract), the
+# wall-clock time stamps, the restart bit (set until the first master
 # clears it, so it depends on what ran before) and the order of the headers in
 # a response, which the standard leaves to the outstation. Objects are sorted
 # by unsolicited, group, variation and index; their order within one type is
 # kept.
 # shellcheck disable=SC2034
-NORMALIZE='del(.adapter, .elapsedMs)
+NORMALIZE='del(.adapter, .elapsedMs, .error.message?)
   | (.objects[]? |= del(.time))
   | (if (.iin | type) == "array" then .iin -= ["DEVICE_RESTART"] else . end)
   | .objects = ((.objects // []) | to_entries
