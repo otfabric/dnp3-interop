@@ -93,8 +93,8 @@ bit. It sends the freezes without acknowledgement, which makes
 
 **Gate:** smoke test and cross-stack self-test for the role it declares. Met
 on linux/arm64 (2026-10-20): 28 of 28 smoke checks (checked against the
-opendnp3 server); the four-adapter run has 1115 checks passed, none failed,
-18 known-bug hits, 309 skipped. Open: the outstation role, which needs a
+opendnp3 server); the four-adapter run has 1114 checks passed, none failed,
+19 known-bug hits, 117 skipped. Open: the outstation role, which needs a
 second fixture within dnp3py's limits and cases for it.
 
 ### Triangle MicroWorks DNP3 SCL (waiting)

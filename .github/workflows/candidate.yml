@@ -60,7 +60,7 @@ jobs:
         run: |
           set -o pipefail
           make candidate-stepfunc STEPFUNC_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
-          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1 | sed 's/^\[interop\] //')" >> "$GITHUB_OUTPUT"
 
       - name: Decide
         id: decide
@@ -116,7 +116,7 @@ jobs:
           set -o pipefail
           make candidate-opendnp3 OPENDNP3_CANDIDATE_SHA=${{ steps.resolve.outputs.latest_sha }} \
             OPENDNP3_CANDIDATE_NAME=${{ steps.resolve.outputs.latest }} 2>&1 | tee tag.log
-          echo "result=$(grep -E 'passed, [0-9]+ failed' tag.log | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "result=$(grep -E 'passed, [0-9]+ failed' tag.log | tail -1 | sed 's/^\[interop\] //')" >> "$GITHUB_OUTPUT"
 
       - name: Build and self-test the tip of the default branch
         id: tip
@@ -126,7 +126,7 @@ jobs:
           set -o pipefail
           make candidate-opendnp3 OPENDNP3_CANDIDATE_SHA=${{ steps.resolve.outputs.tip_sha }} \
             OPENDNP3_CANDIDATE_NAME=tip 2>&1 | tee tip.log
-          echo "result=$(grep -E 'passed, [0-9]+ failed' tip.log | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "result=$(grep -E 'passed, [0-9]+ failed' tip.log | tail -1 | sed 's/^\[interop\] //')" >> "$GITHUB_OUTPUT"
 
       - name: Decide
         id: decide
@@ -177,7 +177,7 @@ jobs:
         run: |
           set -o pipefail
           make candidate-dscsystems GODNP3_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
-          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1 | sed 's/^\[interop\] //')" >> "$GITHUB_OUTPUT"
 
       - name: Decide
         id: decide
@@ -218,7 +218,7 @@ jobs:
         run: |
           set -o pipefail
           make candidate-dnp3py DNP3PY_CANDIDATE=${{ steps.resolve.outputs.latest }} 2>&1 | tee candidate.log
-          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "result=$(grep -E 'passed, [0-9]+ failed' candidate.log | tail -1 | sed 's/^\[interop\] //')" >> "$GITHUB_OUTPUT"
 
       - name: Decide
         id: decide

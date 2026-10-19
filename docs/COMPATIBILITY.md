@@ -69,21 +69,28 @@ can send.
 the dnp3py master sends. dnp3py has no server column: it is a master only.
 
 Verified on linux/arm64 with the pins above on 2026-10-20: 48 cases, the
-value checks over 12 pairings; 1115 checks passed, none failed, 18 known-bug
-hits, 309 skipped (a capability a pairing does not declare, mostly every
-case against dnp3py as a server). The known-bug hits: the first SELECT on a
-fresh stepfunc outstation, 11 (stepfunc, opendnp3 and dnp3py masters; for the
-first two it depends on timing); the go-dnp3 freeze, 6; go-dnp3 against
-itself with a wrong master address, 1. The 484 documents the run kept
-validate against `schemas/`. `make smoke`: 32 of 32 checks for each server
-adapter, 28 of 28 for dnp3py.
+value checks over 12 pairings; 1114 checks passed, none failed, 19 known-bug
+hits, 117 skipped (a capability a pairing does not declare; pairings with
+dnp3py as the server are not counted, it has no server role). The known-bug
+hits: the first SELECT on a fresh stepfunc outstation, 12 (stepfunc, opendnp3
+and dnp3py masters; for the first two it depends on timing, so the count
+varies between runs); the go-dnp3 freeze, 6; go-dnp3 against itself with a
+wrong master address, 1. The 484 documents the run kept validate against
+`schemas/`. `make smoke`: 32 of 32 checks for each server adapter, 28 of 28
+for dnp3py.
 
-The same on GitHub Actions, natively on both architectures (CI run
-39336826490, commit `f5e1cb7`): every smoke check passed for all four
-adapters; the cross-stack self-test had 1115 passed, 18 known-bug hits on
-linux/amd64 and 1113 passed, 20 known-bug hits on linux/arm64, none failed,
-309 skipped on each. The difference is the timing-dependent first SELECT on
-a fresh stepfunc outstation.
+The same on GitHub Actions, natively on both architectures (CI runs
+39336826490 and 39339934244): every smoke check passed for all four adapters,
+and the cross-stack self-test had no failure on linux/amd64 or linux/arm64.
+
+The cross-stack self-test runs one suite per server adapter at the same time
+(an outstation serves one master at a time, so the work is split by server)
+and checks the agreement of the documents across pairings when all are done;
+on a laptop the smoke and cross-stack tests together take about four minutes.
+
+The untagged tip of opendnp3's archived repository (commit `c1dc7165`) passes
+the smoke test and the cross-stack self-test like 3.1.2 (Upstream candidates
+run 39339958041); the pin stays on the release.
 
 Covered by every pairing: integrity poll (values and flags against the
 fixture), event polls per class, reads of every point type (all objects, a

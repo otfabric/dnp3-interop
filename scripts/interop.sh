@@ -16,6 +16,10 @@
 #   - a class assignment moves the events of a point to another class,
 #   - a time synchronization clears NEED_TIME.
 #
+# The work runs as one suite per server adapter, all at the same time (an
+# outstation serves one master at a time, so it is split by server); the
+# agreement of the documents across pairings is checked when all are done.
+#
 # tests/known-bugs.tsv lists bugs of specific upstream versions; a case they
 # explain is counted as a known bug instead of a failure.
 #
@@ -123,58 +127,6 @@ keep() {  # keep <label> <document>
     printf '%s\n' "$2" > "${REPORT_DIR}/$(echo "$1" | tr -c 'A-Za-z0-9._\n-' '_').json"
 }
 
-log "adapters: ${ADAPTERS[*]} (${VERSION})"
-n=0
-while IFS=$'\t' read -r state want_exit want_summary needs operation; do
-    [[ -z "${state}" || "${state}" == \#* ]] && continue
-    n=$((n + 1))
-    reference="" reference_pair=""
-    for server in "${ADAPTERS[@]}"; do
-        for client in "${ADAPTERS[@]}"; do
-            pair="${client}->${server}"
-            if ! supported "${client}" "${server}" "${needs}"; then
-                skip "${pair}: ${operation} (needs ${needs})"
-                continue
-            fi
-            if [[ "${state}" == "rw" ]]; then
-                name=$(start_server "${server}"); wait_ready "${name}" || exit 1
-            else
-                name=$(shared_server "${server}")
-            fi
-            # shellcheck disable=SC2086
-            doc=$(run_client "${client}" ${operation} --host "${name}"); CLIENT_EXIT=$?
-            [[ "${state}" == "rw" ]] && stop_server "${name}"
-            keep "case${n}-${pair}" "${doc}"
-
-            bug=$(known_bug "${client}" "${server}" "${operation}")
-            summary=$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)
-            if [[ "${summary}" != "${want_summary}" || "${CLIENT_EXIT}" != "${want_exit}" ]]; then
-                if [[ -n "${bug}" ]]; then
-                    hit_known_bug "${pair}" "${operation}" "${bug}"
-                    continue
-                fi
-                fail "${pair}: ${operation}"
-                log "    want exit=${want_exit} ${want_summary}"
-                log "    got  exit=${CLIENT_EXIT} ${summary:-<no result document>}"
-                continue
-            fi
-            ok "${pair}: ${operation}"
-            # A pairing a known bug may affect is not held to agreement.
-            [[ -n "${bug}" ]] && continue
-
-            normalized=$(jq -cS "${NORMALIZE}" <<<"${doc}")
-            if [[ -z "${reference}" ]]; then
-                reference="${normalized}"; reference_pair="${pair}"
-            elif [[ "${normalized}" != "${reference}" ]]; then
-                fail "${pair} and ${reference_pair} disagree on: ${operation}"
-                diff <(jq -S . <<<"${reference}") <(jq -S . <<<"${normalized}") | head -20 >&2
-            else
-                ok "${pair} agrees with ${reference_pair}: ${operation}"
-            fi
-        done
-    done
-done < "${CASES}"
-
 # ---- values ----
 # objects <document>: "g<group>v<variation>:<index>=<value>" per object,
 # sorted, unsolicited ones marked "u"; what the value checks compare.
@@ -206,8 +158,57 @@ want_flags=$(jq -cS '
     [ (.binaryInputs[]?, .doubleBitInputs[]?, .binaryOutputs[]?, .counters[]?, .frozenCounters[]?,
        .analogInputs[]?, .analogOutputs[]?) | .flags // ["ONLINE"] ] | sort' "${FIXTURE}")
 
-for server in "${ADAPTERS[@]}"; do
+# suite <server>: every case and every value check against the outstations of
+# one server adapter, with every client adapter. One suite runs per server
+# adapter, all at the same time: an outstation has one master connection at a
+# time, so the work is split by server, never within one. A suite keeps the
+# normalized document of every pairing that met its expectation, for the
+# agreement check across pairings, and leaves its counts in ${WORK}.
+suite() {
+    local server="$1" n=0 state want_exit want_summary needs operation client pair name doc summary bug got got_flags procedure
+    PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
+    while IFS=$'\t' read -r state want_exit want_summary needs operation; do
+        [[ -z "${state}" || "${state}" == \#* ]] && continue
+        n=$((n + 1))
+        mkdir -p "${WORK}/agree/${n}"
+        for client in "${ADAPTERS[@]}"; do
+            pair="${client}->${server}"
+            if ! supported "${client}" "${server}" "${needs}"; then
+                skip "${pair}: ${operation} (needs ${needs})"
+                continue
+            fi
+            if [[ "${state}" == "rw" ]]; then
+                name=$(SERVER_TAG=rw start_server "${server}"); wait_ready "${name}" || { fail "${pair}: server did not start"; continue; }
+            else
+                name=$(shared_server "${server}")
+            fi
+            # shellcheck disable=SC2086
+            doc=$(run_client "${client}" ${operation} --host "${name}"); CLIENT_EXIT=$?
+            [[ "${state}" == "rw" ]] && stop_server "${name}"
+            keep "case${n}-${pair}" "${doc}"
+
+            bug=$(known_bug "${client}" "${server}" "${operation}")
+            summary=$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)
+            if [[ "${summary}" != "${want_summary}" || "${CLIENT_EXIT}" != "${want_exit}" ]]; then
+                if [[ -n "${bug}" ]]; then
+                    hit_known_bug "${pair}" "${operation}" "${bug}"
+                    continue
+                fi
+                fail "${pair}: ${operation}"
+                log "    want exit=${want_exit} ${want_summary}"
+                log "    got  exit=${CLIENT_EXIT} ${summary:-<no result document>}"
+                continue
+            fi
+            ok "${pair}: ${operation}"
+            # A pairing a known bug may affect is not held to agreement.
+            [[ -n "${bug}" ]] && continue
+            jq -cS "${NORMALIZE}" <<<"${doc}" > "${WORK}/agree/${n}/${client}__${server}"
+        done
+    done < "${CASES}"
+
     for client in "${ADAPTERS[@]}"; do
+        pair="${client}->${server}"
+        supported "${client}" "${server}" "-" || continue
         pair="${client}->${server}"
         supported "${client}" "${server}" "-" || continue
         name=$(shared_server "${server}")
@@ -324,7 +325,52 @@ for server in "${ADAPTERS[@]}"; do
             stop_server "${name}"
         done
     done
+    echo "${PASS} ${FAIL} ${SKIPPED} ${KNOWN}" > "${WORK}/tally-${server}"
+}
+
+log "adapters: ${ADAPTERS[*]} (${VERSION})"
+servers=()
+for adapter in "${ADAPTERS[@]}"; do
+    has_role "${adapter}" server && servers+=("${adapter}")
 done
+for server in "${servers[@]}"; do
+    suite "${server}" &
+done
+wait
+
+PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
+for server in "${servers[@]}"; do
+    if [[ ! -s "${WORK}/tally-${server}" ]]; then
+        fail "the suite of ${server} did not finish"
+        continue
+    fi
+    read -r p f s k < "${WORK}/tally-${server}"
+    PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
+done
+
+# ---- every pairing that met a case's expectation returned the same document ----
+n=0
+while IFS=$'\t' read -r state _ _ _ operation; do
+    [[ -z "${state}" || "${state}" == \#* ]] && continue
+    n=$((n + 1))
+    reference="" reference_pair=""
+    for server in "${servers[@]}"; do
+        for client in "${ADAPTERS[@]}"; do
+            file="${WORK}/agree/${n}/${client}__${server}"
+            [[ -f "${file}" ]] || continue
+            pair="${client}->${server}"
+            normalized=$(cat "${file}")
+            if [[ -z "${reference}" ]]; then
+                reference="${normalized}"; reference_pair="${pair}"
+            elif [[ "${normalized}" != "${reference}" ]]; then
+                fail "${pair} and ${reference_pair} disagree on: ${operation}"
+                diff <(jq -S . <<<"${reference}") <(jq -S . <<<"${normalized}") | head -20 >&2
+            else
+                ok "${pair} agrees with ${reference_pair}: ${operation}"
+            fi
+        done
+    done
+done < "${CASES}"
 
 # ---- a known bug that no longer shows is a stale entry ----
 while IFS=$'\t' read -r bug_adapter bug_regex bug_text; do

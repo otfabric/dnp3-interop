@@ -72,7 +72,7 @@ jobs:
       - run: pip install jsonschema
 
       - name: Build images
-        run: make images
+        run: make -j4 --output-sync=target images
 
       - name: Capabilities
         run: make capabilities | tee -a "$GITHUB_STEP_SUMMARY"

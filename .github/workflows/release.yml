@@ -52,7 +52,7 @@ jobs:
 
       - name: Build for linux/${{ matrix.arch }} and self-test
         run: |
-          make images
+          make -j4 --output-sync=target images
           make documents
 
       - name: Login to GHCR

@@ -639,6 +639,12 @@ int run_client(const std::vector<std::string>& argv)
         if (!failure && collect > 0)
             std::this_thread::sleep_for(milliseconds(collect));
 
+        // The library queues the application confirm of the last response and
+        // writes it asynchronously; closing at once can lose it, and the
+        // outstation then keeps events the master has already reported.
+        if (connected)
+            std::this_thread::sleep_for(milliseconds(200));
+
         master->Disable();
         channel->Shutdown();
         manager.Shutdown();

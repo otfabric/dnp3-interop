@@ -33,6 +33,10 @@ BUILDER ?= dnp3-interop
 # all of them; override to work on one: make smoke ADAPTERS=opendnp3
 ADAPTERS ?= stepfunc opendnp3 dscsystems dnp3py
 
+# Parallel jobs for "make documents" (the smoke tests); the image builds take
+# -j on the command line, as the workflows do: make -j4 images
+JOBS ?= 4
+
 image = $(REGISTRY)/dnp3-interop-$(1)
 
 export REGISTRY VERSION
@@ -67,7 +71,8 @@ validate: ## Validate every fixture against the schema and the cross-field rules
 
 documents: ## Run the self-tests keeping every document, and validate them against schemas/
 	@rm -rf reports && mkdir -p reports
-	@REPORT_DIR=reports $(MAKE) --no-print-directory smoke interop
+	@REPORT_DIR=reports $(MAKE) --no-print-directory -j$(JOBS) smoke
+	@REPORT_DIR=reports $(MAKE) --no-print-directory interop
 	@echo "Validating documents..."
 	@if python3 -c 'import jsonschema' 2>/dev/null; then \
 		python3 scripts/validate-documents.py reports; \
