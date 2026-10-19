@@ -11,7 +11,7 @@ self-test covers between the reference stacks.
 | Integrity poll | Class 1, 2, 3 and 0 in one READ | yes, values and flags against the fixture |
 | Static data | Groups 1, 3, 10, 20, 21, 30, 40, 110 in the static variations of the fixture format, including the variations without flags and the 16-bit ones; all objects, ranges, and a specific variation | yes |
 | Event data | Groups 2, 4, 11, 22, 23, 32, 42 with and without time, caused by controls and freezes, in classes 1..3; confirmed events are not sent again | yes |
-| Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED and OUT_OF_RANGE; select-required points | yes |
+| Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED (with PARAMETER_ERROR) and OUT_OF_RANGE; select-required points | yes; on the stepfunc outstation the first SELECT after start fails (see COMPATIBILITY.md) |
 | DIRECT OPERATE NO ACK | Served by both outstations | no: no master can send it |
 | Time synchronization | LAN (RECORD CURRENT TIME, g50v3) and non-LAN (DELAY MEASURE, g50v1); NEED_TIME until the time is written; the written time in the server's event stream | yes |
 | Restart | Cold and warm restart with the delay in g52v2; the outstation does not actually restart | yes |
@@ -35,6 +35,7 @@ injector; a library tests these with scripted peers of its own.
 |---|:---:|:---:|
 | Everything above except the rows below | yes | yes |
 | Assign class, outstation | no | yes |
+| SELECT as the first request after the outstation started | no | yes |
 | Time synchronization when the outstation does not ask for it | yes | no |
 
 The reasons are in [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and

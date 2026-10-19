@@ -39,8 +39,8 @@ outstation, behind container contract 1.0.
 
 ### Upstream notes
 
-- opendnp3 is archived; 3.1.2 is its last release. Its sources need `<cstdint>` included explicitly with GCC 14. Its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes and synchronizes time only when the outstation sets NEED_TIME; its outstation sets an IIN2 error bit along with a NOT_SUPPORTED command status.
-- The stepfunc outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT; its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes.
+- opendnp3 is archived; 3.1.2 is its last release. Its sources need `<cstdint>` included explicitly with GCC 14. Its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes and synchronizes time only when the outstation sets NEED_TIME; both outstations set PARAMETER_ERROR along with a NOT_SUPPORTED command status, so such a refusal is `rejected` with no command status.
+- The stepfunc outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT, and fails the first SELECT after start with NO_SELECT because the master's confirm of its null unsolicited response arrives between SELECT and OPERATE (listed in `tests/known-bugs.tsv`); its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes.
 - The Step Function I/O dnp3 crate is under a non-commercial, non-production licence; its image is published for interoperability testing only.
 
 ### Not in this release

@@ -45,12 +45,35 @@ does not declare is skipped for that pairing and counted as such.
 
 | Client → Server | stepfunc | opendnp3 |
 |-----------------|:--------:|:--------:|
-| **stepfunc** | not yet run | not yet run |
-| **opendnp3** | not yet run | not yet run ¹ |
+| **stepfunc** | pass ¹ ² | pass |
+| **opendnp3** | pass ¹ ² | pass |
 
-¹ The expectations in `tests/cases.tsv` were generated from a native build of
-opendnp3 3.1.2 (macOS, clang) in both roles and checked against
-[FIXTURES.md](FIXTURES.md); the containerised run is still to be done.
+¹ without class assignment: the stepfunc outstation does not implement it.
+² the first select-before-operate on a freshly started stepfunc outstation
+fails (known bug below); select-before-operate after that is checked
+separately and passes.
+
+Verified on linux/arm64 with the pins above on 2026-10-19: 42 cases, the
+value checks over 4 pairings; 344 checks passed, none failed, 8 known-bug
+hits (the four select-before-operate cases on a fresh stepfunc outstation,
+with both masters), 6 skipped for a capability that is not declared. The 166
+documents the run kept validate against `schemas/`. `make smoke`: 32 of 32
+checks for each adapter. linux/amd64 is built and tested by CI, not yet run.
+
+Covered by every pairing: integrity poll (values and flags against the
+fixture), event polls per class, reads of every point type (all objects, a
+range, a specific variation, class 0 by g60v1); wrong outstation address and
+wrong master address (no answer); direct operate of g12v1 (LATCH_ON,
+LATCH_OFF, CLOSE, TRIP) and g41v1..v4, select-before-operate of g12v1 and
+g41v3, refusals (unknown index, unsupported code, direct operate of a
+select-required point, a value out of range); the events controls produce,
+in the classes of the fixture, once; a control that changes nothing produces
+no event; LAN and non-LAN time synchronization and NEED_TIME; cold and warm
+restart with the delay; immediate freeze and freeze-and-clear with their
+events; enable and disable unsolicited, and buffered events delivered
+unsolicited and not polled again; monitor.
+
+Covered where declared: class assignment (both masters, opendnp3 outstation).
 
 ## Findings
 
@@ -74,12 +97,46 @@ request would end in a timeout. Both outstations handle these requests, but
 nothing in the repository can send them yet; the features are declared false
 on both sides.
 
-### opendnp3's outstation sets an IIN2 error bit with NOT_SUPPORTED
+### The first SELECT on a fresh stepfunc outstation fails with NO_SELECT
 
-When its control handler answers NOT_SUPPORTED, the opendnp3 outstation also
-sets an IIN2 error bit in the response. The contract therefore gives an
-echoed command status precedence over the IIN: the error is
-`command-failed`, not `rejected`.
+With unsolicited responses supported, the stepfunc outstation sends a null
+unsolicited response as soon as a master connects. Both masters (stepfunc
+and opendnp3) send their confirm of it only after the response to their
+first request. When that request is a SELECT, the confirm arrives between
+SELECT and OPERATE:
+
+```text
+TX UnsolicitedResponse seq 0 (null, CON)
+RX Select seq 0
+TX Response seq 0
+RX Confirm (UNS) seq 0
+RX Operate seq 1          -> "received OPERATE without prior SELECT", NO_SELECT
+```
+
+The outstation checks that OPERATE is the frame directly after SELECT
+(`SelectState::match_operate` compares frame counters) and counts the
+confirm as one. stepfunc keeps the "null response confirmed" state for the
+life of the outstation, not per connection, so only the first SELECT after
+start is affected. The opendnp3 outstation checks the sequence number only
+and accepts the same exchange.
+
+No adapter can avoid it without disabling unsolicited responses. It is listed
+in [tests/known-bugs.tsv](../tests/known-bugs.tsv) for the stepfunc outstation
+at 1.7.0, and `scripts/interop.sh` checks select-before-operate on that
+outstation after the null response was confirmed, where it passes. A library
+that tests against the stepfunc image should not make its first request
+after the container start a SELECT, or should expect this.
+
+### Both outstations set PARAMETER_ERROR with NOT_SUPPORTED, and stepfunc's master drops the echo
+
+When the control handler answers NOT_SUPPORTED, both the opendnp3 and the
+stepfunc outstation set IIN2.2 PARAMETER_ERROR in the response. The stepfunc
+master then fails the task with `RejectedByIin2` and does not report the
+echoed status; the opendnp3 master reports both. The contract therefore
+makes such a response `rejected` with `commandStatus` null for every adapter
+(the opendnp3 adapter names the echo in the message). Refusals by status
+alone, such as OUT_OF_RANGE, carry no IIN bit and are `command-failed` with
+the status.
 
 ### opendnp3 has no update for frozen counters
 
