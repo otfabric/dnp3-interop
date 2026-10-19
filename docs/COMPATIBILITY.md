@@ -73,8 +73,14 @@ fresh stepfunc outstation, 11 (stepfunc, opendnp3 and dnp3py masters; for the
 first two it depends on timing); the go-dnp3 freeze, 6; go-dnp3 against
 itself with a wrong master address, 1. The 484 documents the run kept
 validate against `schemas/`. `make smoke`: 32 of 32 checks for each server
-adapter, 28 of 28 for dnp3py. linux/amd64 is built and tested by CI, not yet
-run.
+adapter, 28 of 28 for dnp3py.
+
+The same on GitHub Actions, natively on both architectures (CI run
+39336826490, commit `f5e1cb7`): every smoke check passed for all four
+adapters; the cross-stack self-test had 1115 passed, 18 known-bug hits on
+linux/amd64 and 1113 passed, 20 known-bug hits on linux/arm64, none failed,
+309 skipped on each. The difference is the timing-dependent first SELECT on
+a fresh stepfunc outstation.
 
 Covered by every pairing: integrity poll (values and flags against the
 fixture), event polls per class, reads of every point type (all objects, a

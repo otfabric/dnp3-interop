@@ -7,7 +7,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 1 | Foundation: contract, fixture format, validation, version manifest, tooling | done |
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
-| 4 | First published images; consumption from a library's tests | not started |
+| 4 | First published images; consumption from a library's tests | v0.1.0 being released |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py done as master; Triangle MicroWorks waiting for its source |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | not started |
 | 7 | Release qualification | workflow written, not exercised |
@@ -38,7 +38,7 @@ Met: `make smoke-opendnp3` passes 32 of 32 checks; opendnp3 against itself passe
 
 **Gate:** both stacks satisfy the baseline contract in every direction (`make smoke-stepfunc`, `make interop`).
 
-Met on linux/arm64 (2026-10-19): `make smoke-stepfunc` 32 of 32; `make interop` 344 checks passed, none failed, 8 known-bug hits, 6 skipped for undeclared capabilities. The known bug is the stepfunc outstation's first SELECT after start, when the master's confirm of the null unsolicited response arrives between SELECT and OPERATE; select-before-operate is checked separately after that and passes. Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). linux/amd64 is left to CI.
+Met on linux/arm64 (2026-10-19): `make smoke-stepfunc` 32 of 32; `make interop` 344 checks passed, none failed, 8 known-bug hits, 6 skipped for undeclared capabilities. The known bug is the stepfunc outstation's first SELECT after start, when the master's confirm of the null unsolicited response arrives between SELECT and OPERATE; select-before-operate is checked separately after that and passes. Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). Since run on linux/amd64 and linux/arm64 by CI as well.
 
 ## Phase 4 - First published images
 
