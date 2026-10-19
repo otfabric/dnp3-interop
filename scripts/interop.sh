@@ -65,15 +65,20 @@ has() { jq -e --arg f "$2" '.features[$f] == true' "${WORK}/caps-$1.json" >/dev/
 has_role() { jq -e --arg r "$2" '.roles[$r] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
 
 # supported <client> <server> <needs>: the pairing declares every feature in
-# the comma-separated list of "server:<feature>" and "client:<feature>".
+# the comma-separated list of "server:<feature>" and "client:<feature>"; a
+# feature written "!<feature>" must be declared false.
 supported() {
-    local need side feature
+    local need side feature adapter
     has_role "$1" client && has_role "$2" server || return 1
     [[ "$3" == "-" ]] && return 0
     for need in ${3//,/ }; do
         side="${need%%:*}"; feature="${need#*:}"
-        if [[ "${side}" == "server" ]]; then has "$2" "${feature}" || return 1
-        else has "$1" "${feature}" || return 1; fi
+        if [[ "${side}" == "server" ]]; then adapter="$2"; else adapter="$1"; fi
+        if [[ "${feature}" == !* ]]; then
+            has "${adapter}" "${feature#!}" && return 1
+        else
+            has "${adapter}" "${feature}" || return 1
+        fi
     done
     return 0
 }
@@ -177,9 +182,11 @@ objects() {
     jq -r '[.objects[]? | "g\(.group)v\(.variation)\(if .unsolicited then "u" else "" end):\(.index)=\(.value|tostring)"] | sort | join(" ")' <<<"$1" 2>/dev/null
 }
 
-# check <pair> <label> <want> <got>
+# check <pair> <label> <want> <got> [<operation a known bug may affect>]
 check() {
+    local client="${1%%->*}" server="${1#*->}" bug
     if [[ "$4" == "$3" ]]; then ok "$1: $2"
+    elif [[ -n "${5:-}" ]] && bug=$(known_bug "${client}" "${server}" "$5"); then hit_known_bug "$1" "$2" "${bug}"
     else fail "$1: $2"; log "    want ${3:-<nothing>}"; log "    got  ${4:-<nothing>}"; fi
 }
 
@@ -238,18 +245,36 @@ for server in "${ADAPTERS[@]}"; do
             "$(run_client "${client}" integrity-poll --host "${name}" | jq -r '[.objects[] | select((.group == 10 and .index == 1) or (.group == 40 and .index == 1)) | "g\(.group)v\(.variation):\(.index)=\(.value)"] | sort | join(" ")')"
         stop_server "${name}"
 
+        # Direct operate without acknowledgement still operates.
+        if supported "${client}" "${server}" "server:directOperateNoAckServer,client:directOperateNoAckClient"; then
+            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --mode direct-no-ack --host "${name}" >/dev/null
+            run_client "${client}" operate --type g41v2 --index 0 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
+            check "${pair}" "direct operate no ack operates" "g10v2:0=true g40v1:0=7" \
+                "$(run_client "${client}" integrity-poll --host "${name}" | jq -r '[.objects[] | select((.group == 10 and .index == 0) or (.group == 40 and .index == 0)) | "g\(.group)v\(.variation):\(.index)=\(.value)"] | sort | join(" ")')"
+            stop_server "${name}"
+        else
+            skip "${pair}: direct operate no ack"
+        fi
+
+        # A restart is answered, also by a master that does not report the delay.
+        name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+        check "${pair}" "a cold restart is accepted" "true" \
+            "$(run_client "${client}" restart --type cold --host "${name}" | jq -r '.ok')"
+        stop_server "${name}"
+
         # Freeze, then freeze and clear.
         name=$(start_server "${server}"); wait_ready "${name}" || exit 1
         run_client "${client}" freeze --host "${name}" >/dev/null
         check "${pair}" "a freeze copies the counters" "g21v1:0=123456 g21v2:1=65535" \
-            "$(objects "$(run_client "${client}" read --group 21 --variation 0 --host "${name}")")"
+            "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
         check "${pair}" "a freeze produces frozen counter events" "g23v1:0=123456 g23v2:1=65535" \
             "$(objects "$(run_client "${client}" event-poll --classes 3 --host "${name}")")"
         run_client "${client}" freeze --clear --host "${name}" >/dev/null
         check "${pair}" "a freeze and clear clears the counters" "g20v1:0=0 g20v2:1=0 g20v5:2=0" \
-            "$(objects "$(run_client "${client}" read --group 20 --variation 0 --host "${name}")")"
+            "$(objects "$(run_client "${client}" read --group 20 --variation 0 --start 0 --stop 2 --host "${name}")")" "freeze --clear"
         check "${pair}" "a clear produces counter events" "g22v1:0=0 g22v2:1=0" \
-            "$(objects "$(run_client "${client}" event-poll --classes 3 --host "${name}")")"
+            "$(objects "$(run_client "${client}" event-poll --classes 3 --host "${name}")")" "freeze, unchanged frozen value"
         stop_server "${name}"
 
         # Unsolicited responses: buffered events arrive once a class is enabled.

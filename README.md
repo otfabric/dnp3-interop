@@ -12,18 +12,20 @@ integrating third-party protocol stacks into production applications.
 |---------|----------------|----------|:------:|:------:|-------|
 | `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) 1.7.0 | Rust | yes | yes | `ghcr.io/otfabric/dnp3-interop-stepfunc` |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
+| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.1 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 
 The stacks do not all do the same: the stepfunc outstation refuses ASSIGN
-CLASS, and opendnp3's master synchronizes time only when the outstation asks
-for it. Each image says what it supports (`print-capabilities`); see
+CLASS, opendnp3's master synchronizes time only when the outstation asks for
+it, and go-dnp3's master reads only ranges and classes but is the one that
+can send DIRECT OPERATE NO ACK. Each image says what it supports (`print-capabilities`); see
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
 The Step Function I/O dnp3 crate is distributed under a non-commercial,
 non-production licence. Its image exists for interoperability testing only;
 see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Planned: dnp3py (Python), DSC Systems go-dnp3 (Go) and the Triangle
-MicroWorks DNP3 Source Code Library (C). See [PLAN.md](PLAN.md).
+Planned: dnp3py (Python) and the Triangle MicroWorks DNP3 Source Code
+Library (C). See [PLAN.md](PLAN.md).
 
 **Docs:** [docs/CONTAINER_CONTRACT.md](docs/CONTAINER_CONTRACT.md) (commands, JSON documents, exit codes) · [docs/FIXTURES.md](docs/FIXTURES.md) (the simulated outstation and its behaviour) · [docs/CAPABILITIES.md](docs/CAPABILITIES.md) · [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) (pins, cross-stack matrix, findings) · [COVERAGE.md](COVERAGE.md) · [REQUIREMENTS.md](REQUIREMENTS.md) · [PLAN.md](PLAN.md) · [RELEASE.md](RELEASE.md)
 
@@ -147,7 +149,8 @@ each release's `manifest.json`.
 dnp3-interop/
 ├── adapters/
 │   ├── opendnp3/        C++ adapter: Dockerfile, CMakeLists.txt, src/
-│   └── stepfunc/        Rust adapter: Dockerfile, Cargo.toml, Cargo.lock, src/
+│   ├── stepfunc/        Rust adapter: Dockerfile, Cargo.toml, Cargo.lock, src/
+│   └── dscsystems/      Go adapter: Dockerfile, go.mod, *.go
 ├── fixtures/
 │   ├── schema/          JSON Schema of the fixture format
 │   └── baseline/        the baseline outstation
@@ -170,6 +173,7 @@ make ci          # validate, lint, build, smoke, cross-stack self-test, document
 make validate    # fixtures against the schema and the cross-field rules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 make candidate-stepfunc STEPFUNC_CANDIDATE=1.7.1   # self-test the adapter on another dnp3 crate
+make candidate-dscsystems GODNP3_CANDIDATE=latest  # the same for go-dnp3
 ```
 
 The **Upstream candidates** workflow runs that probe weekly against the
@@ -192,7 +196,9 @@ only, and they must never be attached to a plant network. See
 ## License
 
 The repository's own code and documentation, and the adapter sources, are
-MIT-licensed. The images contain the upstream libraries under their own
-licences: opendnp3 is Apache-2.0; the Step Function I/O dnp3 crate is under a
-non-commercial, non-production licence agreement. See [LICENSE](LICENSE) and
+MIT-licensed, except `adapters/dscsystems/`, which links a GPL-3.0 library and
+is GPL-3.0-or-later. The images contain the upstream libraries under their
+own licences: opendnp3 is Apache-2.0, go-dnp3 is GPL-3.0, and the Step
+Function I/O dnp3 crate is under a non-commercial, non-production licence
+agreement. See [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

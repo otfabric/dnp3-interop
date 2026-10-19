@@ -29,3 +29,9 @@ services:
     image: ghcr.io/otfabric/dnp3-interop-opendnp3:${DNP3_INTEROP_VERSION:-dev}
     ports:
       - "127.0.0.1:20001:20000"
+
+  dscsystems:
+    <<: *server
+    image: ghcr.io/otfabric/dnp3-interop-dscsystems:${DNP3_INTEROP_VERSION:-dev}
+    ports:
+      - "127.0.0.1:20002:20000"

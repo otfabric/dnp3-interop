@@ -62,7 +62,7 @@ implementations:
 
   dscsystems:
     priority: P1
-    status: planned
+    status: implemented
     upstream: "DSC Systems go-dnp3"
     repository: "https://github.com/dscsystems/go-dnp3"
     module: "github.com/dscsystems/go-dnp3"
@@ -71,6 +71,7 @@ implementations:
     license: "GPL-3.0"
     language: "Go"
     independent_engine: true
+    roles: [server, client]
     note: "Experimental: the README says the API is not yet stable."
 
   tmw:
@@ -90,11 +91,13 @@ dependencies:
 base_images:
   # Digests recorded 2026-10-19; the Dockerfiles pin these by digest.
   debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
+  golang_1_27_2_trixie: "docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
   rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d"
 
 images:
   stepfunc: "ghcr.io/otfabric/dnp3-interop-stepfunc"
   opendnp3: "ghcr.io/otfabric/dnp3-interop-opendnp3"
+  dscsystems: "ghcr.io/otfabric/dnp3-interop-dscsystems"
 
 platforms:
   - "linux/amd64"

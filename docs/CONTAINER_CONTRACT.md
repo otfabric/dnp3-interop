@@ -14,7 +14,9 @@ and changes only with the major version.
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
-list in `clientOperations` is a usage error (exit 2).
+list in `clientOperations` is a usage error (exit 2), as is a flag value that
+needs a feature the image declares false (`--mode direct-no-ack` without
+`directOperateNoAckClient`, ...).
 
 What an *outstation* does with a request is defined by its fixture: see
 [FIXTURES.md](FIXTURES.md).
@@ -123,7 +125,7 @@ One JSON object per line on stdout.
 | `command` | `function`, `type`, `index`, `code` or `value`, `status` | A select or operate reached the outstation's control handler |
 | `time-sync` | `time` | The master wrote the outstation's time (either procedure) |
 | `restart` | `type` (`cold` or `warm`) | A restart request was accepted |
-| `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only with the feature `assignClassServer` |
+| `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only where the library tells the application (opendnp3) |
 | `stopped` | | Once, after a clean stop |
 
 `command`:
@@ -159,9 +161,10 @@ dnp3-interop client <operation> --host HOST [--port N] [common flags] [operation
 Every operation: open the TCP connection, run the operation, close the
 connection. The master does nothing on its own: no integrity poll at
 startup, no enabling or disabling of unsolicited responses, no time
-synchronization, no event poll on IIN bits. The one automatic action every
-library takes, and that cannot be turned off, is to clear the outstation's
-restart bit (write g80v1 index 7) when a response has it set.
+synchronization, no event poll on IIN bits. The one automatic action the
+libraries take, and that cannot be turned off, is to clear the outstation's
+restart bit (write g80v1 index 7) when a response has it set; a library that
+does not do it leaves the bit set.
 
 ### Common flags
 
@@ -180,10 +183,10 @@ restart bit (write g80v1 index 7) when a response has it set.
 |-----------|-------|-------|---------------|
 | `integrity-poll` | | READ g60v2, g60v3, g60v4, g60v1 (classes 1, 2, 3, 0) | The response arrived without a [request error](#request-errors) |
 | `event-poll` | `--classes L` (`1,2,3`) | READ of the listed event classes (g60v2..v4) | As `integrity-poll` |
-| `read` | `--group G --variation V` (required), `--start N --stop N` | READ of one header: start-stop range when `--start` and `--stop` are given, all objects (qualifier 0x06) otherwise. Variation 0 asks for the outstation's default | As `integrity-poll` |
+| `read` | `--group G --variation V` (required), `--start N --stop N` | READ of one header: start-stop range when `--start` and `--stop` are given, all objects (qualifier 0x06) otherwise. Variation 0 asks for the outstation's default | As `integrity-poll`. All objects of a group other than 60 only with the feature `readAllObjectsClient` |
 | `operate` | see below | A control, see below | The outstation echoed the control with status SUCCESS |
 | `time-sync` | `--procedure P` (`lan`) | `lan`: RECORD CURRENT TIME, then WRITE g50v3. `non-lan`: DELAY MEASURE, then WRITE g50v1 | Both requests were answered without a request error |
-| `restart` | `--type T` (`cold`) | COLD RESTART or WARM RESTART | The outstation answered with the delay (g52v1 or g52v2) |
+| `restart` | `--type T` (`cold`) | COLD RESTART or WARM RESTART | The outstation answered with the delay (g52v1 or g52v2). `restartDelayMs` only with the feature `restartDelayClient`, null otherwise |
 | `enable-unsolicited` | `--classes L` (`1,2,3`) | ENABLE UNSOLICITED with g60v2..v4 | Null response without a request error |
 | `disable-unsolicited` | `--classes L` (`1,2,3`) | DISABLE UNSOLICITED with g60v2..v4 | As `enable-unsolicited` |
 | `assign-class` | `--class C` (required, 0..3), `--group G` (required), `--start N --stop N` | ASSIGN CLASS: g60v(C+1), then group G variation 0, range or all objects | As `enable-unsolicited`. Only with the feature `assignClassClient` |

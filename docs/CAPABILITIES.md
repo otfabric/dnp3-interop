@@ -50,36 +50,38 @@ One JSON object on one line ([schema](../schemas/capabilities.schema.json)):
 A feature without a role in its name applies to both roles: the outstation
 serves it and the master sends it.
 
-| Feature | Meaning | stepfunc | opendnp3 |
-|---------|---------|:--------:|:--------:|
-| `integrityPoll` | Class 1, 2, 3 and 0 in one READ | yes | yes |
-| `eventPoll` | READ of event classes | yes | yes |
-| `read` | READ of one group and variation, all objects or a range | yes | yes |
-| `directOperate` | DIRECT OPERATE of g12v1 and g41v1..v4 | yes | yes |
-| `selectBeforeOperate` | SELECT, then OPERATE, and `selectRequired` points | yes | yes |
-| `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | no ¹ | no ¹ |
-| `directOperateNoAckClient` | `operate --mode direct-no-ack` | no ² | no ² |
-| `timeSyncLan` | RECORD CURRENT TIME and WRITE g50v3 | yes | yes |
-| `timeSyncNonLan` | DELAY MEASURE and WRITE g50v1 | yes | yes |
-| `timeSyncOnDemand` | The master synchronizes whether or not the outstation sets NEED_TIME | yes | no ³ |
-| `restart` | COLD RESTART and WARM RESTART with the delay | yes | yes |
-| `unsolicited` | ENABLE and DISABLE UNSOLICITED, and events in unsolicited responses | yes | yes |
-| `assignClassServer` | The outstation applies ASSIGN CLASS | no ⁴ | yes |
-| `assignClassClient` | `assign-class` | yes | yes |
-| `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes |
-| `freezeNoAckServer` | The outstation applies the `_NR` freezes | no ¹ | no ¹ |
-| `freezeNoAckClient` | `freeze --no-ack` | no ² | no ² |
-| `octetStrings` | g110 in class 0 and reads | yes | yes |
-| `tcp` | DNP3 over TCP | yes | yes |
-| `udp` | DNP3 over UDP | no ⁵ | no ⁵ |
-| `tls` | DNP3 over TLS (IEC 62351-3) | no ⁵ | no ⁵ |
-| `serial` | DNP3 over a serial line | no ⁵ | no ⁵ |
-| `fileTransfer` | File transfer, group 70 | no ⁶ | no ⁷ |
-| `secureAuthentication` | Secure authentication v5, group 120 | no ⁷ | no ⁷ |
+| Feature | Meaning | stepfunc | opendnp3 | dscsystems |
+|---------|---------|:--------:|:--------:|:----------:|
+| `integrityPoll` | Class 1, 2, 3 and 0 in one READ | yes | yes | yes |
+| `eventPoll` | READ of event classes | yes | yes | yes |
+| `read` | READ of one group and variation, all objects or a range | yes | yes | yes |
+| `readAllObjectsClient` | `read` of all objects of a group (qualifier 0x06), not only a range | yes | yes | no ¹¹ |
+| `directOperate` | DIRECT OPERATE of g12v1 and g41v1..v4 | yes | yes | yes |
+| `selectBeforeOperate` | SELECT, then OPERATE, and `selectRequired` points | yes | yes | yes |
+| `parameterErrorWithNotSupported` | Server: the outstation sets IIN2.2 PARAMETER_ERROR with every NOT_SUPPORTED command status, not only for a point that does not exist. A behaviour, not a capability: cases name it either way | yes | yes | no |
+| `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | yes | yes | yes |
+| `directOperateNoAckClient` | `operate --mode direct-no-ack` | no ² | no ² | yes |
+| `timeSyncLan` | RECORD CURRENT TIME and WRITE g50v3 | yes | yes | yes |
+| `timeSyncNonLan` | DELAY MEASURE and WRITE g50v1 | yes | yes | yes |
+| `timeSyncOnDemand` | The master synchronizes whether or not the outstation sets NEED_TIME | yes | no ³ | yes |
+| `restart` | COLD RESTART and WARM RESTART with the delay | yes | yes | yes |
+| `restartDelayClient` | `restart` reports the announced delay in `restartDelayMs` | yes | yes | no ¹² |
+| `unsolicited` | ENABLE and DISABLE UNSOLICITED, and events in unsolicited responses | yes | yes | yes |
+| `assignClassServer` | The outstation applies ASSIGN CLASS | no ⁴ | yes | yes |
+| `assignClassClient` | `assign-class` | yes | yes | no ⁸ |
+| `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes | yes ⁹ |
+| `freezeNoAckServer` | The outstation applies the `_NR` freezes | no ¹ | no ¹ | no ¹ |
+| `freezeNoAckClient` | `freeze --no-ack` | no ² | no ² | no ² |
+| `octetStrings` | g110 in class 0 and reads | yes | yes | yes |
+| `tcp` | DNP3 over TCP | yes | yes | yes |
+| `udp` | DNP3 over UDP | no ⁵ | no ⁵ | no ⁵ |
+| `tls` | DNP3 over TLS (IEC 62351-3) | no ⁵ | no ⁵ | no ⁵ |
+| `serial` | DNP3 over a serial line | no ⁵ | no ⁵ | no ⁵ |
+| `fileTransfer` | File transfer, group 70 | no ⁶ | no ⁷ | no ¹⁰ |
+| `secureAuthentication` | Secure authentication v5, group 120 | no ⁷ | no ⁷ | no ¹⁰ |
 
-¹ Both outstations handle the request, but neither master can send it, so
-the self-tests do not exercise it. It becomes testable with a master that
-can (DSC Systems go-dnp3 has DIRECT OPERATE NO ACK).
+¹ The outstations handle the request, but no master here can send it, so
+the self-tests do not exercise it.
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -102,6 +104,20 @@ no other published adapter serves files yet.
 ⁷ Not in the library: opendnp3 3.x removed secure authentication and has no
 file transfer; stepfunc's open edition has no secure authentication.
 
+⁸ go-dnp3's master has no call for ASSIGN CLASS.
+
+⁹ go-dnp3's FREEZE AND CLEAR leaves counters without a frozen counter
+uncleared (listed in tests/known-bugs.tsv; see COMPATIBILITY.md).
+
+¹⁰ go-dnp3 has file transfer and a subset of secure authentication v5 in both
+roles; contract 1.0 does not cover them yet (see PLAN.md).
+
+¹¹ go-dnp3's master reads start-stop ranges and classes, not all objects of a
+group; `read --group 60 --variation 1..4` works, as a class read.
+
+¹² go-dnp3's master returns no delay from `Restart`; `restartDelayMs` is
+null.
+
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
 (the `needs` column of [tests/cases.tsv](../tests/cases.tsv)), so "no" here
@@ -109,9 +125,14 @@ means "not tested", never "tested and failing".
 
 ## Point types and variations
 
-Both adapters serve all eight point arrays of the fixture format, with the
-static and event variations [FIXTURES.md](FIXTURES.md#points) lists, and
+All three adapters serve all eight point arrays of the fixture format, with
+the static and event variations [FIXTURES.md](FIXTURES.md#points) lists, and
 handle and send all five control objects (`g12v1`, `g41v1`..`g41v4`).
+
+The dscsystems server has two limits of its library: the indexes of each
+point type must run from 0 without gaps, and `outstation.needTime` must be
+true (go-dnp3 asserts NEED_TIME until a master writes the time). It refuses
+other fixtures with exit 4.
 
 ## Rules for consumers
 

@@ -1,6 +1,6 @@
 # Plan
 
-Delivery in phases, each with an acceptance gate. Status as of 2026-10-19.
+Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
@@ -8,7 +8,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-19.
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
 | 4 | First published images; consumption from a library's tests | not started |
-| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | evaluated, not started |
+| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py in progress; Triangle MicroWorks waiting for its source |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | not started |
 | 7 | Release qualification | workflow written, not exercised |
 
@@ -53,15 +53,52 @@ in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Phase 5 - Additional adapters
 
-Evaluated on 2026-10-19 by reading the sources at the pins; nothing built yet.
-Each joins `ADAPTERS` in the Makefile and the CI matrix once it passes `make
-smoke-<adapter>` and the cross-stack self-test for the roles it declares.
+### DSC Systems go-dnp3 (done)
 
-| Adapter | Pin | Roles | What it adds | What it lacks (would be declared false) |
-|---------|-----|-------|--------------|------------------------------------------|
-| `dnp3py` (P1) | dnp3py 0.6.0, PyPI, commit `c00d5df2`, MIT | both | A Python engine | Master: no restart, time synchronization, freeze or assign-class calls, no command status in results, group and variation not passed to the handler (the adapter must decode responses itself). Outstation: no double-bit inputs, octet strings or per-point variations (analog inputs always g30v1), no analog output events, and the TCP runner does not appear to send unsolicited responses. Needs either its own small fixture or a `pointTypes`-aware skip |
-| `dscsystems` (P1, experimental) | DSC Systems go-dnp3 v0.8.1, commit `70ff72bb`, GPL-3.0 | both | DIRECT OPERATE NO ACK (master), file transfer g70 in both roles, secure authentication v5 (symmetric subset) in both roles, LAN and non-LAN time synchronization | Master: restart delay not returned, no ASSIGN CLASS, no all-objects read, no `_NR` freezes. The adapter is GPL-3.0-or-later. Its own interop notes report opendnp3 3.1.2 tested in both directions |
-| `tmw` (P2) | Triangle MicroWorks DNP Source Code Library, ANSI C edition (product page: https://products.trianglemicroworks.com/products/source-code-libraries/dnp-scl-pages/ansi-c-source-code), commercial | both | Industry reference | The source is licensed per customer and not public: the adapter builds from an archive supplied at build time (`adapters/tmw/vendor/`, ignored by git and the build context), verified against a SHA-256 in `versions.yaml`. Waiting for the owner of this repository to say how the archive reaches local builds and CI (for example a private repository or a build secret) |
+Evaluation: both roles, v0.8.1 (GPL-3.0), an engine of its own; pure Go, so
+both architectures build natively. The adapter is GPL-3.0-or-later.
+
+- Go adapter, both roles, ten client operations (no `assign-class`). Its
+  master is the one that sends DIRECT OPERATE NO ACK, which makes
+  `directOperateNoAckServer` testable and now declared for every outstation.
+- Declared false: all-objects reads and restart delays (master), ASSIGN
+  CLASS (master), PARAMETER_ERROR with NOT_SUPPORTED (outstation), file
+  transfer and secure authentication (not in the contract yet).
+- The outstation refuses fixtures with gaps in the indexes or without
+  NEED_TIME at start; the adapter's listener lets a new connection replace
+  the current one, as the contract requires.
+
+**Gate:** smoke test and cross-stack self-test for the roles it declares. Met
+on linux/arm64 (2026-10-20): 32 of 32 smoke checks; the three-adapter run has
+789 checks passed, none failed, 14 known-bug hits, 81 skipped. Three upstream
+bugs of go-dnp3 v0.8.1 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
+of a counter without frozen counter, freeze events for unchanged values, link
+address filtering). Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+### dnp3py (in progress)
+
+Pin dnp3py 0.6.0 (PyPI, commit `c00d5df2`, MIT). Client role only: its
+outstation cannot serve the baseline fixture (no double-bit inputs, octet
+strings or per-point variations; analog inputs always g30v1; no analog output
+events; the TCP runner does not send unsolicited responses). Serving it would
+need a second fixture within those limits and cases for it; that is open.
+
+The master runs dnp3py's link, transport and application layers and its
+decoders; the requests its master has no call for (all-objects and range
+reads, controls of every g41 variation, time synchronization, restart, ASSIGN
+CLASS, freezes with and without acknowledgement, DIRECT OPERATE NO ACK) are
+built with its application-layer types. Its master does not clear the restart
+bit.
+
+### Triangle MicroWorks DNP3 SCL (waiting)
+
+The ANSI C DNP Source Code Library
+(https://products.trianglemicroworks.com/products/source-code-libraries/dnp-scl-pages/ansi-c-source-code)
+is licensed per customer and not public. The adapter will build from an
+archive supplied at build time (`adapters/tmw/vendor/`, ignored by git and by
+the Docker build context), verified against a SHA-256 recorded in
+`versions.yaml`. Waiting for the owner of this repository to say how the
+archive reaches local builds and CI.
 
 ## Phase 6 - Expanded coverage
 
@@ -72,7 +109,7 @@ each other (REQUIREMENTS.md R8.3):
 - Serial: both P0 libraries have it; needs a virtual serial link between two containers (socat pty pair).
 - File transfer (g70): stepfunc master against the go-dnp3 outstation, and go-dnp3 in both roles.
 - Secure authentication v5 (g120): go-dnp3 in both roles; a second stack only with Triangle MicroWorks.
-- DIRECT OPERATE NO ACK and the `_NR` freezes: with the go-dnp3 master against both P0 outstations.
+- The `_NR` freezes: with the dnp3py master against every outstation.
 - Further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
 
 ## Phase 7 - Release qualification (open)

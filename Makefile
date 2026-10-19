@@ -31,7 +31,7 @@ BUILDER ?= dnp3-interop
 
 # Adapters with a published image, in priority order. The self-tests run over
 # all of them; override to work on one: make smoke ADAPTERS=opendnp3
-ADAPTERS ?= stepfunc opendnp3
+ADAPTERS ?= stepfunc opendnp3 dscsystems
 
 image = $(REGISTRY)/dnp3-interop-$(1)
 
@@ -39,8 +39,8 @@ export REGISTRY VERSION
 
 # image-% and smoke-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc \
-        buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 capabilities clean FORCE
+.PHONY: help all ci validate documents lint images smoke interop buildx publish candidate-stepfunc candidate-dscsystems \
+        buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -126,6 +126,22 @@ candidate-stepfunc: image-opendnp3 ## Build stepfunc on dnp3 crate STEPFUNC_CAND
 	@VERSION=candidate scripts/smoke.sh stepfunc
 	@VERSION=candidate scripts/interop.sh stepfunc opendnp3
 
+# A dscsystems candidate is a version of go-dnp3 as "go get" takes it: a tag
+# or a commit.
+GODNP3_CANDIDATE ?= latest
+
+candidate-dscsystems: image-stepfunc image-opendnp3 ## Build dscsystems on go-dnp3 GODNP3_CANDIDATE and self-test it (release pin untouched)
+	@echo "Building dscsystems candidate on go-dnp3 $(GODNP3_CANDIDATE)..."
+	@$(RETRY) docker build \
+		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=candidate \
+		--build-arg GODNP3_VERSION=$(GODNP3_CANDIDATE) --build-arg GODNP3_SHA=candidate \
+		--tag $(call image,dscsystems):candidate \
+		--file adapters/dscsystems/Dockerfile .
+	@docker tag $(call image,stepfunc):$(VERSION) $(call image,stepfunc):candidate
+	@docker tag $(call image,opendnp3):$(VERSION) $(call image,opendnp3):candidate
+	@VERSION=candidate scripts/smoke.sh dscsystems
+	@VERSION=candidate scripts/interop.sh stepfunc opendnp3 dscsystems
+
 capabilities: ## Print the capability document of every adapter
 	@for a in $(ADAPTERS); do docker run --rm $(call image,$$a):$(VERSION) print-capabilities; done
 
@@ -133,12 +149,16 @@ capabilities: ## Print the capability document of every adapter
 
 STEPFUNC_PORT ?= 20000
 OPENDNP3_PORT ?= 20001
+DSCSYSTEMS_PORT ?= 20002
 
 run-stepfunc: ## Run the stepfunc outstation on 127.0.0.1:$(STEPFUNC_PORT)
 	docker run --rm -p 127.0.0.1:$(STEPFUNC_PORT):20000 $(call image,stepfunc):$(VERSION) server
 
 run-opendnp3: ## Run the opendnp3 outstation on 127.0.0.1:$(OPENDNP3_PORT)
 	docker run --rm -p 127.0.0.1:$(OPENDNP3_PORT):20000 $(call image,opendnp3):$(VERSION) server
+
+run-dscsystems: ## Run the go-dnp3 outstation on 127.0.0.1:$(DSCSYSTEMS_PORT)
+	docker run --rm -p 127.0.0.1:$(DSCSYSTEMS_PORT):20000 $(call image,dscsystems):$(VERSION) server
 
 # ── Multi-arch build and publish ──────────────────────────────────────────────
 

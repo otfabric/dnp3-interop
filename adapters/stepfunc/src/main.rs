@@ -89,17 +89,19 @@ fn print_capabilities() -> i32 {
             "integrityPoll": true,
             "eventPoll": true,
             "read": true,
+            "readAllObjectsClient": true,
             "directOperate": true,
             "selectBeforeOperate": true,
-            // The outstation handles DIRECT OPERATE NO ACK, but no master in
-            // the self-tests can send it, so it is not declared.
-            "directOperateNoAckServer": false,
+            // The outstation sets IIN2.2 with every NOT_SUPPORTED status.
+            "parameterErrorWithNotSupported": true,
+            "directOperateNoAckServer": true,
             // The master never sends it.
             "directOperateNoAckClient": false,
             "timeSyncLan": true,
             "timeSyncNonLan": true,
             "timeSyncOnDemand": true,
             "restart": true,
+            "restartDelayClient": true,
             "unsolicited": true,
             // The outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT.
             "assignClassServer": false,

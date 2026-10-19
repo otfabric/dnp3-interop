@@ -16,12 +16,13 @@ self-tested as a candidate.
 |---------|----------|--------|--------|-----|--------|
 | `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.7.0 | 1.7.0 | crate `dnp3 =1.7.0` from crates.io, checksum in `Cargo.lock` (tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca`) | independent, Rust |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
+| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.1 | v0.8.1 | Go module `github.com/dscsystems/go-dnp3@v0.8.1` (commit `70ff72bb09755db183d1bd69859adc72cd663aec`), checksum in `go.sum` | independent, Go |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
-(trixie), Rust 1.99.1.
+(trixie), Rust 1.99.1, Go 1.27.2.
 
-The pins live in the Dockerfiles and `adapters/stepfunc/Cargo.toml` and
-`Cargo.lock`, and are mirrored in [versions.yaml](../versions.yaml);
+The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
+`Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream candidates**
 workflow (`.github/workflows/candidate.yml`, weekly and on demand) resolves
 the latest dnp3 crate, builds the stepfunc adapter on it when it differs,
@@ -43,22 +44,31 @@ fixture, the events controls and freezes cause, unsolicited responses, class
 assignment and time synchronization. A case that needs a feature a pairing
 does not declare is skipped for that pairing and counted as such.
 
-| Client → Server | stepfunc | opendnp3 |
-|-----------------|:--------:|:--------:|
-| **stepfunc** | pass ¹ ² | pass |
-| **opendnp3** | pass ¹ ² | pass |
+| Client → Server | stepfunc | opendnp3 | dscsystems |
+|-----------------|:--------:|:--------:|:----------:|
+| **stepfunc** | pass ¹ ² | pass | pass ⁴ |
+| **opendnp3** | pass ¹ ² | pass | pass ⁴ |
+| **dscsystems** | pass ¹ ³ | pass ³ | pass ³ ⁴ ⁵ |
 
 ¹ without class assignment: the stepfunc outstation does not implement it.
 ² the first select-before-operate on a freshly started stepfunc outstation
-fails (known bug below); select-before-operate after that is checked
+can fail (known bug below); select-before-operate after that is checked
 separately and passes.
+³ without all-objects reads, restart delays and class assignment, which the
+go-dnp3 master cannot send or report; with direct operate no ack, which only
+it can send.
+⁴ with two known bugs of the go-dnp3 outstation's freeze, below.
+⁵ with the known address-filtering bug below.
 
-Verified on linux/arm64 with the pins above on 2026-10-19: 42 cases, the
-value checks over 4 pairings; 344 checks passed, none failed, 8 known-bug
-hits (the four select-before-operate cases on a fresh stepfunc outstation,
-with both masters), 6 skipped for a capability that is not declared. The 166
-documents the run kept validate against `schemas/`. `make smoke`: 32 of 32
-checks for each adapter. linux/amd64 is built and tested by CI, not yet run.
+Verified on linux/arm64 with the pins above on 2026-10-20: 46 cases, the
+value checks over 9 pairings; 789 checks passed, none failed, 14 known-bug
+hits, 81 skipped for a capability a pairing does not declare. The known-bug
+hits: the first SELECT on a fresh stepfunc outstation, 7 (with the stepfunc
+and opendnp3 masters; it depends on timing, a run before had 6); the go-dnp3
+freeze, 6 (two checks with each master); go-dnp3 against itself with a wrong
+master address, 1. The 347 documents the run kept validate against
+`schemas/`. `make smoke`: 32 of 32 checks for each adapter. linux/amd64 is
+built and tested by CI, not yet run.
 
 Covered by every pairing: integrity poll (values and flags against the
 fixture), event polls per class, reads of every point type (all objects, a
@@ -73,7 +83,10 @@ restart with the delay; immediate freeze and freeze-and-clear with their
 events; enable and disable unsolicited, and buffered events delivered
 unsolicited and not polled again; monitor.
 
-Covered where declared: class assignment (both masters, opendnp3 outstation).
+Covered where declared: class assignment (stepfunc and opendnp3 masters;
+opendnp3 and go-dnp3 outstations); direct operate no ack (go-dnp3 master,
+all outstations); all-objects reads and restart delays (stepfunc and opendnp3
+masters).
 
 ## Findings
 
@@ -168,3 +181,67 @@ against the opendnp3 outstation.
 
 `ClassZeroConfig.octet_string` defaults to false; the adapter enables it, so
 that both outstations answer an integrity poll with the same points.
+
+### go-dnp3: FREEZE AND CLEAR clears only counters that have a frozen counter
+
+`Database.freezeRange` walks the indexes below the smaller of the number of
+counters and of frozen counters, and clears only those. The baseline's
+counter 2 has no frozen counter and keeps its value after FREEZE AND CLEAR;
+opendnp3 and the stepfunc adapter clear it. Listed in
+[tests/known-bugs.tsv](../tests/known-bugs.tsv).
+
+### go-dnp3: a freeze raises events for unchanged frozen values
+
+A second freeze of a counter that has not changed raises a frozen counter
+event again (the frozen value is the same; only its time differs).
+opendnp3 raises none. Listed in the known bugs.
+
+### go-dnp3: link addresses are not filtered
+
+Its master accepts frames addressed to another master address: configured
+as master 7, it received the outstation's null unsolicited response meant for
+master 1 and acted on its DEVICE_RESTART bit. Its outstation processes
+requests from a master address other than its configured master's: it
+accepted that master's WRITE clearing the restart bit, and answered it, to
+master 1. Against the other stacks each half is harmless (they filter); go-dnp3
+against itself reads an IIN where every other pairing times out. Listed in
+the known bugs.
+
+### go-dnp3 sets PARAMETER_ERROR only for a control of a point that does not exist
+
+For a control the handler refuses with NOT_SUPPORTED on an existing point (an
+unsupported code, a direct operate of a select-required output) the go-dnp3
+outstation answers with the status and no IIN bit; opendnp3 and stepfunc also
+set PARAMETER_ERROR. The capability `parameterErrorWithNotSupported` says
+which an outstation does, and the cases expect `command-failed` or
+`rejected` accordingly.
+
+### go-dnp3 carries out a restart
+
+A cold restart discards the unconfirmed events and asserts DEVICE_RESTART and
+NEED_TIME again; a restart requested within the delay announced for the
+previous one is answered with the time left and ALREADY_EXECUTING. The
+restart cases therefore run on a fresh outstation for every adapter.
+
+### go-dnp3's master: ranges and classes only, no restart delay, no ASSIGN CLASS
+
+`Session.ScanRange` reads start-stop ranges; there is no all-objects read of a
+group other than the classes. `Session.Restart` returns no delay. There is no
+call for ASSIGN CLASS. The capabilities `readAllObjectsClient`,
+`restartDelayClient` and `assignClassClient` are false for it.
+
+### go-dnp3's master confirms before its first request
+
+Unlike the stepfunc and opendnp3 masters, it confirms the outstation's null
+unsolicited response before it sends its first request, so its first SELECT
+on a fresh stepfunc outstation succeeds.
+
+### go-dnp3's outstation: one connection at a time, contiguous indexes, NEED_TIME at start
+
+Its TCP channel serves one connection and leaves the next one waiting in the
+backlog until the first ends; the adapter puts its own listener in front, so
+that a new connection replaces the current one as with the other stacks. Its
+database holds the indexes 0..n-1 of each type, and it asserts NEED_TIME until
+a master writes the time; the adapter refuses fixtures with gaps or with
+`needTime` false (exit 4). It defers a READ until its null unsolicited
+response is confirmed, as IEEE 1815 allows.

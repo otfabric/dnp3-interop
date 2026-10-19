@@ -197,8 +197,14 @@ in the `time-sync` event; event time stamps are taken from the host clock.
 | `coldRestartDelayMs` (or `warmRestartDelayMs`) given | g52v2 with that delay; the `restart` event |
 | Not given | NO_FUNC_CODE_SUPPORT |
 
-The outstation **does not restart**: its state is unchanged and the
-connection stays up. Restart the container for a real restart.
+The outstation **does not restart**: the connection stays up and the point
+values are unchanged. Restart the container for a real restart.
+
+go-dnp3 models the restart itself, and the dscsystems server cannot prevent
+it: a cold restart discards the unconfirmed events and asserts DEVICE_RESTART
+and NEED_TIME again, and a restart requested within the delay of the
+previous one is answered with the time left of that delay and
+ALREADY_EXECUTING.
 
 ### Unsolicited responses
 

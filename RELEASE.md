@@ -21,8 +21,8 @@ Tags are immutable. A fix is a new version.
 
 ## Summary
 
-First version: two independent reference implementations, as master and as
-outstation, behind container contract 1.0.
+First version: three independent reference implementations, as master and
+as outstation, behind container contract 1.0.
 
 ## Changes
 
@@ -32,6 +32,7 @@ outstation, behind container contract 1.0.
 - **Fixture format 1.0** with JSON Schema, cross-field validation and the **baseline** fixture: 22 points of eight types in all three event classes, controls on binary and analog outputs with targets, select-required points and ranges, counters with frozen counters, an octet string, restart delays, NEED_TIME at start.
 - **`stepfunc` adapter** — Step Function I/O dnp3 1.7.0, Rust.
 - **`opendnp3` adapter** — opendnp3 3.1.2 (commit `26b4c01e`), C++.
+- **`dscsystems` adapter** — DSC Systems go-dnp3 v0.8.1, Go, experimental upstream. GPL-3.0-or-later; its master is the one that sends DIRECT OPERATE NO ACK.
 - **Client operations** — `integrity-poll`, `event-poll`, `read`, `operate` (g12v1, g41v1..v4; direct and select-before-operate), `time-sync` (LAN and non-LAN), `restart` (cold, warm), `enable-unsolicited`, `disable-unsolicited`, `assign-class`, `freeze` (with and without clear), `monitor`.
 - **Self-tests** — `make smoke` (contract checks per adapter) and `make interop` (cases over all client/server pairings requiring identical result documents, plus value checks of controls, events, freezes, unsolicited responses, class assignment and time synchronization).
 - **Schemas** for the capability and client result documents, validated against every document the self-tests produce.
@@ -43,7 +44,9 @@ outstation, behind container contract 1.0.
 - The stepfunc outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT, and fails the first SELECT after start with NO_SELECT because the master's confirm of its null unsolicited response arrives between SELECT and OPERATE (listed in `tests/known-bugs.tsv`); its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes.
 - The Step Function I/O dnp3 crate is under a non-commercial, non-production licence; its image is published for interoperability testing only.
 
+- go-dnp3 v0.8.1: FREEZE AND CLEAR clears only counters that have a frozen counter; a freeze raises events for unchanged frozen values; neither its master nor its outstation filters link addresses (all three in `tests/known-bugs.tsv`). Its outstation carries out a restart (events discarded, DEVICE_RESTART and NEED_TIME set again), so restart cases run on a fresh outstation.
+
 ### Not in this release
 
-- dnp3py, DSC Systems go-dnp3 and Triangle MicroWorks adapters.
+- dnp3py and Triangle MicroWorks adapters.
 - UDP, TLS and serial links, file transfer, secure authentication.

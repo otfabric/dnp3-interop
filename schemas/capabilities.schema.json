@@ -30,8 +30,8 @@
     },
     "features": {
       "type": "object",
-      "required": ["integrityPoll", "eventPoll", "read", "directOperate", "selectBeforeOperate", "directOperateNoAckServer", "directOperateNoAckClient",
-                   "timeSyncLan", "timeSyncNonLan", "timeSyncOnDemand", "restart", "unsolicited", "assignClassServer", "assignClassClient",
+      "required": ["integrityPoll", "eventPoll", "read", "readAllObjectsClient", "directOperate", "selectBeforeOperate", "parameterErrorWithNotSupported", "directOperateNoAckServer", "directOperateNoAckClient",
+                   "timeSyncLan", "timeSyncNonLan", "timeSyncOnDemand", "restart", "restartDelayClient", "unsolicited", "assignClassServer", "assignClassClient",
                    "freeze", "freezeNoAckServer", "freezeNoAckClient", "octetStrings", "tcp", "udp", "tls", "serial", "fileTransfer",
                    "secureAuthentication"],
       "additionalProperties": { "type": "boolean" }

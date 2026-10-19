@@ -71,11 +71,12 @@ int print_capabilities()
          {{"integrityPoll", true},
           {"eventPoll", true},
           {"read", true},
+          {"readAllObjectsClient", true},
           {"directOperate", true},
           {"selectBeforeOperate", true},
-          // The outstation handles DIRECT OPERATE NO ACK, but no master in
-          // the self-tests can send it, so it is not declared.
-          {"directOperateNoAckServer", false},
+          // The outstation sets IIN2.2 with every NOT_SUPPORTED status.
+          {"parameterErrorWithNotSupported", true},
+          {"directOperateNoAckServer", true},
           // The master has no API for it.
           {"directOperateNoAckClient", false},
           {"timeSyncLan", true},
@@ -83,6 +84,7 @@ int print_capabilities()
           // The master synchronizes only when the outstation sets NEED_TIME.
           {"timeSyncOnDemand", false},
           {"restart", true},
+          {"restartDelayClient", true},
           {"unsolicited", true},
           {"assignClassServer", true},
           {"assignClassClient", true},

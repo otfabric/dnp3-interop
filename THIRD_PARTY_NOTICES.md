@@ -11,16 +11,18 @@ next to the licence texts.
 | Repository tooling, fixtures, schemas, scripts, documentation | MIT ([LICENSE](LICENSE)) |
 | `adapters/opendnp3/` (links opendnp3) | MIT |
 | `adapters/stepfunc/` (links the Step Function I/O dnp3 crate) | MIT |
+| `adapters/dscsystems/` (links DSC Systems go-dnp3) | GPL-3.0-or-later |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
 | Image `dnp3-interop-stepfunc` | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
+| Image `dnp3-interop-dscsystems` | GPL-3.0 (it contains go-dnp3) |
 
 Each adapter is a separate program in a separate image; no image contains two
 implementations. Nothing in this repository is linked into a consumer: a
 library that tests against the images talks to them over TCP and reads their
 output, and is not affected by their licences.
 
-Adapters planned later are listed in [PLAN.md](PLAN.md); the one for DSC
-Systems go-dnp3 links a GPL-3.0 library and will be GPL-3.0-or-later.
+The dscsystems adapter is a derivative work of the GPL-3.0 go-dnp3 library
+and carries `SPDX-License-Identifier: GPL-3.0-or-later`; the others are MIT.
 
 ## Image `dnp3-interop-opendnp3`
 
@@ -59,6 +61,19 @@ that purpose only; it is not a product and must not be used in production.
 For any other use, obtain a commercial licence from Step Function I/O
 (https://stepfunc.io).
 
+## Image `dnp3-interop-dscsystems`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| go-dnp3 (DSC Systems) | v0.8.1, commit `70ff72bb09755db183d1bd69859adc72cd663aec` | GPL-3.0 | https://github.com/dscsystems/go-dnp3 |
+| go.bug.st/serial, golang.org/x/sys (linked by go-dnp3's channel package) | the versions in `adapters/dscsystems/go.sum` | BSD-3-Clause | https://github.com/bugst/go-serial, https://go.googlesource.com/sys |
+| Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| Adapter | this repository, `adapters/dscsystems/` | GPL-3.0-or-later | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+Licence texts in the image: `/licenses/go-dnp3/LICENSE`,
+`/licenses/go-dnp3/NOTICE` and `/licenses/GPL-3.0.txt`.
+
 ## Corresponding source
 
 For every published image the complete corresponding source is:
@@ -67,8 +82,8 @@ For every published image the complete corresponding source is:
    `org.opencontainers.image.version` label and by `print-capabilities`
    (`adapterVersion`), which contains the adapter source and the build
    instructions (the Dockerfile); and
-2. the upstream sources at exactly the versions pinned by that Dockerfile and
-   `adapters/stepfunc/Cargo.lock`, recorded in [versions.yaml](versions.yaml)
+2. the upstream sources at exactly the versions pinned by that Dockerfile,
+   `adapters/stepfunc/Cargo.lock` and `adapters/dscsystems/go.mod`, recorded in [versions.yaml](versions.yaml)
    and in the `manifest.json` of the release.
 
 `docker build -f adapters/<adapter>/Dockerfile .` at the release tag
