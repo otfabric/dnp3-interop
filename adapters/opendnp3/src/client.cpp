@@ -576,24 +576,28 @@ int run_client(const std::vector<std::string>& argv)
                 if (result == TaskCompletion::SUCCESS || result == TaskCompletion::FAILURE_BAD_RESPONSE)
                     s.wait(milliseconds(1000), [&] { return !s.awaitIIN; });
             }
+            // Any response carrying NEED_TIME (the null unsolicited response
+            // included) makes the library start the procedure; the READ only
+            // makes sure one arrives. Wait for the procedure, and conclude that
+            // the outstation does not need time only when none ran.
             if (!failure && op == "time-sync" && *s.done == TaskCompletion::SUCCESS)
             {
-                std::unique_lock<std::mutex> lock(s.mutex);
-                const bool needTime = s.iin && s.iin->IsSet(IINBit::NEED_TIME);
-                lock.unlock();
-                if (!needTime)
-                {
-                    failure = Outcome{"failed", "the outstation does not need time; opendnp3 synchronizes only then"};
-                }
-                else if (!s.wait(milliseconds(3 * timeout + 2000), [&] { return s.timeSync.has_value(); }))
-                {
-                    failure = Outcome{"timeout", "the time synchronization did not complete"};
-                }
-                else
+                const bool ran = s.wait(milliseconds(3 * timeout + 2000), [&] {
+                    return s.timeSync.has_value() || (s.lastIIN && !s.lastIIN->IsSet(IINBit::NEED_TIME));
+                });
+                if (ran && s.timeSync)
                 {
                     std::lock_guard<std::mutex> l(s.mutex);
                     s.done = *s.timeSync;
                     s.iin = s.lastIIN;
+                }
+                else
+                {
+                    std::lock_guard<std::mutex> l(s.mutex);
+                    if (s.lastIIN && !s.lastIIN->IsSet(IINBit::NEED_TIME))
+                        failure = Outcome{"failed", "the outstation does not need time; opendnp3 synchronizes only then"};
+                    else
+                        failure = Outcome{"timeout", "the time synchronization did not complete"};
                 }
             }
         }
