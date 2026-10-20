@@ -114,6 +114,10 @@ serves it and the master sends it.
 | `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | yes ²² | no ²¹ | yes | no |
 | `multipleControlsClient` | `operate-multi` (1.3) | yes ²³ | yes | yes | yes |
 | `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | yes | no ²⁴ |
+| `linkConfirmsServer` | `server --link-confirms` (1.3) | no ³⁷ | no ³⁸ | yes | no ³⁹ |
+| `linkConfirmsClient` | `client --link-confirms` (1.3) | no ³⁷ | no ³⁸ | yes | no ³⁹ |
+| `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | yes | no ³⁹ |
+| `linkStatusEventServer` | The server event `link-status` (1.3) | no ⁴⁰ | no ⁴⁰ | yes | no ⁴⁰ |
 | `eventBufferServer` | The outstation applies the fixture's `eventBufferSize` and sets IIN2.3 when it overflows (1.3) | yes | yes | yes ³⁶ | yes ³⁶ |
 | `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | yes ²⁵ | no ²⁶ | yes ²⁷ | no ²⁶ |
 | `freezeAtTimeClient` | `freeze --at` (1.3) | yes | no ²⁸ | yes | yes |
@@ -240,6 +244,15 @@ master drops g34.
 
 ³⁶ go-dnp3 counts the size over all types; dnp3py per type and class, so a
 class holds three times it (FIXTURES.md).
+
+³⁷ stepfunc acknowledges confirmed user data but never sends it.
+
+³⁸ opendnp3 3.x dropped link-layer confirms; it acknowledges them.
+
+³⁹ dnp3py's link layer has no settings.
+
+⁴⁰ The library answers REQUEST_LINK_STATUS without telling the application;
+the go-dnp3 adapter reads it off the wire.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
