@@ -10,7 +10,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 4 | First published images; consumption from a library's tests | images published: v0.1.0 (2026-10-20); consumption by a library pending |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | done as container contract 1.1 (v0.2.0); further point types open |
-| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 qualified, results attached to its release |
+| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 and v0.2.0 qualified, results attached to their releases |
 
 ## Phase 1 - Foundation (done)
 
@@ -135,7 +135,7 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` passes for every pairing that declares a feature, and smoke and cross-stack stay green.
 
-**Status:** done locally: `make features` 191 passed, 0 failed (27 skipped for features a pairing lacks); smoke and cross-stack pass. Open: further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
+**Status:** done, released as v0.2.0: `make features` 191 passed, 0 failed (27 skipped for features a pairing lacks) locally and in the release qualification on both architectures. Open: further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
 
 ## Phase 7 - Release qualification
 
@@ -149,3 +149,5 @@ adds, all as additions to 1.0:
 
 - Scan: every image 0 critical and 43 high findings, all in the Debian 13 base and nearly all without a fix; the fixable ones are liblzma5 (waiting for a new `debian:trixie-slim` digest) and, in the dnp3py image only, pip's vendored setuptools, urllib3 and msgpack (pip and setuptools are removed from the image since v0.1.0).
 - Self-test of the v0.1.0 images: 1113-1115 checks passed per architecture, with 1-2 failures per run, all in pairings with the dscsystems outstation (`confirmed events are gone`, `time-sync`, `direct operate no ack operates`). They are the adapter defects fixed after v0.1.0 (the masters closed before their last confirm or request was out; the opendnp3 master judged a time synchronization by an empty READ that go-dnp3 refuses; docs/COMPATIBILITY.md). Two consecutive local runs of main pass with no failure. The gate for the next release is a clean qualification run.
+
+**v0.2.0** (contract 1.1; release run [39355077580](https://github.com/otfabric/dnp3-interop/actions/runs/39355077580)) met that gate: qualification on both architectures with 0 failures (smoke 40-43 per adapter, cross-stack 1113-1115 passed with 18-20 known upstream bugs, contract 1.1 features 191 passed). Scan: 0 critical; 43 high (44 for dnp3py), all in the Debian 13 base; 2 fixable per image (liblzma5, waiting for a new `debian:trixie-slim` digest).
