@@ -26,3 +26,4 @@ dscsystems:client	v0.8.1	--local-addr	the master accepts frames addressed to ano
 dscsystems:server	v0.8.1	--local-addr	with unsolicited responses off, the outstation answers requests from any master address, to that address	dnp3py
 dnp3py:server	0.6.0	^read .*--start	a read of a range returns every point of the type: ranges and specific variations are ignored	dnp3py
 dnp3py:server	0.6.0	^operate --type g(12v1|41v2) --index (9|5) 	a control of a point that does not exist is answered NOT_SUPPORTED without IIN2.2 PARAMETER_ERROR	dnp3py
+stepfunc:client	1.7.0	\[attributes\] signed	the master decodes a signed integer attribute of one octet without its sign (-42 as 214)	features
