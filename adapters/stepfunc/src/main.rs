@@ -61,6 +61,8 @@ const USAGE: &str = "usage: dnp3-interop <command>
       file-put             --name NAME --content HEX
       file-ls              --name DIRECTORY
       file-info            --name NAME
+                           file operations: [--file-user U --file-password P]; file-put: [--append]
+      file-authenticate    --file-user U --file-password P
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
@@ -141,6 +143,11 @@ fn print_capabilities() -> i32 {
             "fileServer": false,
             "fileClient": true,
             "fileDeleteClient": false,
+            // Contract 1.3: AUTHENTICATE_FILE and append, master only.
+            "fileAuthServer": false,
+            "fileAuthClient": true,
+            "fileAppendServer": false,
+            "fileAppendClient": true,
             // Not in the library.
             "secureAuthentication": false,
             // Contract 1.2. The master decodes frozen analogs and command
@@ -180,7 +187,7 @@ fn print_capabilities() -> i32 {
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
             "enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor",
-            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write", "operate-multi", "deadband-write"],
+            "file-get", "file-put", "file-ls", "file-info", "file-authenticate", "attribute-read", "attribute-write", "operate-multi", "deadband-write"],
     }));
     EXIT_OK
 }
