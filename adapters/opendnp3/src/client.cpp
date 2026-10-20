@@ -379,7 +379,7 @@ int run_client(const std::vector<std::string>& argv)
     }
 
     std::set<std::string> flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms",
-                                   "collect-ms"};
+                                   "collect-ms", "keep-alive-ms"};
     flags.insert(kClientTransportFlags.begin(), kClientTransportFlags.end());
     std::set<std::string> switches = kClientTransportSwitches;
     if (op == "event-poll" || op == "enable-unsolicited" || op == "disable-unsolicited")
@@ -406,7 +406,7 @@ int run_client(const std::vector<std::string>& argv)
 
     // Everything is parsed before anything is sent.
     std::string host;
-    int64_t port, local, remote, connectTimeout, timeout, collect = 0, duration = 0;
+    int64_t port, local, remote, connectTimeout, timeout, collect = 0, duration = 0, keepAlive = 0;
     std::vector<Header> headers;
     std::function<void(IMaster&, State&, std::shared_ptr<ISOEHandler>)> start;
     std::string procedure;
@@ -425,6 +425,7 @@ int run_client(const std::vector<std::string>& argv)
         connectTimeout = args.integer("connect-timeout-ms", 5000, 1, 3600000);
         timeout = args.integer("timeout-ms", 5000, 1, 3600000);
         collect = args.integer("collect-ms", 0, 0, 3600000);
+        keepAlive = args.integer("keep-alive-ms", 0, 0, 3600000);
 
         auto task = [](State& s) { return TaskConfig::With(std::make_shared<Callback>(s)); };
 
@@ -726,7 +727,8 @@ int run_client(const std::vector<std::string>& argv)
                                                        : TimeSyncMode::NonLAN;
         config.link.LocalAddr = static_cast<uint16_t>(local);
         config.link.RemoteAddr = static_cast<uint16_t>(remote);
-        config.link.KeepAliveTimeout = TimeDuration::Max();
+        // --keep-alive-ms (contract 1.3): REQUEST_LINK_STATUS on an idle link.
+        config.link.KeepAliveTimeout = keepAlive > 0 ? TimeDuration::Milliseconds(keepAlive) : TimeDuration::Max();
 
         auto soe = std::make_shared<Handler>(s);
         auto master = channel->AddMaster("master", soe, std::make_shared<Application>(s), config);

@@ -391,7 +391,7 @@ func runClient(argv []string) int {
 		logf("client: unknown operation '%s'", op)
 		return exitUsage
 	}
-	flags := []string{"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms"}
+	flags := []string{"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "keep-alive-ms"}
 	flags = append(append(flags, clientTransportFlags...), saFlags...)
 	switches := append([]string(nil), clientTransportSwitches...)
 	switch op {
@@ -432,6 +432,7 @@ func runClient(argv []string) int {
 	var (
 		host                                                            string
 		port, local, remote, connectTimeout, timeout, collect, duration int64
+		keepAlive                                                       int64
 		req                                                             request
 		freq                                                            fileRequest
 		areq                                                            attributeRequest
@@ -461,6 +462,7 @@ func runClient(argv []string) int {
 		{&port, "port", 20000, 1, 65535}, {&local, "local-addr", 1, 0, 65519}, {&remote, "remote-addr", 1024, 0, 65519},
 		{&connectTimeout, "connect-timeout-ms", 5000, 1, 3600000}, {&timeout, "timeout-ms", 5000, 1, 3600000},
 		{&collect, "collect-ms", 0, 0, 3600000}, {&duration, "duration-ms", 1000, 0, 3600000},
+		{&keepAlive, "keep-alive-ms", 0, 0, 3600000},
 	} {
 		if err == nil {
 			*f.dst, err = a.integer(f.name, f.def, f.min, f.max)
@@ -495,6 +497,8 @@ func runClient(argv []string) int {
 
 		SecureAuthentication: sec.master(),
 		FileCredentials:      credentials,
+		UseLinkConfirms:      a.has("link-confirms"),
+		KeepAlive:            time.Duration(keepAlive) * time.Millisecond,
 	}, h)
 	inner, addr, err := clientChannel(tr, host, port)
 	if err != nil {

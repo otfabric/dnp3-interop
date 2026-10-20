@@ -333,7 +333,7 @@ func runServer(argv []string) int {
 		"confirm-timeout-ms", "local-addr", "remote-addr"}
 	flags = append(append(append(flags, serverTransportFlags...), saFlags...), statisticsFlags...)
 	flags = append(flags, "file-user", "file-password")
-	a, err := parseArgs(argv, flags, nil)
+	a, err := parseArgs(argv, flags, []string{"link-confirms"})
 	var port, selectTimeout, confirmTimeout, local, remote int64
 	var tr transport
 	var sec security
@@ -431,6 +431,7 @@ func runServer(argv []string) int {
 		SelectTimeout:  time.Duration(selectTimeout) * time.Millisecond,
 
 		MaxControlsPerRequest: fx.MaxControls,
+		UseLinkConfirms:       a.has("link-confirms"),
 		Unsolicited:           outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
 		Files:                 files,
 		Log:                   libraryLog(),

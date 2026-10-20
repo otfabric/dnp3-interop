@@ -38,9 +38,9 @@ const usage = `usage: dnp3-interop <command>
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT] [SA]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
-         [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P]
+         [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P] [--link-confirms]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [LINK] [TRANSPORT] [SA] [operation flags]
+         [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [LINK] [TRANSPORT] [SA] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
          [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
@@ -172,6 +172,13 @@ func printCapabilities() int {
 			{"maxControlsServer", true},
 			// Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows. The library has one buffer for all types.
 			{"eventBufferServer", true},
+			// Contract 1.3: link-layer confirms both ways, keep-alives from
+			// the master, and the server's link-status event (read off the
+			// wire).
+			{"linkConfirmsServer", true},
+			{"linkConfirmsClient", true},
+			{"keepAliveClient", true},
+			{"linkStatusEventServer", true},
 			// FREEZE AT TIME both ways; the outstation also freezes analog
 			// inputs (g30 in a freeze), the master counters only.
 			{"freezeAtTimeServer", true},

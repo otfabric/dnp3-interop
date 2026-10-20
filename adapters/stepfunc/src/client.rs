@@ -836,6 +836,7 @@ pub fn run(argv: &[String]) -> i32 {
         "connect-timeout-ms",
         "timeout-ms",
         "collect-ms",
+        "keep-alive-ms",
     ];
     flags.extend(transport::CLIENT_FLAGS);
     let mut switches: Vec<&str> = transport::CLIENT_SWITCHES.to_vec();
@@ -888,6 +889,7 @@ pub fn run(argv: &[String]) -> i32 {
             args.integer("connect-timeout-ms", 5000, 1, 3_600_000)? as u64,
             args.integer("timeout-ms", 5000, 1, 3_600_000)? as u64,
             args.integer("collect-ms", 0, 0, 3_600_000)? as u64,
+            args.integer("keep-alive-ms", 0, 0, 3_600_000)? as u64,
             if files::OPERATIONS.contains(&op) {
                 Op::File(files::parse(op, &args)?)
             } else if ATTRIBUTE_OPERATIONS.contains(&op) {
@@ -897,14 +899,24 @@ pub fn run(argv: &[String]) -> i32 {
             },
         ))
     })();
-    let (transport, host, port, local, remote, connect_timeout, timeout, collect, operation) =
-        match parsed {
-            Ok(v) => v,
-            Err(UsageError(m)) => {
-                logf!("client {op}: {m}");
-                return EXIT_USAGE;
-            }
-        };
+    let (
+        transport,
+        host,
+        port,
+        local,
+        remote,
+        connect_timeout,
+        timeout,
+        collect,
+        keep_alive,
+        operation,
+    ) = match parsed {
+        Ok(v) => v,
+        Err(UsageError(m)) => {
+            logf!("client {op}: {m}");
+            return EXIT_USAGE;
+        }
+    };
 
     let started = Instant::now();
     let runtime = match tokio::runtime::Runtime::new() {
@@ -926,6 +938,7 @@ pub fn run(argv: &[String]) -> i32 {
         Duration::from_millis(connect_timeout),
         Duration::from_millis(timeout),
         Duration::from_millis(collect),
+        (keep_alive > 0).then(|| Duration::from_millis(keep_alive)),
         operation,
         received.clone(),
     ));
@@ -984,6 +997,7 @@ async fn execute(
     connect_timeout: Duration,
     timeout: Duration,
     collect: Duration,
+    keep_alive: Option<Duration>,
     operation: Op,
     received: Arc<Mutex<Received>>,
 ) -> (bool, Option<Failure>, Option<u8>, Option<u64>) {
@@ -1123,6 +1137,8 @@ async fn execute(
     if let Ok(t) = Timeout::from_duration(timeout) {
         assoc_config.response_timeout = t;
     }
+    // --keep-alive-ms (contract 1.3): REQUEST_LINK_STATUS on an idle link.
+    assoc_config.keep_alive_timeout = keep_alive;
     let handler = Handler {
         received: received.clone(),
         unsolicited: false,
