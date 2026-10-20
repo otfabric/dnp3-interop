@@ -97,6 +97,7 @@ struct Fixture
     bool needTime = false;
     std::optional<uint16_t> coldRestartDelayMs, warmRestartDelayMs;
     std::optional<uint16_t> maxControlsPerRequest; // contract 1.3
+    std::optional<uint16_t> eventBufferSize;       // contract 1.3
     std::map<std::string, std::vector<Point>> points; // by array name
 
     const Point* find(const std::string& type, uint16_t index) const;

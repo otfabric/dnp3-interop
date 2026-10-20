@@ -46,6 +46,8 @@ pub struct Fixture {
     pub warm_restart_delay_ms: Option<u16>,
     /// maxControlsPerRequest (contract 1.3)
     pub max_controls: Option<u16>,
+    /// eventBufferSize (contract 1.3)
+    pub event_buffer: Option<u16>,
     pub points: BTreeMap<&'static str, Vec<Point>>,
     /// Device attributes, group 0 (contract 1.3).
     pub attributes: Vec<Attribute>,
@@ -483,6 +485,7 @@ fn check_outstation(o: &Map<String, Value>, out: &mut Fixture, errors: &mut Vec<
         "coldRestartDelayMs",
         "warmRestartDelayMs",
         "maxControlsPerRequest",
+        "eventBufferSize",
     ];
     for key in o.keys() {
         if !fields.contains(&key.as_str()) {
@@ -515,6 +518,12 @@ fn check_outstation(o: &Map<String, Value>, out: &mut Fixture, errors: &mut Vec<
         match int(v) {
             Some(n) if (1..=255).contains(&n) => out.max_controls = Some(n as u16),
             _ => errors.push("outstation: maxControlsPerRequest must be 1..255".into()),
+        }
+    }
+    if let Some(v) = o.get("eventBufferSize") {
+        match int(v) {
+            Some(n) if (1..=65535).contains(&n) => out.event_buffer = Some(n as u16),
+            _ => errors.push("outstation: eventBufferSize must be 1..65535".into()),
         }
     }
     for (key, target) in [

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "name": "events",
+  "description": "Event buffer overflow (contract 1.3): a buffer of three events, and an analog output that drives an analog input with class 2 events. Within what every outstation serves.",
+  "outstation": { "address": 1024, "masterAddress": 1, "needTime": true, "eventBufferSize": 3 },
+  "analogInputs": [
+    { "index": 0, "value": 0, "class": 2 }
+  ],
+  "analogOutputs": [
+    { "index": 0, "value": 0, "target": 0, "min": -100000, "max": 100000 }
+  ]
+}
