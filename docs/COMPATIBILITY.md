@@ -167,7 +167,11 @@ masters send it, go-dnp3's master cannot.
 Only go-dnp3's master can send a broadcast (a DIRECT OPERATE NO ACK to
 0xFFFF): stepfunc's master cannot address one, opendnp3's has no request that
 expects no answer, and dnp3py's refuses the address. The stepfunc, opendnp3
-and go-dnp3 outstations carry it out and set IIN1.0; dnp3py's ignores it.
+and go-dnp3 outstations carry it out and set IIN1.0 in their next response;
+dnp3py's ignores it. go-dnp3's master sends its start-up WRITE (clearing
+IIN1.7 RESTART) to the broadcast address as well, and a go-dnp3 master that
+reads afterwards gets IIN1.0 in the response to that WRITE, not in the one it
+reports.
 
 ### Link layer
 
