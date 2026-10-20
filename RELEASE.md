@@ -18,6 +18,21 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.4.1
+
+**Date:** 2026-10-20
+
+## Summary
+
+A fix to the dscsystems adapter; container contract 1.3 unchanged.
+
+## Changes
+
+- dscsystems, `server --outstations N`: the library's multidrop bus routed the frames of a new connection before the outstations' sessions had re-attached, so a request that arrived first was lost (about one in five in a stress test). The adapter now holds the bus's first read of each connection until every outstation is back (#16).
+- The multidrop known bug and the "(intermittent)" exemption from the stale-entry check are gone: every known bug has to reproduce again.
+
+---
+
 ## v0.4.0
 
 **Date:** 2026-10-20
