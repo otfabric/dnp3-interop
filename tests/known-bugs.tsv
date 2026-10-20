@@ -18,7 +18,8 @@
 # For a pairing that involves the adapter at that version, a matching case
 # may fail and is counted as "known bug" rather than as a failure. If no
 # matching case fails any more, the run fails: the entry is stale and the pin
-# can move.
+# can move. An entry whose text ends in "(intermittent)" is a race that a run
+# may not hit, and is exempt from that.
 stepfunc:server	1.7.0	--mode sbo	the first SELECT after start fails with NO_SELECT: the master's confirm of the null unsolicited response arrives between SELECT and OPERATE and the outstation counts it as an intervening request
 dscsystems:server	v0.8.1	^freeze --clear	FREEZE AND CLEAR leaves a counter that has no frozen counter of the same index uncleared
 dscsystems:server	v0.8.1	^freeze, unchanged frozen value	a freeze raises frozen counter events even for frozen values that did not change
