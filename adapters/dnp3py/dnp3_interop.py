@@ -1141,6 +1141,8 @@ def print_capabilities():
             "dualEndpointClientTls": False,
             "securityStatisticsServer": False,
             "securityStatisticsClient": False,
+            "deviceAttributesServer": False,
+            "deviceAttributesClient": False,
         },
         "pointTypes": list(SERVED),
         # Contract 1.2: what the outstation does differently from the master.

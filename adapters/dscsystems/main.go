@@ -61,6 +61,8 @@ const usage = `usage: dnp3-interop <command>
       file-ls              --name DIRECTORY
       file-info            --name NAME
       file-delete          --name NAME
+      attribute-read       --set N [--variation V]
+      attribute-write      --set N --variation V (--text S | --uint N | --int N)
   print-capabilities
   print-fixture [NAME]
   version
@@ -151,12 +153,15 @@ func printCapabilities() int {
 			// the adapter decodes g121/g122 itself (the library drops them).
 			{"securityStatisticsServer", true},
 			{"securityStatisticsClient", true},
+			// Contract 1.3: device attributes, both roles.
+			{"deviceAttributesServer", true},
+			{"deviceAttributesClient", true},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
 			"enable-unsolicited", "disable-unsolicited", "freeze", "monitor",
-			"file-get", "file-put", "file-ls", "file-info", "file-delete"}},
+			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write"}},
 		{"secureAuthentication", object{
 			{"macAlgorithms", supportedMACs},
 			{"keyWrapAlgorithms", keyWrap},
