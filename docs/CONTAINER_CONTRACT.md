@@ -12,7 +12,7 @@ and changes only with the major version.
 |---------|--------|
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
-| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; additions |
+| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -125,7 +125,7 @@ One JSON object per line on stdout.
 
 | `event` | Other fields | When |
 |---------|--------------|------|
-| `ready` | `adapter`, `address` (`ip:port`; the device with `--transport serial`), `fixture`, `linkAddress`, `masterAddress`, `transport` (`tcp`, `tls`, `udp` or `serial`; 1.1) | Once, when the outstation accepts connections |
+| `ready` | `adapter`, `address` (`ip:port`; the device with `--transport serial`; the master's with `--connect`), `fixture`, `linkAddress`, `masterAddress`, `transport` (`tcp`, `tls`, `udp` or `serial`; 1.1), `dial` (true with `--connect`; 1.2) | Once, when the outstation accepts connections (or, with `--connect`, dials) |
 | `connection-opened` | | A master connected (TCP and TLS only) |
 | `connection-closed` | | The connection ended (TCP and TLS only) |
 | `command` | `function`, `type`, `index`, `code` or `value`, `status` | A select or operate reached the outstation's control handler |
@@ -366,6 +366,29 @@ an outstation that does not answer is `timeout`, never `connect-failed`.
 keeps answering the first endpoint it heard from for its whole life, so give
 masters a fixed endpoint (`--udp-local-port`, a fixed IP) or restart the
 outstation per master.
+
+### Dual end point
+
+*Contract 1.2.* The connection the other way round: the outstation dials,
+the master listens. The DNP3 roles do not change.
+
+| Flag | Role | Meaning |
+|------|------|---------|
+| `--connect HOST:PORT` | `server` | The outstation dials the master at HOST:PORT instead of listening, and dials again after a connection ends. `--bind-address` and `--port` are usage errors with it; `--transport tcp` only. Feature `dualEndpointServer` |
+| `--tls-server-name NAME` | `server`, with `--connect` | The name the master's certificate must carry (default HOST). opendnp3 does not check it |
+| `--listen` | `client` | The master listens on `--bind-address` (default `0.0.0.0`) and `--port` (20000) and waits up to `--connect-timeout-ms` for an outstation; no outstation is `connect-failed`. `--host` is a usage error with it; `--transport tcp` only. Feature `dualEndpointClient` |
+| `--bind-address ADDR` | `client`, with `--listen` | Where the master listens |
+
+With TLS the TLS flags keep their meaning for the end that holds them, and
+the certificates swap sides: the dialling outstation is the TLS client
+(`server --connect ... --tls-cert --tls-key --tls-ca`), the listening master
+the TLS server (`client --listen --tls --tls-cert --tls-key --tls-ca`). A
+listening master over TLS needs the feature `dualEndpointClientTls`.
+
+A dialling outstation writes its readiness file once it is set up and
+dialling, before any master is there; its ready event has `dial: true` and
+`address` the master's. `connection-opened` and `connection-closed` mark
+each connection.
 
 ### Serial
 

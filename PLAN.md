@@ -144,6 +144,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` covers each type for every master that declares it, against the go-dnp3 outstation.
 
+### Contract 1.2: dual end point
+
+- `server --connect HOST:PORT` (the outstation dials) and `client --listen` (the master listens), over TCP and TLS; features `dualEndpointServer`, `dualEndpointClient`, `dualEndpointClientTls`.
+- stepfunc, opendnp3 and go-dnp3 in both directions; stepfunc's master listens over TCP only.
+
+**Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
+
 ## Phase 7 - Release qualification
 
 - Every check of the smoke and cross-stack self-tests is recorded (`results-*.tsv` beside the documents when `REPORT_DIR` is set); `scripts/compat-report.py` turns them and the capability documents into a compatibility report: adapters, totals, a client × server matrix, failures, known-bug hits, skips by reason, declared features.
