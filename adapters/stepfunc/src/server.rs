@@ -737,7 +737,7 @@ async fn serve(
     let mut config = OutstationConfig::new(
         outstation_address,
         master_address,
-        EventBufferConfig::all_types(1000),
+        EventBufferConfig::all_types(fx.event_buffer.unwrap_or(1000)),
     );
     config.class_zero.octet_string = true;
     config.features.unsolicited = if fx.unsolicited {

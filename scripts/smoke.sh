@@ -125,7 +125,7 @@ for feature in udp serial; do
             --transport "${feature}"
     fi
 done
-for fixture in files extended attributes controls; do
+for fixture in files extended attributes controls events; do
     if diff -q <(docker run --rm "${IMAGE}" print-fixture "${fixture}" 2>/dev/null) "${ROOT}/fixtures/${fixture}/fixture.json" >/dev/null
     then ok "print-fixture ${fixture}"; else fail "print-fixture ${fixture} differs from fixtures/${fixture}/fixture.json"; fi
 done

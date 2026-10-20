@@ -38,6 +38,8 @@ from dnp3.database import (
     BinaryOutputConfig,
     CounterConfig,
     Database,
+    DatabaseConfig,
+    EventBufferConfig,
     EventClass,
 )
 from dnp3.master.config import MasterConfig
@@ -806,7 +808,7 @@ def load_fixture(text):
         o = {}
     for k in o:
         if k not in ("address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs",
-                     "maxControlsPerRequest"):
+                     "maxControlsPerRequest", "eventBufferSize"):
             errors.append(f"outstation: unknown field '{k}'")
     for k in ("address", "masterAddress"):
         if not is_int(o.get(k)) or not 0 <= o[k] <= 65519:
@@ -820,6 +822,8 @@ def load_fixture(text):
         errors.append("outstation.unsolicited: dnp3py's outstation sends no unsolicited responses")
     if "maxControlsPerRequest" in o and (not is_int(o["maxControlsPerRequest"]) or not 1 <= o["maxControlsPerRequest"] <= 255):
         errors.append("outstation: maxControlsPerRequest must be 1..255")
+    if "eventBufferSize" in o and (not is_int(o["eventBufferSize"]) or not 1 <= o["eventBufferSize"] <= 65535):
+        errors.append("outstation: eventBufferSize must be 1..65535")
     for k in ("coldRestartDelayMs", "warmRestartDelayMs"):
         if k in o and (not is_int(o[k]) or not 0 <= o[k] <= 65535):
             errors.append(f"outstation: {k} must be 0..65535")
@@ -1076,7 +1080,11 @@ def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
         time_sync_required=bool(o.get("needTime", False)), analog_output_static_variation=aovars.pop(),
         unsolicited=UnsolicitedConfig(enabled=False),
         max_controls_per_request=o.get("maxControlsPerRequest", 16))
-    db = Database()
+    # eventBufferSize (contract 1.3): dnp3py sizes its buffer per type and
+    # class; each class holds the sum of the three types.
+    size = o.get("eventBufferSize", 100)
+    db = Database(DatabaseConfig(event_buffer_config=EventBufferConfig(
+        max_binary_events=size, max_analog_events=size, max_counter_events=size)))
     for i, p in sorted(points["binaryInputs"].items()):
         db.add_binary_input(i, BinaryInputConfig(event_class=EventClass(p.get("class", 0))), p["value"],
                             BinaryQuality(p["flags"]))
@@ -1234,6 +1242,8 @@ def print_capabilities():
             # dnp3py's outstation carries out every control of a request,
             # whatever max_controls_per_request says.
             "maxControlsServer": False,
+            # Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows.
+            "eventBufferServer": True,
             # The master sends FREEZE AT TIME and freezes of any group; the
             # outstation has neither (NO_FUNC_CODE_SUPPORT, counters only).
             "freezeAtTimeServer": False,
