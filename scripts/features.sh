@@ -29,6 +29,8 @@
 #   controls (contract 1.3) several controls in one request, direct and
 #           select-before-operate, a refused one among them, and the limit
 #           of the controls fixture (two per request)
+#   freeze  (contract 1.3) FREEZE AT TIME, at once and scheduled, and the
+#           freeze of analog inputs into frozen analog inputs
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -460,6 +462,49 @@ suite() {
             multi "${server}" "${client}" "${pair}"
         else
             skip "${pair}: several controls (needs client:multipleControlsClient)"
+        fi
+
+        # ---- FREEZE AT TIME and the analog freeze (contract 1.3) ----
+        if has "${server}" freezeAtTimeServer && has "${client}" freezeAtTimeClient; then
+            name="fz-${server}-${RUN_ID}"
+            start "${server}" "${name}" --
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" -- freeze --at immediately --host "${name}")
+                check "${pair}: [freeze] at time 0 freezes at once" "ok=true error=- g21v1:0=123456 g21v2:1=65535" \
+                    "$(outcome "${doc}") $(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+            fi
+            stop_server "${name}"
+            start "${server}" "${name}" --
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" -- freeze --at +1500 --host "${name}")
+                check "${pair}: [freeze] a freeze in 1.5 s is accepted, not done yet" "ok=true error=- g21v1:0=0 g21v2:1=0" \
+                    "$(outcome "${doc}") $(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+                # A master stays connected meanwhile: go-dnp3 runs scheduled
+                # freezes only while one is (COMPATIBILITY.md).
+                client "${client}" -- monitor --duration-ms 2500 --host "${name}" >/dev/null
+                check "${pair}: [freeze] and done at its time" "g21v1:0=123456 g21v2:1=65535" \
+                    "$(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+            else
+                fail "${pair}: [freeze] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: freeze at time (needs server:freezeAtTimeServer,client:freezeAtTimeClient)"
+        fi
+        if has "${server}" analogFreezeServer && has "${client}" analogFreezeClient && serves_extended "${server}"; then
+            name="fy-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/extended/fixture.json
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" -- freeze --group 30 --host "${name}")
+                check "${pair}: [freeze] a freeze of analog inputs" "ok=true error=-" "$(outcome "${doc}")"
+                check "${pair}: [freeze] copies them into the frozen analog inputs of the same index" "0 49.5" \
+                    "$(client dscsystems -- read --group 31 --variation 0 --start 0 --stop 1 --host "${name}" | jq -r '[.objects[].value] | join(" ")')"
+            else
+                fail "${pair}: [freeze] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
         fi
 
         # ---- device attributes (contract 1.3) ----
