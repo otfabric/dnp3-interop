@@ -561,6 +561,8 @@ int run_server(const std::vector<std::string>& argv)
         config.outstation.params.allowUnsolicited = fx.unsolicited;
         config.outstation.params.unsolClassMask = ClassField::None();
         config.outstation.params.selectTimeout = TimeDuration::Milliseconds(selectTimeout);
+        if (fx.maxControlsPerRequest)
+            config.outstation.params.maxControlsPerRequest = *fx.maxControlsPerRequest;
         config.outstation.params.solConfirmTimeout = TimeDuration::Milliseconds(confirmTimeout);
         config.outstation.params.unsolConfirmTimeout = TimeDuration::Milliseconds(confirmTimeout);
         config.link.LocalAddr = local;

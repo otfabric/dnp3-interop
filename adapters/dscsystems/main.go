@@ -61,6 +61,7 @@ const usage = `usage: dnp3-interop <command>
       file-ls              --name DIRECTORY
       file-info            --name NAME
       file-delete          --name NAME
+      operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
   print-capabilities
@@ -156,12 +157,16 @@ func printCapabilities() int {
 			// Contract 1.3: device attributes, both roles.
 			{"deviceAttributesServer", true},
 			{"deviceAttributesClient", true},
+			// Several controls in one request, a status for each; the
+			// fixture's maxControlsPerRequest.
+			{"multipleControlsClient", true},
+			{"maxControlsServer", true},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
 			"enable-unsolicited", "disable-unsolicited", "freeze", "monitor",
-			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write"}},
+			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write", "operate-multi"}},
 		{"secureAuthentication", object{
 			{"macAlgorithms", supportedMACs},
 			{"keyWrapAlgorithms", keyWrap},

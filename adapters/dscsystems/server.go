@@ -416,9 +416,11 @@ func runServer(argv []string) int {
 		Events:         outstation.EventBufferConfig{MaxEvents: 1000},
 		ConfirmTimeout: time.Duration(confirmTimeout) * time.Millisecond,
 		SelectTimeout:  time.Duration(selectTimeout) * time.Millisecond,
-		Unsolicited:    outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
-		Files:          files,
-		Log:            libraryLog(),
+
+		MaxControlsPerRequest: fx.MaxControls,
+		Unsolicited:           outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
+		Files:                 files,
+		Log:                   libraryLog(),
 
 		SecureAuthentication: sec.outstation(),
 	}

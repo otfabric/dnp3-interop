@@ -321,8 +321,9 @@ std::string load_fixture(const std::string& path, Fixture& out)
     else
     {
         const auto& o = fx["outstation"];
-        const std::set<std::string> fields = {"address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs",
-                                              "warmRestartDelayMs"};
+        const std::set<std::string> fields = {"address",           "masterAddress",      "unsolicited",
+                                              "needTime",          "coldRestartDelayMs", "warmRestartDelayMs",
+                                              "maxControlsPerRequest"};
         for (auto it = o.begin(); it != o.end(); ++it)
         {
             if (!fields.count(it.key()))
@@ -342,6 +343,14 @@ std::string load_fixture(const std::string& path, Fixture& out)
                 c.add(std::string("outstation: ") + b + " must be a boolean");
             else
                 (std::string(b) == "unsolicited" ? out.unsolicited : out.needTime) = o[b].get<bool>();
+        }
+        if (o.contains("maxControlsPerRequest"))
+        {
+            const auto& m = o["maxControlsPerRequest"];
+            if (!is_integer(m) || m.get<int64_t>() < 1 || m.get<int64_t>() > 255)
+                c.add("outstation: maxControlsPerRequest must be 1..255");
+            else
+                out.maxControlsPerRequest = static_cast<uint16_t>(m.get<int64_t>());
         }
         for (const char* d : {"coldRestartDelayMs", "warmRestartDelayMs"})
         {
