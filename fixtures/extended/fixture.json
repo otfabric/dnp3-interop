@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.0",
+  "name": "extended",
+  "description": "Point types beyond the baseline: frozen analog inputs (g31), command events of the outputs (g13, g43) and a time and interval object (g50v4). For adapters that serve them (pointTypes frozenAnalogInputs and timeAndIntervals, feature commandEventsServer).",
+  "outstation": {
+    "address": 1024,
+    "masterAddress": 1,
+    "needTime": true
+  },
+  "binaryInputs": [
+    {
+      "index": 0,
+      "value": true
+    },
+    {
+      "index": 1,
+      "value": false,
+      "class": 1
+    }
+  ],
+  "binaryOutputs": [
+    {
+      "index": 0,
+      "value": false,
+      "class": 1,
+      "target": 1,
+      "commandEventClass": 2,
+      "commandEventVariation": 2
+    }
+  ],
+  "analogInputs": [
+    {
+      "index": 0,
+      "value": 0,
+      "class": 1
+    }
+  ],
+  "analogOutputs": [
+    {
+      "index": 0,
+      "value": 0,
+      "class": 1,
+      "target": 0,
+      "min": -1000000,
+      "max": 1000000,
+      "commandEventClass": 2,
+      "commandEventVariation": 3
+    }
+  ],
+  "frozenAnalogInputs": [
+    {
+      "index": 0,
+      "value": 1500
+    },
+    {
+      "index": 1,
+      "value": 49.5,
+      "staticVariation": 7,
+      "flags": [
+        "ONLINE",
+        "OVER_RANGE"
+      ]
+    }
+  ],
+  "timeAndIntervals": [
+    {
+      "index": 0,
+      "time": "2026-01-01T00:00:00.000Z",
+      "interval": 15,
+      "units": 3
+    }
+  ]
+}

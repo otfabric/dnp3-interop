@@ -96,6 +96,10 @@ serves it and the master sends it.
 | `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | yes | no ⁷ | yes | no ¹⁴ |
 | `fileDeleteClient` | `file-delete` (1.1) | no ⁶ | no ⁷ | yes | no ¹⁴ |
 | `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ⁷ | no ⁷ | yes ¹⁵ | no ¹⁴ |
+| `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁶ | no ¹⁶ | yes | — |
+| `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes | no ¹⁷ |
+| `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | yes | no ¹⁶ | yes | no ¹⁷ |
+| `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | no ¹⁸ | yes | no ¹⁸ | no ¹⁷ |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -148,6 +152,18 @@ authentication.
 no remote key management, unsolicited responses not authenticated. The
 capability document says so in `secureAuthentication`. It is tested against
 itself only: no other image has secure authentication.
+
+¹⁶ Not in the library: stepfunc's and opendnp3's outstations have no command
+events and no frozen analogs (opendnp3 does not even parse groups 31 and 33,
+so a response with them fails as a whole). Their `pointTypes` say what they
+serve: opendnp3 could serve `timeAndIntervals` in a fixture without frozen
+analogs, stepfunc cannot.
+
+¹⁷ dnp3py's decoders know none of groups 13, 31, 33, 43 and 50.
+
+¹⁸ stepfunc's master and go-dnp3's master drop g50v4 objects (stepfunc warns
+"ignored header variation"; go-dnp3 has no handler for the type). go-dnp3's
+outstation serves them.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks

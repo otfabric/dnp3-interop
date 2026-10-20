@@ -104,8 +104,10 @@ for feature in udp serial; do
             --transport "${feature}"
     fi
 done
-if diff -q <(docker run --rm "${IMAGE}" print-fixture files 2>/dev/null) "${ROOT}/fixtures/files/fixture.json" >/dev/null
-then ok "print-fixture files"; else fail "print-fixture files differs from fixtures/files/fixture.json"; fi
+for fixture in files extended; do
+    if diff -q <(docker run --rm "${IMAGE}" print-fixture "${fixture}" 2>/dev/null) "${ROOT}/fixtures/${fixture}/fixture.json" >/dev/null
+    then ok "print-fixture ${fixture}"; else fail "print-fixture ${fixture} differs from fixtures/${fixture}/fixture.json"; fi
+done
 
 if [[ "${serves}" == true ]]; then
     # ---- an invalid fixture stops the server before it listens ----
@@ -124,6 +126,15 @@ if [[ "${serves}" == true ]]; then
     else
         expect_exit 4 "server without file transfer refuses the files fixture" "${IMAGE}" server \
             --fixture /fixtures/files/fixture.json
+    fi
+    # The extended fixture needs frozen analogs, g50v4 and command events (1.2).
+    if jq -e '.features.commandEventsServer and (.pointTypes | index("frozenAnalogInputs") and index("timeAndIntervals"))' \
+            <<<"${caps}" >/dev/null 2>&1; then
+        name=$(start_server "${ADAPTER}" --fixture /fixtures/extended/fixture.json)
+        if wait_ready "${name}"; then ok "server serves the extended fixture"; else fail "server does not serve the extended fixture"; fi
+        stop_server "${name}"
+    else
+        expect_exit 4 "server refuses the extended fixture" "${IMAGE}" server --fixture /fixtures/extended/fixture.json
     fi
 else
     expect_exit 2 "server of an adapter without the server role" "${IMAGE}" server

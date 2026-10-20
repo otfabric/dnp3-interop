@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -132,8 +133,15 @@ func printCapabilities() int {
 			{"fileClient", true},
 			{"fileDeleteClient", true},
 			{"secureAuthentication", true},
+			// Contract 1.2. The outstation records command events (g13, g43)
+			// when a control reaches the control handler; the master
+			// decodes them and frozen analogs, but drops g50v4.
+			{"commandEventsServer", true},
+			{"commandEventsClient", true},
+			{"frozenAnalogInputsClient", true},
+			{"timeAndIntervalClient", false},
 		}},
-		{"pointTypes", pointTypes},
+		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
 			"enable-unsolicited", "disable-unsolicited", "freeze", "monitor",

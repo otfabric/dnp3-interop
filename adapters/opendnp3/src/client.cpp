@@ -201,9 +201,31 @@ public:
                                      {"unsolicited", s.unsolicitedFragment}});
         });
     }
-    void Process(const HeaderInfo& info, const ICollection<Indexed<TimeAndInterval>>&) override { ignored(info); }
-    void Process(const HeaderInfo& info, const ICollection<Indexed<BinaryCommandEvent>>&) override { ignored(info); }
-    void Process(const HeaderInfo& info, const ICollection<Indexed<AnalogCommandEvent>>&) override { ignored(info); }
+    // g50v4 (contract 1.2): the interval as the value, its time and units.
+    void Process(const HeaderInfo& info, const ICollection<Indexed<TimeAndInterval>>& values) override
+    {
+        const auto gv = GroupVariationSpec::to_type(info.gv);
+        std::lock_guard<std::mutex> lock(s.mutex);
+        values.ForeachItem([&](const Indexed<TimeAndInterval>& x) {
+            s.objects.push_back(json{{"group", gv >> 8},
+                                     {"variation", gv & 0xff},
+                                     {"index", x.index},
+                                     {"value", x.value.interval},
+                                     {"time", format_time(x.value.time.value)},
+                                     {"units", x.value.units},
+                                     {"unsolicited", s.unsolicitedFragment}});
+        });
+    }
+    // g13 and g43 (contract 1.2): the commanded state or value and the
+    // status, without flags.
+    void Process(const HeaderInfo& info, const ICollection<Indexed<BinaryCommandEvent>>& values) override
+    {
+        command_events(info, values, [](const BinaryCommandEvent& m) { return json(m.value); });
+    }
+    void Process(const HeaderInfo& info, const ICollection<Indexed<AnalogCommandEvent>>& values) override
+    {
+        command_events(info, values, [](const AnalogCommandEvent& m) { return number(m.value); });
+    }
     void Process(const HeaderInfo& info, const ICollection<DNPTime>&) override { ignored(info); }
 
 private:
@@ -216,6 +238,25 @@ private:
         values.ForeachItem([&](const Indexed<T>& x) {
             json o{{"group", group}, {"variation", gv & 0xff}, {"index", x.index}, {"value", value(x.value)},
                    {"flags", flag_names(group, x.value.flags.value)}};
+            if (timed)
+                o["time"] = format_time(x.value.time.value);
+            o["unsolicited"] = s.unsolicitedFragment;
+            s.objects.push_back(std::move(o));
+        });
+    }
+
+    template<class T, class F>
+    void command_events(const HeaderInfo& info, const ICollection<Indexed<T>>& values, F value)
+    {
+        const auto gv = GroupVariationSpec::to_type(info.gv);
+        const bool timed = info.tsquality != TimestampQuality::INVALID;
+        std::lock_guard<std::mutex> lock(s.mutex);
+        values.ForeachItem([&](const Indexed<T>& x) {
+            json o{{"group", gv >> 8},
+                   {"variation", gv & 0xff},
+                   {"index", x.index},
+                   {"value", value(x.value)},
+                   {"status", command_status_name(CommandStatusSpec::to_type(x.value.status))}};
             if (timed)
                 o["time"] = format_time(x.value.time.value);
             o["unsolicited"] = s.unsolicitedFragment;

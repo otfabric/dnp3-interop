@@ -1,6 +1,6 @@
 # Container contract
 
-Version: **1.1** (`contract_version` in [versions.yaml](../versions.yaml))
+Version: **1.2** (`contract_version` in [versions.yaml](../versions.yaml))
 
 Every adapter image exposes the same commands, flags, JSON documents and exit
 codes. Consumers depend on this document, not on any adapter's source. A
@@ -12,6 +12,7 @@ and changes only with the major version.
 |---------|--------|
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
+| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -500,6 +501,26 @@ Server events:
 The master's error is `auth-failed` when the outstation refused its
 authentication or a session key change failed.
 
+## More point types
+
+*Contract 1.2.* Object documents for three more kinds of object, served by
+outstations whose fixture has them (the `extended` fixture; see
+[FIXTURES.md](FIXTURES.md)) and decoded by masters that declare it:
+
+| Objects | Served when | Master feature | Document |
+|---------|-------------|----------------|----------|
+| Frozen analog inputs, g31 (static), g33 (events) | `pointTypes` has `frozenAnalogInputs` | `frozenAnalogInputsClient` | as an analog input: `value`, `flags` (analog flags), `time` for the variations with one |
+| Binary output command events, g13 | feature `commandEventsServer`, and the output has a `commandEventClass` | `commandEventsClient` | `value` the commanded state (true for LATCH_ON, PULSE_ON, CLOSE), `status` the command status by name, `time` for g13v2; no `flags` |
+| Analog output command events, g43 | as g13 | `commandEventsClient` | `value` the commanded value, `status`, `time` for g43v3, v4, v7, v8; no `flags` |
+| Time and interval, g50v4 | `pointTypes` has `timeAndIntervals` | `timeAndIntervalClient` | `value` the interval, `time` the start time, `units` the interval units (IEEE 1815 table A-6: 0 none, 1 ms, 2 s, 3 min, 4 h, 5 day, ...) |
+
+`read` names them as any other object: `read --group 31 --variation 0
+--start 0 --stop 1`, `read --group 50 --variation 4 --start 0 --stop 0`.
+Command events arrive in event polls of their class. A master that does not
+declare the feature may fail a response that carries them (opendnp3 cannot
+parse groups 31 and 33) or leave them out: read them only with masters that
+declare it.
+
 ## Object documents
 
 ```json
@@ -515,6 +536,8 @@ authentication or a session key change failed.
 | `flags` | The flag names set in the object's flags octet, see below. For a variation without flags, what the library reports. Absent for octet strings, which have no flags |
 | `time` | Variations with an absolute time stamp (and relative ones, resolved by the library), UTC `YYYY-MM-DDTHH:MM:SS.mmmZ`. Absent otherwise |
 | `unsolicited` | The object came in an unsolicited response |
+| `status` | Groups 13 and 43 (1.2): the command status of the control, by name ([command status](#command-status)) |
+| `units` | Group 50 variation 4 (1.2): the units of the interval |
 
 | Groups | `value` |
 |--------|---------|
@@ -523,6 +546,10 @@ authentication or a session key change failed.
 | 20, 21, 22, 23 | integer |
 | 30, 32, 40, 42 | number |
 | 110, 111 | the octets, lower-case hex |
+| 31, 33 | number (1.2) |
+| 13 | the commanded state, boolean (1.2) |
+| 43 | the commanded value, number (1.2) |
+| 50 (variation 4) | the interval, integer (1.2) |
 
 `flags` names by bit, in bit order. The state bits of the binary types are
 in `value`, not in `flags`.

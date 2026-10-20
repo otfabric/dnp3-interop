@@ -26,6 +26,8 @@ var timed = map[[2]uint8]bool{
 	{2, 2}: true, {2, 3}: true, {4, 2}: true, {4, 3}: true, {11, 2}: true, {21, 5}: true, {21, 6}: true,
 	{22, 5}: true, {22, 6}: true, {23, 5}: true, {23, 6}: true, {32, 3}: true, {32, 4}: true, {32, 7}: true,
 	{32, 8}: true, {42, 3}: true, {42, 4}: true, {42, 7}: true, {42, 8}: true,
+	{13, 2}: true, {33, 3}: true, {33, 4}: true, {33, 7}: true, {33, 8}: true,
+	{43, 3}: true, {43, 4}: true, {43, 7}: true, {43, 8}: true,
 }
 
 // handler collects what the library delivers.
@@ -87,6 +89,32 @@ func (h *handler) HandleFrozenCounter(info master.HeaderInfo, values []dnp3.Inde
 func (h *handler) HandleAnalog(info master.HeaderInfo, values []dnp3.Indexed[dnp3.Analog]) {
 	push(h, info, values, func(x dnp3.Analog) any { return number(x.Value) },
 		func(x dnp3.Analog) dnp3.Flags { return x.Flags }, func(x dnp3.Analog) dnp3.Timestamp { return x.Time })
+}
+
+// HandleFrozenAnalog receives g31 and g33 (master.FrozenAnalogHandler).
+func (h *handler) HandleFrozenAnalog(info master.HeaderInfo, values []dnp3.Indexed[dnp3.Analog]) {
+	push(h, info, values, func(x dnp3.Analog) any { return number(x.Value) },
+		func(x dnp3.Analog) dnp3.Flags { return x.Flags }, func(x dnp3.Analog) dnp3.Timestamp { return x.Time })
+}
+
+// HandleCommandEvent receives g13 and g43 (master.CommandEventHandler): the
+// commanded state or value and the status, with no flags.
+func (h *handler) HandleCommandEvent(info master.HeaderInfo, values []dnp3.Indexed[dnp3.CommandEvent]) {
+	g, v := info.GV.Group, info.GV.Variation
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, x := range values {
+		var value any = x.Value.State
+		if x.Value.Analog {
+			value = number(x.Value.Value)
+		}
+		o := object{{"group", g}, {"variation", v}, {"index", x.Index}, {"value", value},
+			{"status", commandStatusName(uint8(x.Value.Status))}}
+		if t := x.Value.Time; timed[[2]uint8{g, v}] && t.Quality != dnp3.TimestampInvalid {
+			o = append(o, field{"time", formatTime(t.Time)})
+		}
+		h.objects = append(h.objects, append(o, field{"unsolicited", h.unsolicited}))
+	}
 }
 
 func (h *handler) HandleBinaryOutputStatus(info master.HeaderInfo, values []dnp3.Indexed[dnp3.BinaryOutputStatus]) {
