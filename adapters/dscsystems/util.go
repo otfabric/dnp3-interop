@@ -114,7 +114,7 @@ func familyOfGroup(group uint8) family {
 	switch group {
 	case 20, 21, 22, 23:
 		return familyCounter
-	case 30, 32, 40, 42:
+	case 30, 31, 32, 33, 40, 42:
 		return familyAnalog
 	}
 	return familyBinary
@@ -173,7 +173,7 @@ func flagBit(pointType, name string) int {
 	switch pointType {
 	case "counters", "frozenCounters":
 		f = familyCounter
-	case "analogInputs", "analogOutputs":
+	case "analogInputs", "analogOutputs", "frozenAnalogInputs":
 		f = familyAnalog
 	}
 	for bit := 5; bit < 7; bit++ {

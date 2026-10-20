@@ -42,6 +42,8 @@ var dnpTypes = map[string]dnp3.PointType{
 	"analogInputs":    dnp3.TypeAnalog,
 	"analogOutputs":   dnp3.TypeAnalogOutputStatus,
 	"octetStrings":    dnp3.TypeOctetString,
+
+	"frozenAnalogInputs": dnp3.TypeFrozenAnalog,
 }
 
 // servable checks what the library's outstation cannot do with a valid
@@ -57,6 +59,15 @@ func servable(fx *fixture) error {
 			if !seen[uint16(i)] {
 				return fmt.Errorf("%s: the go-dnp3 database holds the indexes 0..n-1 of a type; index %d is missing", kind, i)
 			}
+		}
+	}
+	seen := map[uint16]bool{}
+	for _, t := range fx.TimeIntervals {
+		seen[t.Index] = true
+	}
+	for i := range len(fx.TimeIntervals) {
+		if !seen[uint16(i)] {
+			return fmt.Errorf("timeAndIntervals: the go-dnp3 database holds the indexes 0..n-1; index %d is missing", i)
 		}
 	}
 	if !fx.NeedTime {
@@ -98,10 +109,19 @@ func configure(db *outstation.Database, fx *fixture) error {
 				db.UpdateAnalogOutputStatus(p.Index, dnp3.AnalogOutputStatus{Value: p.Value, Flags: flags, Time: now})
 			case "octetStrings":
 				db.UpdateOctetString(p.Index, dnp3.OctetString(p.Octets))
+			case "frozenAnalogInputs":
+				db.UpdateFrozenAnalog(p.Index, dnp3.Analog{Value: p.Value, Flags: flags, Time: now})
 			}
 			cfg.Class = dnpClass(p.Class)
+			// Command events of an output: recorded by the library when a
+			// control reaches the control handler.
+			cfg.CommandEventClass = dnpClass(p.CmdClass)
+			cfg.CommandEventVariation = p.CmdVar
 			db.Configure(dnpTypes[kind], p.Index, cfg)
 		}
+	}
+	for _, t := range fx.TimeIntervals {
+		db.UpdateTimeAndInterval(t.Index, dnp3.TimeAndInterval{Time: ts(t.Time), Interval: t.Interval, Units: t.Units})
 	}
 	return nil
 }
@@ -372,6 +392,8 @@ func runServer(argv []string) int {
 		Analog:             len(fx.Points["analogInputs"]),
 		AnalogOutputStatus: len(fx.Points["analogOutputs"]),
 		OctetString:        len(fx.Points["octetStrings"]),
+		FrozenAnalog:       len(fx.Points["frozenAnalogInputs"]),
+		TimeAndInterval:    len(fx.TimeIntervals),
 	}
 	var files outstation.FileConfig
 	if fx.Files != nil || fx.Directories != nil {
