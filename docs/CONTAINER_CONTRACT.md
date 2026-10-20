@@ -1,6 +1,6 @@
 # Container contract
 
-Version: **1.2** (`contract_version` in [versions.yaml](../versions.yaml))
+Version: **1.3** (`contract_version` in [versions.yaml](../versions.yaml))
 
 Every adapter image exposes the same commands, flags, JSON documents and exit
 codes. Consumers depend on this document, not on any adapter's source. A
@@ -13,6 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -545,6 +546,31 @@ secure authentication refuses g121 (`rejected`).
 go-dnp3's master drops groups 121 and 122, so the dscsystems adapter reads
 them from the frames itself, from responses that carry nothing but them (a
 class poll that returns other events before them leaves them out).
+
+## Device attributes
+
+*Contract 1.3.* Device attributes, group 0 (IEEE 1815-2012 clause 11.9.1 and
+table 11-1): an outstation serves those of its fixture (`deviceAttributes`;
+the `attributes` fixture has a set of them), a master reads and writes them.
+Features `deviceAttributesServer` and `deviceAttributesClient`.
+
+| Operation | Flags | Sends | Succeeds when | Result |
+|-----------|-------|-------|---------------|--------|
+| `attribute-read` | `--set N` (required), `--variation V` (default 254: every attribute of the set) | READ g0vV, the set as the range | The response arrived without a request error | `attributes` |
+| `attribute-write` | `--set N`, `--variation V` (required), exactly one of `--text S`, `--uint N`, `--int N` | WRITE g0vV with the value | A null response without a request error | |
+
+`attributes`: `[{ "set", "variation", "type", "value" }]` in the order they
+arrived. `type` is one of `visibleString`, `unsignedInt`, `signedInt`,
+`float`, `octetString`, `bitString`, `time`, `attributeList`,
+`extendedAttributeList`; `value` a string, a number, lower-case hex
+(octet and bit strings), a time stamp, or null (lists). A read of set 0
+returns what the outstation library adds there itself (point counts, sizes);
+compare attributes of the fixture's set.
+
+An outstation accepts a write of an attribute its fixture marks `writable`,
+of the same type, and reports it with the server event `attribute-write`
+(`set`, `variation`, `type`, `value`); it refuses other writes (a request
+error).
 
 ## More point types
 
