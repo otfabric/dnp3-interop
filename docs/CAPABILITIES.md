@@ -114,6 +114,10 @@ serves it and the master sends it.
 | `freezeAtTimeClient` | `freeze --at` (1.3) | yes | no ²⁸ | yes | yes |
 | `analogFreezeServer` | The outstation freezes analog inputs into frozen analog inputs (1.3) | no ²⁹ | no ²⁹ | yes | no ²⁹ |
 | `analogFreezeClient` | `freeze --group 30` (1.3) | yes | yes | no ³⁰ | yes |
+| `deadbandWriteServer` | The outstation applies a deadband written (g34) (1.3) | yes ³¹ | no ³² | yes | no ³² |
+| `deadbandWriteClient` | `deadband-write` (1.3) | yes | no ³³ | yes | no ³³ |
+| `deadbandReadServer` | The outstation serves a read of g34 (1.3) | yes | no ³² | no ³⁴ | no ³² |
+| `deadbandReadClient` | A read of g34 comes back as objects (1.3) | yes | no ³³ | no ³⁴ | no ³³ |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -214,6 +218,18 @@ at once, and runs scheduled freezes only while a master is connected
 ²⁹ The stepfunc, opendnp3 and dnp3py outstations freeze counters only.
 
 ³⁰ go-dnp3's master freezes counters only.
+
+³¹ stepfunc compares a change with the last value it reported, which until
+the first event is the RESTART value the library starts a point with: the
+first change after start makes an event whatever the deadband.
+
+³² opendnp3 answers a write of g34 with an error; dnp3py's outstation has no
+deadband to write or read.
+
+³³ The library's master cannot write group 34 or decode it.
+
+³⁴ go-dnp3's outstation answers a read of g34 with OBJECT_UNKNOWN, and its
+master drops g34.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
