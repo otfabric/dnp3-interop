@@ -10,7 +10,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 4 | First published images; consumption from a library's tests | images published: v0.1.0 (2026-10-20); consumption by a library pending |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | in progress, as container contract 1.1 |
-| 7 | Release qualification: image scanning, SBOMs, compatibility report | in progress |
+| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 qualified, results attached to its release |
 
 ## Phase 1 - Foundation (done)
 
@@ -139,3 +139,8 @@ each other (REQUIREMENTS.md R8.3):
 - The **Release qualification** workflow (`.github/workflows/qualify.yml`) runs both against a published release, natively on both architectures, and attaches the results to the GitHub release; the release workflow calls it after publishing.
 
 **Gate:** a release carries its compatibility report, scan summary and SBOMs, produced from the published images.
+
+**Status:** done for v0.1.0 (run [39349907326](https://github.com/otfabric/dnp3-interop/actions/runs/39349907326); the first run attached empty SBOM archives, fixed in the workflow). The v0.1.0 release carries `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz`.
+
+- Scan: every image 0 critical and 43 high findings, all in the Debian 13 base and nearly all without a fix; the fixable ones are liblzma5 (waiting for a new `debian:trixie-slim` digest) and, in the dnp3py image only, pip's vendored setuptools, urllib3 and msgpack (pip and setuptools are removed from the image since v0.1.0).
+- Self-test of the v0.1.0 images: 1113-1115 checks passed per architecture, with 1-2 failures per run, all in pairings with the dscsystems outstation (`confirmed events are gone`, `time-sync`, `direct operate no ack operates`). They are the adapter defects fixed after v0.1.0 (the masters closed before their last confirm or request was out; the opendnp3 master judged a time synchronization by an empty READ that go-dnp3 refuses; docs/COMPATIBILITY.md). Two consecutive local runs of main pass with no failure. The gate for the next release is a clean qualification run.
