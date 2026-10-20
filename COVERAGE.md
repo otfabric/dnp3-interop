@@ -12,13 +12,13 @@ self-test covers between the reference stacks.
 | Static data | Groups 1, 3, 10, 20, 21, 30, 40, 110 in the static variations of the fixture format, including the variations without flags and the 16-bit ones; all objects, ranges, and a specific variation | yes |
 | Event data | Groups 2, 4, 11, 22, 23, 32, 42 with and without time, caused by controls and freezes, in classes 1..3; confirmed events are not sent again | yes |
 | Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED (with PARAMETER_ERROR) and OUT_OF_RANGE; select-required points | yes; on the stepfunc outstation the first SELECT after start fails (see COMPATIBILITY.md) |
-| DIRECT OPERATE NO ACK | Served by every outstation; sent by the go-dnp3 and dnp3py masters | yes |
+| DIRECT OPERATE NO ACK | Served by every outstation; sent by the DSC go-dnp3 and dnp3py masters | yes |
 | Freeze without acknowledgement | Served by every outstation; sent by the dnp3py master | yes |
 | Time synchronization | LAN (RECORD CURRENT TIME, g50v3) and non-LAN (DELAY MEASURE, g50v1); NEED_TIME until the time is written; the written time in the server's event stream | yes |
 | Restart | Cold and warm restart with the delay in g52v2; the outstation does not actually restart | yes |
 | Unsolicited responses | Null unsolicited response at connection; ENABLE and DISABLE UNSOLICITED per class; buffered and new events sent unsolicited and confirmed | yes |
 | Freeze | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0; frozen counter and counter events | yes |
-| Assign class | Served by the opendnp3 and go-dnp3 outstations; sent by the stepfunc and opendnp3 masters | yes, where declared |
+| Assign class | Served by the opendnp3 and DSC go-dnp3 outstations; sent by the stepfunc and opendnp3 masters | yes, where declared |
 | IIN | DEVICE_RESTART until cleared, NEED_TIME, class event bits, request errors | yes, without DEVICE_RESTART |
 | File transfer (g70) | no | no |
 | Secure authentication (g120) | no | no |

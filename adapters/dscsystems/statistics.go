@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Security statistics (contract 1.2): the outstation serves them as go-dnp3
+// Security statistics (contract 1.2): the outstation serves them as DSC go-dnp3
 // does with secure authentication on; the library's master drops groups 121
 // and 122 (no handler knows the type), so the adapter reads them off the
 // wire, from responses that carry nothing else.

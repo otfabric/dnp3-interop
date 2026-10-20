@@ -542,7 +542,7 @@ suite() {
                 doc=$(client "${client}" -- freeze --at +1500 --host "${name}")
                 check "${pair}: [freeze] a freeze in 1.5 s is accepted, not done yet" "ok=true error=- g21v1:0=0 g21v2:1=0" \
                     "$(outcome "${doc}") $(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
-                # A master stays connected meanwhile: go-dnp3 runs scheduled
+                # A master stays connected meanwhile: DSC go-dnp3 runs scheduled
                 # freezes only while one is (COMPATIBILITY.md).
                 client "${client}" -- monitor --duration-ms 2500 --host "${name}" >/dev/null
                 check "${pair}: [freeze] and done at its time" "g21v1:0=123456 g21v2:1=65535" \
@@ -626,7 +626,7 @@ suite() {
                 doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 77 --mode direct-no-ack --broadcast --host "${name}")
                 check "${pair}: [broadcast] a control to 0xFFFF" "ok=true error=-" "$(outcome "${doc}")"
                 sleep 0.3
-                # Read by stepfunc's master, which sends nothing first: go-dnp3's
+                # Read by stepfunc's master, which sends nothing first: DSC go-dnp3's
                 # writes IIN at start, and that response carries IIN1.0.
                 doc=$(client stepfunc -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")
                 check "${pair}: [broadcast] is carried out" "77" "$(jq -r '[.objects[]?.value] | join(" ")' <<<"${doc}" 2>/dev/null)"

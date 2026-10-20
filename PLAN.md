@@ -8,7 +8,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
 | 4 | First published images; consumption from a library's tests | done: v0.1.0 and v0.2.0 published; a library pins the v0.2.0 digests |
-| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
+| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | DSC go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | done as container contract 1.1 (v0.2.0) and 1.2 (v0.3.0: point types, dual end point, security statistics); contract 1.3 in progress |
 | 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0, v0.2.0 and v0.3.0 qualified, results attached to their releases |
 
@@ -90,7 +90,7 @@ both architectures build natively. The adapter is GPL-3.0-or-later.
 **Gate:** smoke test and cross-stack self-test for the roles it declares. Met
 on linux/arm64 (2026-10-20): 32 of 32 smoke checks; the three-adapter run has
 789 checks passed, none failed, 14 known-bug hits, 81 skipped. Three upstream
-bugs of go-dnp3 v0.8.1 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
+bugs of DSC go-dnp3 v0.8.1 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
 of a counter without frozen counter, freeze events for unchanged values, link
 address filtering). Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
@@ -156,41 +156,41 @@ adds, all as additions to 1.0:
 ### Contract 1.2: more point types
 
 - The `extended` fixture with frozen analog inputs (g31/g33), command events of the outputs (g13/g43) and a g50v4 object; object documents with `status` and `units`; features `commandEventsServer`, `commandEventsClient`, `frozenAnalogInputsClient`, `timeAndIntervalClient`.
-- Served by go-dnp3 only (no other outstation has them); read by the stepfunc and go-dnp3 masters (g31, g13/g43), the opendnp3 master (g13/g43, g50v4).
+- Served by DSC go-dnp3 only (no other outstation has them); read by the stepfunc and DSC go-dnp3 masters (g31, g13/g43), the opendnp3 master (g13/g43, g50v4).
 
-**Gate:** `make features` covers each type for every master that declares it, against the go-dnp3 outstation.
+**Gate:** `make features` covers each type for every master that declares it, against the DSC go-dnp3 outstation.
 
 ### Contract 1.2: dual end point
 
 - `server --connect HOST:PORT` (the outstation dials) and `client --listen` (the master listens), over TCP and TLS; features `dualEndpointServer`, `dualEndpointClient`, `dualEndpointClientTls`.
-- stepfunc, opendnp3 and go-dnp3 in both directions; stepfunc's master listens over TCP only.
+- stepfunc, opendnp3 and DSC go-dnp3 in both directions; stepfunc's master listens over TCP only.
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
 ### Contract 1.3: several outstations
 
-- `server --outstations N`; feature `multipleOutstationsServer`. opendnp3 and go-dnp3. The master listener that picks outstations by link address is dropped: only stepfunc's master can.
+- `server --outstations N`; feature `multipleOutstationsServer`. opendnp3 and DSC go-dnp3. The master listener that picks outstations by link address is dropped: only stepfunc's master can.
 
 **Gate:** `make features` polls each of two outstations on one port by its address, sees their databases apart, and no answer from a third address.
 
 ### Contract 1.3: management functions
 
 - `manage --function initialize-data|initialize-application|start-application|stop-application|save-configuration`, the server event `manage`; features `manageServer`, `manageClient`.
-- Served by go-dnp3's outstation, sent by opendnp3's master. ACTIVATE CONFIG (g70v8 → g91) is dropped: no reference master sends it.
+- Served by DSC go-dnp3's outstation, sent by opendnp3's master. ACTIVATE CONFIG (g70v8 → g91) is dropped: no reference master sends it.
 
 **Gate:** `make features` sends each function and sees the server's event, and a refusal from an outstation without them.
 
 ### Contract 1.3: broadcast
 
 - `operate --mode direct-no-ack --broadcast`, the server event `broadcast`, IIN1.0 in `iin`; features `broadcastServer`, `broadcastEventServer`, `broadcastClient`.
-- Sent by go-dnp3's master; carried out by the stepfunc, opendnp3 and go-dnp3 outstations.
+- Sent by DSC go-dnp3's master; carried out by the stepfunc, opendnp3 and DSC go-dnp3 outstations.
 
 **Gate:** `make features` broadcasts a control and sees it carried out, IIN1.0 and the server's event, for every outstation that declares it.
 
 ### Contract 1.3: link layer
 
 - `--link-confirms` (client and server), `client --keep-alive-ms`, the server event `link-status`; features `linkConfirmsServer/Client`, `keepAliveClient`, `linkStatusEventServer`.
-- Confirms: go-dnp3 both roles. Keep-alive: stepfunc, opendnp3 and go-dnp3 masters; go-dnp3's adapter reports them.
+- Confirms: DSC go-dnp3 both roles. Keep-alive: stepfunc, opendnp3 and DSC go-dnp3 masters; DSC go-dnp3's adapter reports them.
 
 **Gate:** `make features` polls with confirms both ways, and keeps a link alive and sees the link status requests, for every pairing that declares it.
 
@@ -203,21 +203,21 @@ adds, all as additions to 1.0:
 ### Contract 1.3: file append and authentication
 
 - `file-put --append`, `file-authenticate`, `--file-user`/`--file-password` on the file operations and on the server; file events `append` and `authenticate`; features `fileAppendServer/Client`, `fileAuthServer/Client`.
-- Outstation: go-dnp3 only (the only file server). Masters: stepfunc (both), go-dnp3 (authentication).
+- Outstation: DSC go-dnp3 only (the only file server). Masters: stepfunc (both), DSC go-dnp3 (authentication).
 
 **Gate:** `make features` appends and reads back, and authenticates, refuses and accepts, for every pairing that declares it.
 
 ### Contract 1.3: analog deadbands
 
 - `deadband-write --deadbands INDEX:VALUE,...` (WRITE of g34v3) and group 34 in object documents; features `deadbandWriteServer/Client`, `deadbandReadServer/Client`.
-- Write: stepfunc and go-dnp3, both roles. Read: stepfunc, both roles.
+- Write: stepfunc and DSC go-dnp3, both roles. Read: stepfunc, both roles.
 
 **Gate:** `make features` writes a deadband, sees a smaller change held back and a larger one reported, and reads it back, for every pairing that declares it.
 
 ### Contract 1.3: freeze at time and analog freeze
 
 - `freeze --at immediately|+MS|EPOCH_MS [--interval-ms N]` (FREEZE AT TIME with g50v2) and `freeze --group 30`; features `freezeAtTimeServer/Client`, `analogFreezeServer/Client`.
-- FREEZE AT TIME: stepfunc and go-dnp3 outstations, stepfunc, go-dnp3 and dnp3py masters. Analog freeze: go-dnp3's outstation; stepfunc, opendnp3 and dnp3py masters.
+- FREEZE AT TIME: stepfunc and DSC go-dnp3 outstations, stepfunc, DSC go-dnp3 and dnp3py masters. Analog freeze: DSC go-dnp3's outstation; stepfunc, opendnp3 and dnp3py masters.
 
 **Gate:** `make features` freezes at once and at a time, and freezes analogs, for every pairing that declares it.
 
@@ -231,14 +231,14 @@ adds, all as additions to 1.0:
 ### Contract 1.3: device attributes
 
 - The `attributes` fixture (attribute set 1), `attribute-read` and `attribute-write`, the `attribute-write` event, features `deviceAttributesServer` and `deviceAttributesClient`.
-- stepfunc and go-dnp3 in both roles; opendnp3 and dnp3py have no group 0.
+- stepfunc and DSC go-dnp3 in both roles; opendnp3 and dnp3py have no group 0.
 
 **Gate:** `make features` reads, writes and refuses attributes for every pairing that declares them.
 
 ### Contract 1.2: security statistics
 
 - g121/g122 object documents, `--sa-statistics-class` and `--sa-statistics-threshold`, features `securityStatisticsServer` and `securityStatisticsClient`.
-- go-dnp3 in both roles (its master decoded by the adapter); no other stack has them.
+- DSC go-dnp3 in both roles (its master decoded by the adapter); no other stack has them.
 
 **Gate:** `make features` reads g121 and the g122 events after a refused key change, and checks the refusal of g121 without secure authentication.
 
@@ -253,6 +253,6 @@ adds, all as additions to 1.0:
 **Status:** done for v0.1.0 (run [39349907326](https://github.com/otfabric/dnp3-interop/actions/runs/39349907326); the first run attached empty SBOM archives, fixed in the workflow). The v0.1.0 release carries `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz`.
 
 - Scan: every image 0 critical and 43 high findings, all in the Debian 13 base and nearly all without a fix; the fixable ones are liblzma5 (waiting for a new `debian:trixie-slim` digest) and, in the dnp3py image only, pip's vendored setuptools, urllib3 and msgpack (pip and setuptools are removed from the image since v0.1.0).
-- Self-test of the v0.1.0 images: 1113-1115 checks passed per architecture, with 1-2 failures per run, all in pairings with the dscsystems outstation (`confirmed events are gone`, `time-sync`, `direct operate no ack operates`). They are the adapter defects fixed after v0.1.0 (the masters closed before their last confirm or request was out; the opendnp3 master judged a time synchronization by an empty READ that go-dnp3 refuses; docs/COMPATIBILITY.md). Two consecutive local runs of main pass with no failure. The gate for the next release is a clean qualification run.
+- Self-test of the v0.1.0 images: 1113-1115 checks passed per architecture, with 1-2 failures per run, all in pairings with the dscsystems outstation (`confirmed events are gone`, `time-sync`, `direct operate no ack operates`). They are the adapter defects fixed after v0.1.0 (the masters closed before their last confirm or request was out; the opendnp3 master judged a time synchronization by an empty READ that DSC go-dnp3 refuses; docs/COMPATIBILITY.md). Two consecutive local runs of main pass with no failure. The gate for the next release is a clean qualification run.
 
 **v0.2.0** (contract 1.1; release run [39355077580](https://github.com/otfabric/dnp3-interop/actions/runs/39355077580)) met that gate: qualification on both architectures with 0 failures (smoke 40-43 per adapter, cross-stack 1113-1115 passed with 18-20 known upstream bugs, contract 1.1 features 191 passed). Scan: 0 critical; 43 high (44 for dnp3py), all in the Debian 13 base; 2 fixable per image (liblzma5, waiting for a new `debian:trixie-slim` digest).
