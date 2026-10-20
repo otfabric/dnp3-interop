@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: analog deadbands
+
+- `deadband-write --deadbands INDEX:VALUE,...` (WRITE of g34v3) and group 34 in object documents; features `deadbandWriteServer/Client`, `deadbandReadServer/Client`.
+- Write: stepfunc and go-dnp3, both roles. Read: stepfunc, both roles.
+
+**Gate:** `make features` writes a deadband, sees a smaller change held back and a larger one reported, and reads it back, for every pairing that declares it.
+
 ### Contract 1.3: freeze at time and analog freeze
 
 - `freeze --at immediately|+MS|EPOCH_MS [--interval-ms N]` (FREEZE AT TIME with g50v2) and `freeze --group 30`; features `freezeAtTimeServer/Client`, `analogFreezeServer/Client`.

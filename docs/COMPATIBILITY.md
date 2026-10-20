@@ -162,6 +162,16 @@ is connected runs when the next one is. Only go-dnp3's outstation freezes
 analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
 masters send it, go-dnp3's master cannot.
 
+### Analog deadbands
+
+The stepfunc and go-dnp3 masters write deadbands (g34v3) to the stepfunc and
+go-dnp3 outstations, which then hold back events of a smaller change. Only
+stepfunc serves a read of group 34 and decodes one; go-dnp3's outstation
+refuses it. stepfunc compares a change with the last value it reported, and
+starts with none (the RESTART value): the first change after start makes an
+event whatever the deadband. opendnp3's outstation refuses the write; dnp3py
+has no deadbands.
+
 ### Several controls in one request
 
 All four outstations carry out each control of a request on its own: in a

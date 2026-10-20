@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -584,6 +584,21 @@ interval 0 freezes at once (IEEE 1815-2012 A.23.2). A time already past with
 no interval is refused. It succeeds when the outstation accepted the request,
 not when the freeze happens.
 
+## Analog deadbands
+
+*Contract 1.3.* The reporting deadband of an analog input, group 34: a change
+of the value larger than it makes an event, a smaller one does not.
+
+| Operation | Flags | Does |
+|-----------|-------|------|
+| `deadband-write` | `--deadbands INDEX:VALUE[,...]`, VALUE a non-negative number | WRITE of g34v3 (single precision) with a one- or two-octet index prefix. Feature `deadbandWriteClient` (master), `deadbandWriteServer` (outstation) |
+
+It succeeds when the outstation accepted the write. A master reads the
+deadbands with `read --group 34 --variation 1|2|3 --start A --stop B` (or
+variation 0 without a range); each comes as an object of group 34 whose
+`value` is the deadband, without `flags`. Feature `deadbandReadClient`
+(master), `deadbandReadServer` (outstation).
+
 ## Device attributes
 
 *Contract 1.3.* Device attributes, group 0 (IEEE 1815-2012 clause 11.9.1 and
@@ -660,6 +675,7 @@ declare it.
 | 43 | the commanded value, number (1.2) |
 | 50 (variation 4) | the interval, integer (1.2) |
 | 121, 122 | the count of the security statistic, integer (1.2) |
+| 34 | the deadband, non-negative number, no `flags` (1.3) |
 
 `flags` names by bit, in bit order. The state bits of the binary types are
 in `value`, not in `flags`.
