@@ -411,6 +411,7 @@ func runClient(argv []string) int {
 		flags = append(flags, "group", "variation", "start", "stop")
 	case "operate":
 		flags = append(flags, "type", "index", "code", "count", "on-ms", "off-ms", "value", "mode")
+		switches = append(switches, "broadcast")
 	case "operate-multi":
 		flags = append(flags, "controls", "mode")
 	case "deadband-write":
@@ -470,6 +471,13 @@ func runClient(argv []string) int {
 	}
 	if err == nil {
 		credentials, err = parseFileCredentials(op, a)
+	}
+	// --broadcast (contract 1.3): to 0xFFFF, which never answers.
+	if err == nil && a.has("broadcast") {
+		if a.str("mode", "direct") != "direct-no-ack" {
+			err = usagef("--broadcast needs --mode direct-no-ack")
+		}
+		remote = 0xFFFF
 	}
 	fileOp := slices.Contains(fileOperations, op)
 	attributeOp := slices.Contains(attributeOperations, op)

@@ -392,7 +392,12 @@ fn freeze(fx: &Fixture, database: &mut DatabaseHandle, indices: FreezeIndices, c
 }
 
 struct Information;
-impl OutstationInformation for Information {}
+impl OutstationInformation for Information {
+    // Contract 1.3: a request to a broadcast address.
+    fn broadcast_received(&mut self, function: FunctionCode, _action: BroadcastAction) {
+        emit(&json!({"event": "broadcast", "function": function.as_u8()}));
+    }
+}
 
 struct Controls {
     fx: Arc<Fixture>,

@@ -40,7 +40,7 @@ const usage = `usage: dnp3-interop <command>
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
          [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P] [--link-confirms]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [LINK] [TRANSPORT] [SA] [operation flags]
+         [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [--broadcast] [LINK] [TRANSPORT] [SA] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
          [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
@@ -179,6 +179,11 @@ func printCapabilities() int {
 			{"linkConfirmsClient", true},
 			{"keepAliveClient", true},
 			{"linkStatusEventServer", true},
+			// Contract 1.3: broadcast both ways (operate --mode
+			// direct-no-ack --broadcast); the adapter reads it off the wire.
+			{"broadcastServer", true},
+			{"broadcastEventServer", true},
+			{"broadcastClient", true},
 			// FREEZE AT TIME both ways; the outstation also freezes analog
 			// inputs (g30 in a freeze), the master counters only.
 			{"freezeAtTimeServer", true},
