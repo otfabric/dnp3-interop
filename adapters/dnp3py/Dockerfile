@@ -34,7 +34,11 @@ RUN if grep -q "^dnp3py==${UPSTREAM_VERSION} " /opt/adapter/requirements.txt; th
        fi \
     && mkdir -p /licenses/dnp3py \
     && cp "$(python -c 'import importlib.metadata as m; d=m.distribution("dnp3py"); print([str(d.locate_file(f)) for f in d.files if f.name == "LICENSE"][0])')" \
-          /licenses/dnp3py/LICENSE
+          /licenses/dnp3py/LICENSE \
+    # pip and setuptools are not needed at run time; removing them keeps their
+    # vendored packages (urllib3, msgpack, ...) and their findings out of the image.
+    && python -m pip uninstall --yes --quiet pip setuptools wheel \
+    && rm -rf /usr/local/lib/python3.14/ensurepip
 
 COPY adapters/dnp3py/dnp3_interop.py /opt/adapter/dnp3_interop.py
 # Compile-check the adapter, and fail the build if the dnp3py internals it uses moved.
