@@ -199,7 +199,7 @@ reverse() {
     doc=$(reverse_op "${server}" "${client}" "${tag}" integrity-poll)
     check "${pair}: [reverse ${tag}] integrity-poll" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
     check "${pair}: [reverse ${tag}] the outstation dialled" "true ${tag} true" \
-        "$(jq -rs '"\(.[0].dial) \(.[0].transport) \(any(.[]; .event == "connection-opened"))"' \
+        "$(jq -rs '(map(select(.event == "ready")) | .[0]) as $r | "\($r.dial) \($r.transport) \(any(.[]; .event == "connection-opened"))"' \
             "${WORK}/events-fo-${server}-${client}-${RUN_ID}" 2>/dev/null)"
     doc=$(reverse_op "${server}" "${client}" "${tag}" operate --type g12v1 --index 0 --code LATCH_ON)
     check "${pair}: [reverse ${tag}] operate" "SUCCESS" "$(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"

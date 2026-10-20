@@ -388,7 +388,7 @@ listening master over TLS needs the feature `dualEndpointClientTls`.
 A dialling outstation writes its readiness file once it is set up and
 dialling, before any master is there; its ready event has `dial: true` and
 `address` the master's. `connection-opened` and `connection-closed` mark
-each connection.
+each connection; the first `connection-opened` may come before `ready`.
 
 ### Serial
 
