@@ -32,6 +32,7 @@ way; this document says what "the same way" is.
 | `unsolicited` | Whether the outstation supports unsolicited responses (default false). See [Unsolicited responses](#unsolicited-responses) |
 | `needTime` | Whether IIN1.4 NEED_TIME is set at start (default false). It is cleared when a master writes the time |
 | `coldRestartDelayMs`, `warmRestartDelayMs` | The delay the outstation announces for a cold or warm restart, 0..65535 ms. Absent: that restart is refused |
+| `maxControlsPerRequest` | Contract 1.3: the most controls of one request the outstation carries out, 1..255; the rest are answered TOO_MANY_OPS. Absent: the library's default (at least 16) |
 
 ### Points
 
@@ -350,6 +351,14 @@ restart 1000 ms.
 Every outstation whose point types cover it serves it;
 `FIXTURE=dnp3py scripts/interop.sh` runs tests/cases-dnp3py.tsv against all
 of them.
+
+## The controls fixture
+
+`fixtures/controls/fixture.json`: outstation 1024, master 1, NEED_TIME at
+start, at most two controls per request. Binary inputs 0 and 1 (false, no
+events), binary outputs 0 and 1 (targets binary inputs 0 and 1) and 2,
+analog inputs 0 and 1, analog outputs 0 (range ±1000, target analog input 0)
+and 1 (range ±100, target analog input 1). Every outstation serves it.
 
 ## The attributes fixture
 

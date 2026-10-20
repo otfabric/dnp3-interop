@@ -124,14 +124,17 @@ int print_capabilities()
           {"securityStatisticsClient", false},
           // opendnp3 3.x knows no group 0.
           {"deviceAttributesServer", false},
-          {"deviceAttributesClient", false}}},
+          {"deviceAttributesClient", false},
+          // Several controls in one request, a status for each.
+          {"multipleControlsClient", true},
+          {"maxControlsServer", true}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},
         {"commandTypes", {"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
         {"clientOperations",
          {"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
-          "disable-unsolicited", "assign-class", "freeze", "monitor"}},
+          "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi"}},
     });
     return adapter::kExitOK;
 }

@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -546,6 +546,28 @@ secure authentication refuses g121 (`rejected`).
 go-dnp3's master drops groups 121 and 122, so the dscsystems adapter reads
 them from the frames itself, from responses that carry nothing but them (a
 class poll that returns other events before them leaves them out).
+
+## Several controls in one request
+
+*Contract 1.3.* `operate-multi --controls LIST [--mode direct|sbo]` sends one
+DIRECT OPERATE (or SELECT, then OPERATE after a select whose every control
+succeeded) carrying every control of LIST, one object header each, in order.
+LIST is comma-separated: `g12v1:INDEX:CODE` (codes as for `operate`; count 1,
+on and off time 100 ms) and `g41v1..v4:INDEX:VALUE`. Feature
+`multipleControlsClient`.
+
+| Result field | Meaning |
+|--------------|---------|
+| `commandStatus` | The first status other than SUCCESS, or SUCCESS when all succeeded; null when no echo arrived or the response carried a request error |
+| `commandStatuses` | The status of each control in order, or null where the master library reports only the first refusal (stepfunc) |
+
+It succeeds when every control is echoed SUCCESS; a refused one is
+`command-failed`, as for `operate`. The outstation carries out the controls
+that succeed and not the others: a request can partly succeed.
+
+An outstation whose fixture sets `maxControlsPerRequest` carries out that
+many controls of a request and answers TOO_MANY_OPS for the rest (feature
+`maxControlsServer`).
 
 ## Device attributes
 

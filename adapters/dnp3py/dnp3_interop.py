@@ -67,7 +67,7 @@ EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_CONNECT_FAILED = 0, 1, 2, 3
 
 OPERATIONS = [
     "integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
-    "disable-unsolicited", "assign-class", "freeze", "monitor",
+    "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi",
 ]
 
 USAGE = """usage: dnp3-interop <command>
@@ -400,6 +400,8 @@ def parse_operation(op, a):
         return lambda c: c.request(FunctionCode.READ, [header])
     if op == "operate":
         return parse_operate(a)
+    if op == "operate-multi":
+        return parse_operate_multi(a)
     if op == "time-sync":
         procedure = a.str("procedure", "lan")
         if procedure not in ("lan", "non-lan"):
@@ -499,6 +501,54 @@ def parse_operate(a):
     return run
 
 
+def parse_operate_multi(a):
+    """--controls: "g12v1:INDEX:CODE" and "g41vN:INDEX:VALUE", one header each."""
+    mode = a.str("mode", "direct")
+    if mode not in ("direct", "sbo"):
+        raise UsageError("--mode must be direct or sbo")
+    objs = []
+    for item in a.required("controls").split(","):
+        parts = item.split(":")
+        if len(parts) != 3:
+            raise UsageError("--controls items are TYPE:INDEX:CODE or TYPE:INDEX:VALUE")
+        kind, index, arg = parts
+        if not index.isdigit() or int(index) > 65535:
+            raise UsageError(f"--controls: '{index}' is not a point index")
+        index = int(index)
+        if kind == "g12v1":
+            if arg not in CODES:
+                raise UsageError(f"--controls: '{arg}' is not a control code")
+            objs.append(control(12, 1, index, struct.pack("<BBIIB", CODES[arg], 1, 100, 100, 0)))
+            continue
+        try:
+            value = float(arg)
+        except ValueError:
+            raise UsageError(f"--controls: '{arg}' is not a number") from None
+        integral = value == int(value) if abs(value) != float("inf") else False
+        if kind == "g41v1" and integral and -(2**31) <= value <= 2**31 - 1:
+            objs.append(control(41, 1, index, struct.pack("<iB", int(value), 0)))
+        elif kind == "g41v2" and integral and -32768 <= value <= 32767:
+            objs.append(control(41, 2, index, struct.pack("<hB", int(value), 0)))
+        elif kind == "g41v3" and abs(value) <= 3.4028234663852886e38:
+            objs.append(control(41, 3, index, struct.pack("<fB", value, 0)))
+        elif kind == "g41v4":
+            objs.append(control(41, 4, index, struct.pack("<dB", value, 0)))
+        else:
+            raise UsageError(f"--controls: '{item}' is not a control type with a value in its range")
+
+    async def run(c):
+        if mode == "direct":
+            await c.request(FunctionCode.DIRECT_OPERATE, objs)
+            return
+        await c.request(FunctionCode.SELECT, objs)
+        last = c.recorder.statuses[-len(objs):]
+        if len(last) == len(objs) and not any(last) and not (c.recorder.iin or 0) & REQUEST_ERRORS:
+            await c.request(FunctionCode.OPERATE, objs)
+
+    run.count = len(objs)
+    return run
+
+
 async def time_sync_lan(c):
     recorded = time.time()
     await c.request(FunctionCode.RECORD_CURRENT_TIME)
@@ -565,6 +615,12 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             failure = Failure("failed", f"{type(exc).__name__}: {exc}")
 
     command_status = recorder.statuses[-1] if recorder.statuses else None
+    command_statuses = None
+    if op == "operate-multi" and len(recorder.statuses) >= request.count:
+        # The statuses of the last response: the OPERATE, or the SELECT that failed.
+        command_statuses = recorder.statuses[-request.count:]
+        command_status = next((s for s in command_statuses if s != 0), 0)
+    recorder.command_statuses = command_statuses
     if failure is None and connected and op != "monitor":
         if (recorder.iin or 0) & REQUEST_ERRORS and not getattr(request, "no_response", False):
             message = "the outstation refused the request (IIN2)"
@@ -572,9 +628,10 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
                 message += f"; it echoed {status_name(command_status)}"
             failure = Failure("rejected", message)
             command_status = None
-        elif op == "operate" and command_status is not None and command_status != 0:
+            recorder.command_statuses = None
+        elif op in ("operate", "operate-multi") and command_status is not None and command_status != 0:
             failure = Failure("command-failed", f"the outstation answered {status_name(command_status)}")
-        elif op == "operate" and command_status is None and not getattr(request, "no_response", False):
+        elif op in ("operate", "operate-multi") and command_status is None and not getattr(request, "no_response", False):
             failure = Failure("failed", "the outstation's echo did not carry a status")
         elif op == "restart" and recorder.delay_ms is None:
             failure = Failure("failed", "the outstation's answer did not carry a delay")
@@ -608,6 +665,7 @@ def client_main(argv):
         "event-poll": {"classes"}, "enable-unsolicited": {"classes"}, "disable-unsolicited": {"classes"},
         "read": {"group", "variation", "start", "stop"},
         "operate": {"type", "index", "code", "count", "on-ms", "off-ms", "value", "mode"},
+        "operate-multi": {"controls", "mode"},
         "time-sync": {"procedure"}, "restart": {"type"}, "assign-class": {"class", "group", "start", "stop"},
         "monitor": {"duration-ms"},
     }.get(op, set())
@@ -648,8 +706,11 @@ def client_main(argv):
         "iin": iin_names(recorder.iin) if reads and recorder.iin is not None else None,
         "objects": recorder.objects,
     }
-    if op == "operate":
+    if op in ("operate", "operate-multi"):
         doc["commandStatus"] = None if command_status is None else status_name(command_status)
+    if op == "operate-multi":
+        statuses = recorder.command_statuses
+        doc["commandStatuses"] = None if statuses is None else [status_name(s) for s in statuses]
     if op == "restart":
         doc["restartDelayMs"] = recorder.delay_ms
     doc["elapsedMs"] = int((time.monotonic() - started) * 1000)
@@ -722,7 +783,8 @@ def load_fixture(text):
         errors.append("outstation is required")
         o = {}
     for k in o:
-        if k not in ("address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs"):
+        if k not in ("address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs",
+                     "maxControlsPerRequest"):
             errors.append(f"outstation: unknown field '{k}'")
     for k in ("address", "masterAddress"):
         if not is_int(o.get(k)) or not 0 <= o[k] <= 65519:
@@ -734,6 +796,8 @@ def load_fixture(text):
             errors.append(f"outstation: {k} must be a boolean")
     if o.get("unsolicited"):
         errors.append("outstation.unsolicited: dnp3py's outstation sends no unsolicited responses")
+    if "maxControlsPerRequest" in o and (not is_int(o["maxControlsPerRequest"]) or not 1 <= o["maxControlsPerRequest"] <= 255):
+        errors.append("outstation: maxControlsPerRequest must be 1..255")
     for k in ("coldRestartDelayMs", "warmRestartDelayMs"):
         if k in o and (not is_int(o[k]) or not 0 <= o[k] <= 65535):
             errors.append(f"outstation: {k} must be 0..65535")
@@ -988,7 +1052,8 @@ def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
     config = OutstationConfig(
         address=local, master_address=remote, select_timeout=select_ms / 1000, confirm_timeout=confirm_ms / 1000,
         time_sync_required=bool(o.get("needTime", False)), analog_output_static_variation=aovars.pop(),
-        unsolicited=UnsolicitedConfig(enabled=False))
+        unsolicited=UnsolicitedConfig(enabled=False),
+        max_controls_per_request=o.get("maxControlsPerRequest", 16))
     db = Database()
     for i, p in sorted(points["binaryInputs"].items()):
         db.add_binary_input(i, BinaryInputConfig(event_class=EventClass(p.get("class", 0))), p["value"],
@@ -1143,6 +1208,10 @@ def print_capabilities():
             "securityStatisticsClient": False,
             "deviceAttributesServer": False,
             "deviceAttributesClient": False,
+            "multipleControlsClient": True,
+            # dnp3py's outstation carries out every control of a request,
+            # whatever max_controls_per_request says.
+            "maxControlsServer": False,
         },
         "pointTypes": list(SERVED),
         # Contract 1.2: what the outstation does differently from the master.

@@ -26,7 +26,8 @@ use dnp3::udp::*;
 use std::net::SocketAddr;
 use std::path::Path;
 
-const OPERATIONS: [&str; 11] = [
+const OPERATIONS: [&str; 12] = [
+    "operate-multi",
     "integrity-poll",
     "event-poll",
     "read",
@@ -566,6 +567,9 @@ fn task_failure(e: &TaskError, iin: &mut Option<(u8, u8)>) -> Failure {
 }
 
 fn parse_op(op: &str, args: &Args) -> Result<Op, UsageError> {
+    if op == "operate-multi" {
+        return parse_operate_multi(args);
+    }
     let range_headers = |g: u8, v: u8| -> Result<ReadHeader, UsageError> {
         let Some(var) = variation(g, v) else {
             return usage(format!(
@@ -774,6 +778,7 @@ pub fn run(argv: &[String]) -> i32 {
         "file-get" | "file-ls" | "file-info" => flags.push("name"),
         "file-put" => flags.extend(["name", "content"]),
         "attribute-read" => flags.extend(["set", "variation"]),
+        "operate-multi" => flags.extend(["controls", "mode"]),
         "attribute-write" => flags.extend(["set", "variation", "text", "uint", "int"]),
         "event-poll" | "enable-unsolicited" | "disable-unsolicited" => flags.push("classes"),
         "read" => flags.extend(["group", "variation", "start", "stop"]),
@@ -862,8 +867,12 @@ pub fn run(argv: &[String]) -> i32 {
         "iin": if reads { r.iin.map(|(a, b)| iin_names(a, b)) } else { None },
         "objects": r.objects,
     });
-    if op == "operate" {
+    if op == "operate" || op == "operate-multi" {
         doc["commandStatus"] = json!(command_status.map(command_status_name));
+    }
+    if op == "operate-multi" {
+        // The library reports the first refused control only.
+        doc["commandStatuses"] = Value::Null;
     }
     if op == "restart" {
         doc["restartDelayMs"] = json!(restart_delay);
@@ -1300,4 +1309,63 @@ fn parse_attribute(op: &str, args: &Args) -> Result<Op, UsageError> {
         variation,
         values.remove(0),
     )))
+}
+
+// ---- several controls in one request (contract 1.3) ----
+
+/// --controls: "g12v1:INDEX:CODE" and "g41vN:INDEX:VALUE" items,
+/// comma-separated; one header per control.
+fn parse_operate_multi(args: &Args) -> Result<Op, UsageError> {
+    let mode = match args.str("mode", "direct").as_str() {
+        "direct" => CommandMode::DirectOperate,
+        "sbo" => CommandMode::SelectBeforeOperate,
+        _ => return usage("--mode must be direct or sbo"),
+    };
+    let mut builder = CommandBuilder::new();
+    for item in args.required("controls")?.split(',') {
+        let parts: Vec<&str> = item.split(':').collect();
+        let [kind, index, arg] = parts[..] else {
+            return usage("--controls items are TYPE:INDEX:CODE or TYPE:INDEX:VALUE");
+        };
+        let Ok(index) = index.parse::<u16>() else {
+            return usage(format!("--controls: '{index}' is not a point index"));
+        };
+        if kind == "g12v1" {
+            let code = match arg {
+                "LATCH_ON" => ControlCode::from_op_type(OpType::LatchOn),
+                "LATCH_OFF" => ControlCode::from_op_type(OpType::LatchOff),
+                "PULSE_ON" => ControlCode::from_op_type(OpType::PulseOn),
+                "PULSE_OFF" => ControlCode::from_op_type(OpType::PulseOff),
+                "CLOSE" => ControlCode::from_tcc_and_op_type(TripCloseCode::Close, OpType::PulseOn),
+                "TRIP" => ControlCode::from_tcc_and_op_type(TripCloseCode::Trip, OpType::PulseOn),
+                _ => return usage(format!("--controls: '{arg}' is not a control code")),
+            };
+            builder.add_u16(Group12Var1::new(code, 1, 100, 100), index);
+        } else {
+            let value: f64 = match arg.parse() {
+                Ok(v) if f64::is_finite(v) => v,
+                _ => return usage(format!("--controls: '{arg}' is not a number")),
+            };
+            let integral = |lo: f64, hi: f64| value == value.floor() && (lo..=hi).contains(&value);
+            match kind {
+                "g41v1" if integral(i32::MIN as f64, i32::MAX as f64) => {
+                    builder.add_u16(Group41Var1::new(value as i32), index)
+                }
+                "g41v2" if integral(i16::MIN as f64, i16::MAX as f64) => {
+                    builder.add_u16(Group41Var2::new(value as i16), index)
+                }
+                "g41v3" if value.abs() <= f32::MAX as f64 => {
+                    builder.add_u16(Group41Var3::new(value as f32), index)
+                }
+                "g41v4" => builder.add_u16(Group41Var4::new(value), index),
+                _ => {
+                    return usage(format!(
+                        "--controls: '{item}' is not a control type with a value in its range"
+                    ))
+                }
+            }
+        }
+        builder.finish_header();
+    }
+    Ok(Op::Operate(mode, builder.build()))
 }

@@ -706,6 +706,9 @@ async fn serve(
     if let Ok(t) = Timeout::from_millis(select_timeout) {
         config.select_timeout = t;
     }
+    if fx.max_controls.is_some() {
+        config.max_controls_per_request = fx.max_controls;
+    }
     if let Ok(t) = Timeout::from_millis(confirm_timeout) {
         config.confirm_timeout = t;
     }

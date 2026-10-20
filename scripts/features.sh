@@ -26,6 +26,9 @@
 #   attributes (contract 1.3) device attributes of the attributes fixture:
 #           read all of a set and one, write the writable ones and read them
 #           back, refusal of a read-only one, the server's events
+#   controls (contract 1.3) several controls in one request, direct and
+#           select-before-operate, a refused one among them, and the limit
+#           of the controls fixture (two per request)
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -240,6 +243,47 @@ reverse() {
     check "${pair}: [reverse ${tag}] operate" "SUCCESS" "$(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
 }
 
+# multi_op <server> <client> <args>: operate-multi against a fresh outstation
+# of the controls fixture; prints the result, then the binary and analog
+# output values ("bo=... ao=...") on a second line.
+multi_op() {
+    local server="$1" client="$2"; shift 2
+    local name="fm-${server}-${RUN_ID}" doc
+    start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
+    wait_ready "${name}" || { echo "{}"; echo "server did not start"; return; }
+    client "${client}" -- operate-multi "$@" --host "${name}" | jq -c '{error: .error.code, commandStatus, commandStatuses}'
+    echo "bo=$(client dscsystems -- read --group 10 --variation 2 --start 0 --stop 2 --host "${name}" | jq -c '[.objects[].value]') ao=$(client dscsystems -- read --group 40 --variation 1 --start 0 --stop 1 --host "${name}" | jq -c '[.objects[].value]')"
+    stop_server "${name}"
+}
+
+# multi <server> <client> <pair>
+multi() {
+    local server="$1" client="$2" pair="$3" out
+    # statuses <want>: the per-control statuses, or null where the master does
+    # not report them (stepfunc).
+    statuses() { jq -c '.commandStatuses' <<<"${out%%$'\n'*}" | grep -qx "null" && echo null || echo "$1"; }
+    out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g41v1:0:5)
+    check "${pair}: [controls] two controls" \
+        "{\"error\":null,\"commandStatus\":\"SUCCESS\",\"commandStatuses\":$(statuses '["SUCCESS","SUCCESS"]')}" "${out%%$'\n'*}"
+    check "${pair}: [controls] both carried out" "bo=[true,false,false] ao=[5,0]" "${out#*$'\n'}"
+    out=$(multi_op "${server}" "${client}" --controls g41v1:0:5,g41v1:1:500)
+    check "${pair}: [controls] a refused control among them" \
+        "{\"error\":\"command-failed\",\"commandStatus\":\"OUT_OF_RANGE\",\"commandStatuses\":$(statuses '["SUCCESS","OUT_OF_RANGE"]')}" "${out%%$'\n'*}"
+    check "${pair}: [controls] the other is carried out" "bo=[false,false,false] ao=[5,0]" "${out#*$'\n'}"
+    out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g41v1:1:7 --mode sbo)
+    check "${pair}: [controls] select-before-operate of two" \
+        "{\"error\":null,\"commandStatus\":\"SUCCESS\",\"commandStatuses\":$(statuses '["SUCCESS","SUCCESS"]')}" "${out%%$'\n'*}"
+    check "${pair}: [controls] both operated" "bo=[true,false,false] ao=[0,7]" "${out#*$'\n'}"
+    if has "${server}" maxControlsServer; then
+        out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g12v1:1:LATCH_ON,g12v1:2:LATCH_ON)
+        check "${pair}: [controls] the third of three is one too many" \
+            "{\"error\":\"command-failed\",\"commandStatus\":\"TOO_MANY_OPS\",\"commandStatuses\":$(statuses '["SUCCESS","SUCCESS","TOO_MANY_OPS"]')}" "${out%%$'\n'*}"
+        check "${pair}: [controls] the two within the limit are carried out" "bo=[true,true,false] ao=[0,0]" "${out#*$'\n'}"
+    else
+        skip "${pair}: control limit (needs server:maxControlsServer)"
+    fi
+}
+
 suite() {
     local server="$1" k="$2" client pair name doc host run ip_server ip_client
     PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
@@ -409,6 +453,13 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: security statistics (needs server:securityStatisticsServer,client:securityStatisticsClient)"
+        fi
+
+        # ---- several controls in one request (contract 1.3) ----
+        if has_role "${server}" server && has "${client}" multipleControlsClient; then
+            multi "${server}" "${client}" "${pair}"
+        else
+            skip "${pair}: several controls (needs client:multipleControlsClient)"
         fi
 
         # ---- device attributes (contract 1.3) ----
