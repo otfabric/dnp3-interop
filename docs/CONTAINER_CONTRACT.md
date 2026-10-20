@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -599,6 +599,14 @@ An outstation freezes at the time given, once or every interval; time 0 with
 interval 0 freezes at once (IEEE 1815-2012 A.23.2). A time already past with
 no interval is refused. It succeeds when the outstation accepted the request,
 not when the freeze happens.
+
+## Event buffer overflow
+
+*Contract 1.3.* An outstation whose fixture sets `eventBufferSize` buffers
+at most that many events (see [FIXTURES.md](FIXTURES.md) for how each library
+counts). An event that does not fit is lost, and the outstation sets IIN2.3
+EVENT_BUFFER_OVERFLOW, which a master sees in `iin` as `EVENT_BUFFER_OVERFLOW`.
+Feature `eventBufferServer`. The `events` fixture has a buffer of three.
 
 ## Analog deadbands
 
