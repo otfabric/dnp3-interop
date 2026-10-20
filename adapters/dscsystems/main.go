@@ -184,6 +184,10 @@ func printCapabilities() int {
 			{"broadcastServer", true},
 			{"broadcastEventServer", true},
 			{"broadcastClient", true},
+			// Contract 1.3: the outstation accepts the management functions
+			// and reports them; the master cannot send them.
+			{"manageServer", true},
+			{"manageClient", false},
 			// FREEZE AT TIME both ways; the outstation also freezes analog
 			// inputs (g30 in a freeze), the master counters only.
 			{"freezeAtTimeServer", true},

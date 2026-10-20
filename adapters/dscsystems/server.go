@@ -432,6 +432,7 @@ func runServer(argv []string) int {
 
 		MaxControlsPerRequest: fx.MaxControls,
 		UseLinkConfirms:       a.has("link-confirms"),
+		Management:            management{},
 		Unsolicited:           outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
 		Files:                 files,
 		Log:                   libraryLog(),
@@ -489,4 +490,13 @@ func runServer(argv []string) int {
 	}
 	emit(object{{"event", "stopped"}})
 	return exitOK
+}
+
+// management accepts the management functions (contract 1.3) and reports
+// each one.
+type management struct{}
+
+func (management) Manage(op outstation.ManagementOperation, _ []byte) bool {
+	emit(object{{"event", "manage"}, {"function", uint8(op)}})
+	return true
 }
