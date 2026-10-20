@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       cmake \
       g++ \
       git \
+      libssl-dev \
       make \
     && rm -rf /var/lib/apt/lists/*
 
@@ -44,14 +45,15 @@ RUN git init -q . \
 # Configuring fetches the dependencies opendnp3 pins itself in deps/*.cmake
 # (asio 1.16.0, exe4cpp and ser4cpp at fixed commits). The sources of 2022
 # rely on <cstdint> arriving through other headers, which GCC 14 no longer
-# does: it is included explicitly. TLS, tests and examples are off.
+# does: it is included explicitly. TLS is on (OpenSSL 3 of the base image);
+# tests and examples are off.
 WORKDIR /src/opendnp3/build
 RUN cmake .. \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/opt/opendnp3 \
       -DCMAKE_CXX_FLAGS="-include cstdint" \
       -DDNP3_STATIC_LIBS=ON \
-      -DDNP3_TLS=OFF \
+      -DDNP3_TLS=ON \
       -DDNP3_TESTS=OFF \
       -DDNP3_EXAMPLES=OFF \
     && make -j"$(nproc)" \
@@ -69,6 +71,7 @@ ARG ADAPTER_VERSION=dev
 RUN apt-get update && apt-get install -y --no-install-recommends \
       cmake \
       g++ \
+      libssl-dev \
       make \
       nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -92,7 +95,11 @@ FROM ${BASE_REGISTRY}/debian:trixie-slim@${DEBIAN_DIGEST} AS runtime
 
 ARG ADAPTER_VERSION=dev
 
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop \
+# OpenSSL for TLS; socat bridges a pseudo-terminal to TCP for DNP3 over
+# serial (contract 1.1).
+RUN apt-get update && apt-get install -y --no-install-recommends libssl3t64 socat \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop \
     && mkdir -p /run/dnp3-interop /licenses/opendnp3 \
     && chown interop /run/dnp3-interop
 

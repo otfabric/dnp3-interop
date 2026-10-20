@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "stack.h"
+#include "transport.h"
 
 #include <opendnp3/DNP3Manager.h>
 #include <opendnp3/master/IMasterApplication.h>
@@ -265,7 +266,8 @@ int run_client(const std::vector<std::string>& argv)
 
     std::set<std::string> flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms",
                                    "collect-ms"};
-    std::set<std::string> switches;
+    flags.insert(kClientTransportFlags.begin(), kClientTransportFlags.end());
+    std::set<std::string> switches = kClientTransportSwitches;
     if (op == "event-poll" || op == "enable-unsolicited" || op == "disable-unsolicited")
         flags.insert("classes");
     else if (op == "read")
@@ -289,10 +291,13 @@ int run_client(const std::vector<std::string>& argv)
     std::vector<Header> headers;
     std::function<void(IMaster&, State&, std::shared_ptr<ISOEHandler>)> start;
     std::string procedure;
+    Transport transport;
     try
     {
         Args args(std::vector<std::string>(argv.begin() + 1, argv.end()), flags, switches);
-        host = args.required("host");
+        transport = parse_transport(args, false);
+        if (transport.kind != "serial")
+            host = args.required("host");
         port = args.integer("port", 20000, 1, 65535);
         local = args.integer("local-addr", 1, 0, 65519);
         remote = args.integer("remote-addr", 1024, 0, 65519);
@@ -527,10 +532,9 @@ int run_client(const std::vector<std::string>& argv)
     bool connected = false;
     {
         DNP3Manager manager(1, stderr_log_handler());
-        auto channel = manager.AddTCPClient("client", log_levels(),
-                                            ChannelRetry(TimeDuration::Milliseconds(100), TimeDuration::Seconds(1)),
-                                            {IPEndpoint(host, static_cast<uint16_t>(port))}, "0.0.0.0",
-                                            std::make_shared<ChannelListener>(s));
+        std::string address;
+        auto channel = client_channel(manager, transport, host, static_cast<uint16_t>(port),
+                                      std::make_shared<ChannelListener>(s), address);
 
         MasterStackConfig config;
         config.master.responseTimeout = TimeDuration::Milliseconds(timeout);
@@ -554,7 +558,7 @@ int run_client(const std::vector<std::string>& argv)
         connected = s.wait(milliseconds(connectTimeout), [&] { return s.open; });
         if (!connected)
         {
-            failure = Outcome{"connect-failed", "no connection to " + host + ":" + std::to_string(port)};
+            failure = Outcome{"connect-failed", "no connection to " + address};
         }
         else if (op == "monitor")
         {

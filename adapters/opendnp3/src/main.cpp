@@ -25,9 +25,12 @@ namespace
 const char* kUsage = R"(usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
-         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
+         [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [LINK] [operation flags]
+         [--collect-ms N] [LINK] [TRANSPORT] [operation flags]
+         [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
+         [--udp-local-port N]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
@@ -47,6 +50,8 @@ const char* kUsage = R"(usage: dnp3-interop <command>
   version
 
   LINK: [--local-addr N] [--remote-addr N]
+  TRANSPORT: [--transport tcp|udp|serial]   (udp: the server needs --udp-peer)
+             serial: --serial-device PATH [--baud N] [--data-bits 7|8] [--parity none|even|odd] [--stop-bits 1|2]
 
 See docs/CONTAINER_CONTRACT.md in https://github.com/otfabric/dnp3-interop
 )";
@@ -94,11 +99,14 @@ int print_capabilities()
           {"freezeNoAckClient", false},
           {"octetStrings", true},
           {"tcp", true},
-          {"udp", false},
-          {"tls", false},
-          {"serial", false},
-          // opendnp3 3.x has neither.
+          {"udp", true},
+          {"tls", true},
+          {"serial", true},
+          // opendnp3 3.x has neither file transfer nor secure authentication.
           {"fileTransfer", false},
+          {"fileServer", false},
+          {"fileClient", false},
+          {"fileDeleteClient", false},
           {"secureAuthentication", false}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",

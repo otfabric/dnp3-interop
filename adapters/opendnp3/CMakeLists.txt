@@ -16,6 +16,8 @@ set(UPSTREAM_REVISION "unknown" CACHE STRING "opendnp3 commit")
 
 find_package(nlohmann_json 3 REQUIRED)
 find_package(Threads REQUIRED)
+# opendnp3 is built with TLS (asio over OpenSSL).
+find_package(OpenSSL REQUIRED)
 
 add_executable(dnp3-interop
   src/main.cpp
@@ -23,7 +25,8 @@ add_executable(dnp3-interop
   src/fixture.cpp
   src/stack.cpp
   src/server.cpp
-  src/client.cpp)
+  src/client.cpp
+  src/transport.cpp)
 
 # The library's headers are not held to the adapter's warning level.
 target_include_directories(dnp3-interop SYSTEM PRIVATE "${OPENDNP3_PREFIX}/include")
@@ -35,5 +38,7 @@ target_compile_definitions(dnp3-interop PRIVATE
 target_link_libraries(dnp3-interop PRIVATE
   "${OPENDNP3_PREFIX}/lib/libopendnp3.a"
   nlohmann_json::nlohmann_json
+  OpenSSL::SSL
+  OpenSSL::Crypto
   Threads::Threads
   -static-libstdc++ -static-libgcc)

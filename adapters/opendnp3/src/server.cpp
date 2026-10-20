@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "stack.h"
+#include "transport.h"
 
 #include <opendnp3/DNP3Manager.h>
 #include <opendnp3/outstation/ICommandHandler.h>
@@ -12,6 +13,9 @@
 #include <opendnp3/outstation/UpdateBuilder.h>
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <csignal>
 #include <cstdio>
 #include <fstream>
@@ -446,20 +450,35 @@ private:
     const Fixture& fx;
 };
 
+// Reports the connections of a TCP or TLS channel as events, and says when
+// a UDP or serial channel is open (bound, or the device opened).
 class ConnectionListener final : public IChannelListener
 {
 public:
+    explicit ConnectionListener(bool events) : events(events) {}
+
     void OnStateChange(ChannelState state) override
     {
+        std::lock_guard<std::mutex> lock(mutex);
         const bool now_open = state == ChannelState::OPEN;
-        if (now_open && !open)
+        if (events && now_open && !open)
             emit(json{{"event", "connection-opened"}});
-        else if (!now_open && open)
+        else if (events && !now_open && open)
             emit(json{{"event", "connection-closed"}});
         open = now_open;
+        cv.notify_all();
+    }
+
+    bool wait_open(std::chrono::milliseconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, timeout, [this] { return open; });
     }
 
 private:
+    const bool events;
+    std::mutex mutex;
+    std::condition_variable cv;
     bool open = false;
 };
 
@@ -470,12 +489,14 @@ int run_server(const std::vector<std::string>& argv)
     std::string fixturePath, bindAddress, readyFile;
     int64_t port = 20000, selectTimeout = 5000, confirmTimeout = 5000;
     std::optional<int64_t> localAddr, remoteAddr;
+    Transport transport;
     try
     {
-        Args args(argv,
-                  {"fixture", "bind-address", "port", "ready-file", "select-timeout-ms", "confirm-timeout-ms",
-                   "local-addr", "remote-addr"},
-                  {});
+        std::set<std::string> flags = {"fixture",           "bind-address",       "port",      "ready-file",
+                                       "select-timeout-ms", "confirm-timeout-ms", "local-addr", "remote-addr"};
+        flags.insert(kServerTransportFlags.begin(), kServerTransportFlags.end());
+        Args args(argv, flags, {});
+        transport = parse_transport(args, true);
         fixturePath = args.str("fixture", kDefaultFixture);
         bindAddress = args.str("bind-address", "0.0.0.0");
         readyFile = args.str("ready-file", kDefaultReadyFile);
@@ -520,17 +541,20 @@ int run_server(const std::vector<std::string>& argv)
     {
         DNP3Manager manager(1, stderr_log_handler());
         std::shared_ptr<IChannel> channel;
+        std::string address;
+        const bool stream = transport.kind == "tcp";
+        auto listener = std::make_shared<ConnectionListener>(stream);
         try
         {
-            channel = manager.AddTCPServer("server", log_levels(), ServerAcceptMode::CloseExisting,
-                                           IPEndpoint(bindAddress, static_cast<uint16_t>(port)),
-                                           std::make_shared<ConnectionListener>());
+            channel = server_channel(manager, transport, bindAddress, static_cast<uint16_t>(port), listener, address);
         }
         catch (const std::exception& e)
         {
-            logf("server: cannot listen on %s:%lld: %s", bindAddress.c_str(), static_cast<long long>(port), e.what());
+            logf("server: cannot open the %s channel on %s:%lld: %s", transport.name().c_str(), bindAddress.c_str(),
+                 static_cast<long long>(port), e.what());
             return kExitFailed;
         }
+
 
         OutstationStackConfig config(database_config(fx));
         config.outstation.eventBufferConfig = EventBufferConfig::AllTypes(1000);
@@ -548,6 +572,15 @@ int run_server(const std::vector<std::string>& argv)
         outstation->Apply(initial_values(fx));
         outstation->Enable();
 
+        // A TCP or TLS server listens once it exists; a UDP socket is bound
+        // and a serial device open when the channel says so, which it does
+        // once a stack on it is enabled.
+        if (!stream && !listener->wait_open(std::chrono::seconds(5)))
+        {
+            logf("server: cannot open %s", address.c_str());
+            return kExitFailed;
+        }
+
         {
             std::ofstream ready(readyFile);
             if (!ready)
@@ -558,10 +591,11 @@ int run_server(const std::vector<std::string>& argv)
         }
         emit(json{{"event", "ready"},
                   {"adapter", kAdapter},
-                  {"address", bindAddress + ":" + std::to_string(port)},
+                  {"address", address},
                   {"fixture", fx.name},
                   {"linkAddress", local},
-                  {"masterAddress", remote}});
+                  {"masterAddress", remote},
+                  {"transport", transport.name()}});
 
         int sig = 0;
         sigwait(&signals, &sig);
