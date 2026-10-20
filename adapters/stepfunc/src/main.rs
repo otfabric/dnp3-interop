@@ -158,12 +158,16 @@ fn print_capabilities() -> i32 {
             // Contract 1.3: device attributes, both roles.
             "deviceAttributesServer": true,
             "deviceAttributesClient": true,
+            // Several controls in one request: sent; only the first refusal
+            // is reported, so commandStatuses is null.
+            "multipleControlsClient": true,
+            "maxControlsServer": true,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
             "enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor",
-            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write"],
+            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write", "operate-multi"],
     }));
     EXIT_OK
 }

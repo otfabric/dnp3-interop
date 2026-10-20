@@ -44,6 +44,8 @@ pub struct Fixture {
     pub need_time: bool,
     pub cold_restart_delay_ms: Option<u16>,
     pub warm_restart_delay_ms: Option<u16>,
+    /// maxControlsPerRequest (contract 1.3)
+    pub max_controls: Option<u16>,
     pub points: BTreeMap<&'static str, Vec<Point>>,
     /// Device attributes, group 0 (contract 1.3).
     pub attributes: Vec<Attribute>,
@@ -480,6 +482,7 @@ fn check_outstation(o: &Map<String, Value>, out: &mut Fixture, errors: &mut Vec<
         "needTime",
         "coldRestartDelayMs",
         "warmRestartDelayMs",
+        "maxControlsPerRequest",
     ];
     for key in o.keys() {
         if !fields.contains(&key.as_str()) {
@@ -506,6 +509,12 @@ fn check_outstation(o: &Map<String, Value>, out: &mut Fixture, errors: &mut Vec<
                 Some(b) => *target = b,
                 None => errors.push(format!("outstation: {key} must be a boolean")),
             }
+        }
+    }
+    if let Some(v) = o.get("maxControlsPerRequest") {
+        match int(v) {
+            Some(n) if (1..=255).contains(&n) => out.max_controls = Some(n as u16),
+            _ => errors.push("outstation: maxControlsPerRequest must be 1..255".into()),
         }
     }
     for (key, target) in [

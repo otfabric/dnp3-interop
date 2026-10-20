@@ -39,7 +39,7 @@ json number(double v)
 
 const std::set<std::string> kOperations = {"integrity-poll", "event-poll",          "read",         "operate",
                                            "time-sync",      "restart",             "enable-unsolicited",
-                                           "disable-unsolicited", "assign-class",   "freeze",       "monitor"};
+                                           "disable-unsolicited", "assign-class",   "freeze",       "monitor", "operate-multi"};
 
 // Everything the stack's threads report, guarded by one mutex.
 struct State
@@ -54,6 +54,7 @@ struct State
     // The operation's task.
     std::optional<TaskCompletion> done;
     std::optional<uint8_t> commandStatus;
+    std::vector<uint8_t> commandStatuses; // operate-multi
     bool commandMismatch = false;
     std::optional<int64_t> restartDelayMs;
 
@@ -272,6 +273,78 @@ private:
     State& s;
 };
 
+// A control of operate-multi's --controls: "g12v1:INDEX:CODE" or
+// "g41vN:INDEX:VALUE".
+struct Control
+{
+    std::string type;
+    uint16_t index = 0;
+    uint8_t code = 0;
+    double value = 0;
+};
+
+std::vector<Control> parse_controls(const std::string& text)
+{
+    std::vector<Control> out;
+    size_t start = 0;
+    while (start <= text.size())
+    {
+        const auto end = std::min(text.find(',', start), text.size());
+        const auto item = text.substr(start, end - start);
+        start = end + 1;
+        const auto a = item.find(':'), b = item.find(':', a == std::string::npos ? a : a + 1);
+        if (a == std::string::npos || b == std::string::npos || item.find(':', b + 1) != std::string::npos)
+            throw UsageError{"--controls items are TYPE:INDEX:CODE or TYPE:INDEX:VALUE"};
+        Control c;
+        c.type = item.substr(0, a);
+        const auto index = item.substr(a + 1, b - a - 1), arg = item.substr(b + 1);
+        try
+        {
+            size_t used = 0;
+            const auto i = std::stol(index, &used);
+            if (used != index.size() || i < 0 || i > 65535)
+                throw std::invalid_argument("index");
+            c.index = static_cast<uint16_t>(i);
+        }
+        catch (const std::logic_error&)
+        {
+            throw UsageError{"--controls: '" + index + "' is not a point index"};
+        }
+        if (c.type == "g12v1")
+        {
+            static const std::map<std::string, uint8_t> codes
+                = {{"LATCH_ON", 0x03}, {"LATCH_OFF", 0x04}, {"PULSE_ON", 0x01},
+                   {"PULSE_OFF", 0x02}, {"CLOSE", 0x41},    {"TRIP", 0x81}};
+            const auto found = codes.find(arg);
+            if (found == codes.end())
+                throw UsageError{"--controls: '" + arg + "' is not a control code"};
+            c.code = found->second;
+        }
+        else
+        {
+            try
+            {
+                size_t used = 0;
+                c.value = std::stod(arg, &used);
+                if (used != arg.size() || !std::isfinite(c.value))
+                    throw std::invalid_argument("value");
+            }
+            catch (const std::logic_error&)
+            {
+                throw UsageError{"--controls: '" + arg + "' is not a number"};
+            }
+            const bool integral = c.value == std::floor(c.value);
+            const bool ok = (c.type == "g41v1" && integral && c.value >= -2147483648.0 && c.value <= 2147483647.0)
+                || (c.type == "g41v2" && integral && c.value >= -32768 && c.value <= 32767)
+                || (c.type == "g41v3" && std::fabs(c.value) <= 3.4028234663852886e38) || c.type == "g41v4";
+            if (!ok)
+                throw UsageError{"--controls: '" + item + "' is not a control type with a value in its range"};
+        }
+        out.push_back(c);
+    }
+    return out;
+}
+
 bool request_error(const IINField& iin)
 {
     return iin.IsSet(IINBit::FUNC_NOT_SUPPORTED) || iin.IsSet(IINBit::OBJECT_UNKNOWN) || iin.IsSet(IINBit::PARAM_ERROR);
@@ -315,6 +388,8 @@ int run_client(const std::vector<std::string>& argv)
         flags.insert({"group", "variation", "start", "stop"});
     else if (op == "operate")
         flags.insert({"type", "index", "code", "count", "on-ms", "off-ms", "value", "mode"});
+    else if (op == "operate-multi")
+        flags.insert({"controls", "mode"});
     else if (op == "time-sync")
         flags.insert("procedure");
     else if (op == "restart")
@@ -486,6 +561,56 @@ int run_client(const std::vector<std::string>& argv)
             {
                 throw UsageError{"--type must be g12v1, g41v1, g41v2, g41v3 or g41v4"};
             }
+        }
+        else if (op == "operate-multi")
+        {
+            const auto mode = args.str("mode", "direct");
+            if (mode != "direct" && mode != "sbo")
+                throw UsageError{"--mode must be direct or sbo"};
+            const bool sbo = mode == "sbo";
+            auto specs = std::make_shared<std::vector<Control>>(parse_controls(args.required("controls")));
+            start = [sbo, specs](IMaster& m, State& s, std::shared_ptr<ISOEHandler>) {
+                // One header per control, in the order given.
+                CommandSet set;
+                for (const auto& c : *specs)
+                {
+                    if (c.type == "g12v1")
+                        set.StartHeader<ControlRelayOutputBlock>().Add(ControlRelayOutputBlock(c.code, 1, 100, 100), c.index);
+                    else if (c.type == "g41v1")
+                        set.StartHeader<AnalogOutputInt32>().Add(AnalogOutputInt32(static_cast<int32_t>(c.value)), c.index);
+                    else if (c.type == "g41v2")
+                        set.StartHeader<AnalogOutputInt16>().Add(AnalogOutputInt16(static_cast<int16_t>(c.value)), c.index);
+                    else if (c.type == "g41v3")
+                        set.StartHeader<AnalogOutputFloat32>().Add(AnalogOutputFloat32(static_cast<float>(c.value)), c.index);
+                    else
+                        set.StartHeader<AnalogOutputDouble64>().Add(AnalogOutputDouble64(c.value), c.index);
+                }
+                auto callback = [&s](const ICommandTaskResult& r) {
+                    {
+                        std::lock_guard<std::mutex> lock(s.mutex);
+                        r.ForeachItem([&](const CommandPointResult& p) {
+                            const bool echoed = p.state == CommandPointState::SUCCESS
+                                || p.state == CommandPointState::SELECT_FAIL
+                                || p.state == CommandPointState::OPERATE_FAIL
+                                || p.state == CommandPointState::SELECT_SUCCESS;
+                            if (!echoed)
+                            {
+                                s.commandMismatch = true;
+                                return;
+                            }
+                            const auto st = CommandStatusSpec::to_type(p.status);
+                            s.commandStatuses.push_back(st);
+                            if (!s.commandStatus || (*s.commandStatus == 0 && st != 0))
+                                s.commandStatus = st;
+                        });
+                    }
+                    s.complete(r.summary);
+                };
+                if (sbo)
+                    m.SelectAndOperate(std::move(set), callback);
+                else
+                    m.DirectOperate(std::move(set), callback);
+            };
         }
         else if (op == "time-sync")
         {
@@ -666,18 +791,19 @@ int run_client(const std::vector<std::string>& argv)
             if (rejected)
             {
                 std::string message = "the outstation refused the request (IIN2)";
-                if (op == "operate" && s.commandStatus)
+                if ((op == "operate" || op == "operate-multi") && s.commandStatus)
                     message += "; it echoed " + command_status_name(*s.commandStatus);
                 s.commandStatus.reset();
+                s.commandStatuses.clear();
                 failure = Outcome{"rejected", message};
             }
-            else if (op == "operate" && s.commandStatus && *s.commandStatus != 0)
+            else if ((op == "operate" || op == "operate-multi") && s.commandStatus && *s.commandStatus != 0)
                 failure = Outcome{"command-failed", "the outstation answered " + command_status_name(*s.commandStatus)};
             else if (s.lost || result == TaskCompletion::FAILURE_NO_COMMS)
                 failure = Outcome{"connection-lost", "the connection closed during the operation"};
             else if (result == TaskCompletion::FAILURE_RESPONSE_TIMEOUT || result == TaskCompletion::FAILURE_START_TIMEOUT)
                 failure = Outcome{"timeout", "no response from the outstation"};
-            else if (op == "operate" && (s.commandMismatch || !s.commandStatus))
+            else if ((op == "operate" || op == "operate-multi") && (s.commandMismatch || !s.commandStatus))
                 failure = Outcome{"failed", "the outstation's echo did not match the request"};
             else if (result != TaskCompletion::SUCCESS)
                 failure = Outcome{"failed", std::string("task ") + TaskCompletionSpec::to_human_string(result)};
@@ -713,8 +839,15 @@ int run_client(const std::vector<std::string>& argv)
     const bool reads = op == "integrity-poll" || op == "event-poll" || op == "read";
     doc["iin"] = reads && s.iin ? iin_names(s.iin->LSB, s.iin->MSB) : json(nullptr);
     doc["objects"] = s.objects;
-    if (op == "operate")
+    if (op == "operate" || op == "operate-multi")
         doc["commandStatus"] = s.commandStatus ? json(command_status_name(*s.commandStatus)) : json(nullptr);
+    if (op == "operate-multi")
+    {
+        json statuses = json::array();
+        for (auto st : s.commandStatuses)
+            statuses.push_back(command_status_name(st));
+        doc["commandStatuses"] = s.commandStatuses.empty() ? json(nullptr) : statuses;
+    }
     if (op == "restart")
         doc["restartDelayMs"] = s.restartDelayMs ? json(*s.restartDelayMs) : json(nullptr);
     doc["elapsedMs"] = duration_cast<milliseconds>(steady_clock::now() - started).count();

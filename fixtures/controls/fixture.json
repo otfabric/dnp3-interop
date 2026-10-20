@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1.0",
+  "name": "controls",
+  "description": "Several controls in one request (contract 1.3): outputs with targets, and at most two controls per request. Within what every outstation serves.",
+  "outstation": {
+    "address": 1024,
+    "masterAddress": 1,
+    "needTime": true,
+    "maxControlsPerRequest": 2
+  },
+  "binaryInputs": [
+    {
+      "index": 0,
+      "value": false
+    },
+    {
+      "index": 1,
+      "value": false
+    }
+  ],
+  "binaryOutputs": [
+    {
+      "index": 0,
+      "value": false,
+      "target": 0
+    },
+    {
+      "index": 1,
+      "value": false,
+      "target": 1
+    },
+    {
+      "index": 2,
+      "value": false
+    }
+  ],
+  "analogInputs": [
+    {
+      "index": 0,
+      "value": 0
+    },
+    {
+      "index": 1,
+      "value": 0
+    }
+  ],
+  "analogOutputs": [
+    {
+      "index": 0,
+      "value": 0,
+      "target": 0,
+      "min": -1000,
+      "max": 1000
+    },
+    {
+      "index": 1,
+      "value": 0,
+      "target": 1,
+      "min": -100,
+      "max": 100
+    }
+  ]
+}
