@@ -54,6 +54,8 @@ func attributeValue(a dnp3.Attribute) any {
 		return number(a.Real)
 	case dnp3.AttrTime:
 		return formatTime(a.Time)
+	case dnp3.AttrAttributeList, dnp3.AttrExtAttributeList:
+		return nil // the contract gives lists no value
 	}
 	return hex.EncodeToString(a.Octets)
 }

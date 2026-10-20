@@ -92,13 +92,13 @@ func (f fileEvents) OpenRead(name string) (io.ReadCloser, dnp3.FileInfo, dnp3.Fi
 
 func (f fileEvents) OpenWrite(name string, mode dnp3.FileMode, size uint32) (io.WriteCloser, dnp3.FileStatus) {
 	w, status := f.h.OpenWrite(name, mode, size)
-	if status != dnp3.FileSuccess {
-		fileEvent("write", name, status)
-		return w, status
-	}
 	action := "write"
 	if mode == dnp3.FileModeAppend {
 		action = "append"
+	}
+	if status != dnp3.FileSuccess {
+		fileEvent(action, name, status)
+		return w, status
 	}
 	return &writeEvent{WriteCloser: w, name: name, action: action}, status
 }
@@ -140,6 +140,8 @@ func parseFileCredentials(op string, a args) (*master.FileCredentials, error) {
 	user, hasUser := a["file-user"]
 	password, hasPassword := a["file-password"]
 	switch {
+	case op == "file-info" && (hasUser || hasPassword):
+		return nil, usagef("file-info takes no --file-user or --file-password: GET_FILE_INFO carries no key")
 	case op == "file-authenticate" && (!hasUser || !hasPassword):
 		return nil, usagef("file-authenticate needs --file-user and --file-password")
 	case hasUser != hasPassword:
@@ -221,8 +223,8 @@ func parseFileOperation(op string, a args) (fileRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	if name != "/" && !fileName.MatchString(name) {
-		return nil, usagef("--name must be an absolute file name")
+	if name != "/" && (!fileName.MatchString(name) || len(name) > 200) {
+		return nil, usagef("--name must be an absolute file name of at most 200 characters, path elements of A-Za-z0-9._- not starting with '.'")
 	}
 	switch op {
 	case "file-get":

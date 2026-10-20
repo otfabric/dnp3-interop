@@ -351,6 +351,17 @@ bool request_error(const IINField& iin)
     return iin.IsSet(IINBit::FUNC_NOT_SUPPORTED) || iin.IsSet(IINBit::OBJECT_UNKNOWN) || iin.IsSet(IINBit::PARAM_ERROR);
 }
 
+// The status the outstation echoed for a control. opendnp3 records the status
+// of a failed select and of an operate, but a control whose select succeeded
+// keeps the library's initial UNDEFINED: SELECT_SUCCESS means the echo was
+// SUCCESS.
+uint8_t echoed_status(const CommandPointResult& p)
+{
+    if (p.state == CommandPointState::SELECT_SUCCESS)
+        return CommandStatusSpec::to_type(CommandStatus::SUCCESS);
+    return CommandStatusSpec::to_type(p.status);
+}
+
 PointClass point_class(int c)
 {
     static const PointClass classes[] = {PointClass::Class0, PointClass::Class1, PointClass::Class2, PointClass::Class3};
@@ -493,7 +504,7 @@ int run_client(const std::vector<std::string>& argv)
                                 || p.state == CommandPointState::OPERATE_FAIL
                                 || p.state == CommandPointState::SELECT_SUCCESS;
                             if (echoed)
-                                s.commandStatus = CommandStatusSpec::to_type(p.status);
+                                s.commandStatus = echoed_status(p);
                             else if (p.state == CommandPointState::SELECT_MISMATCH)
                                 s.commandMismatch = true;
                         });
@@ -605,7 +616,7 @@ int run_client(const std::vector<std::string>& argv)
                                 s.commandMismatch = true;
                                 return;
                             }
-                            const auto st = CommandStatusSpec::to_type(p.status);
+                            const auto st = echoed_status(p);
                             s.commandStatuses.push_back(st);
                             if (!s.commandStatus || (*s.commandStatus == 0 && st != 0))
                                 s.commandStatus = st;
@@ -734,11 +745,33 @@ int run_client(const std::vector<std::string>& argv)
     State s;
     std::optional<Outcome> failure;
     bool connected = false;
+    // TLS files that cannot be loaded fail the operation before anything is
+    // opened (contract 1.1: failed); the library would read them only per
+    // connection attempt.
+    if (transport.tls)
     {
-        DNP3Manager manager(1, stderr_log_handler());
-        std::string address;
-        auto channel = client_channel(manager, transport, host, static_cast<uint16_t>(port),
-                                      std::make_shared<ChannelListener>(s), address);
+        const auto error = tls_files_error(transport);
+        if (!error.empty())
+            failure = Outcome{"failed", "TLS: " + error};
+    }
+    DNP3Manager manager(1, stderr_log_handler());
+    std::string address;
+    std::shared_ptr<IChannel> channel;
+    if (!failure)
+    {
+        try
+        {
+            channel = client_channel(manager, transport, host, static_cast<uint16_t>(port),
+                                     std::make_shared<ChannelListener>(s), address);
+        }
+        catch (const std::exception& e)
+        {
+            // A listening master that cannot bind, for one.
+            failure = Outcome{"failed", std::string("cannot open the channel: ") + e.what()};
+        }
+    }
+    if (channel)
+    {
 
         MasterStackConfig config;
         config.master.responseTimeout = TimeDuration::Milliseconds(timeout);
@@ -863,8 +896,8 @@ int run_client(const std::vector<std::string>& argv)
 
         master->Disable();
         channel->Shutdown();
-        manager.Shutdown();
     }
+    manager.Shutdown();
 
     std::lock_guard<std::mutex> lock(s.mutex);
     json doc{{"schemaVersion", kSchemaVersion},
@@ -883,7 +916,9 @@ int run_client(const std::vector<std::string>& argv)
         json statuses = json::array();
         for (auto st : s.commandStatuses)
             statuses.push_back(command_status_name(st));
-        doc["commandStatuses"] = s.commandStatuses.empty() ? json(nullptr) : statuses;
+        // One status per control sent, or null: the schema has no entry for
+        // a control without an echo, so a partial echo is null as no echo is.
+        doc["commandStatuses"] = s.commandStatuses.empty() || s.commandMismatch ? json(nullptr) : statuses;
     }
     if (op == "restart")
         doc["restartDelayMs"] = s.restartDelayMs ? json(*s.restartDelayMs) : json(nullptr);

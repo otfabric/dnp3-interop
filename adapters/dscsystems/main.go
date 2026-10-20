@@ -100,7 +100,7 @@ func printCapabilities() int {
 			{"name", "DSC Systems go-dnp3"},
 			{"version", upstreamVersion},
 			{"revision", upstreamRevision},
-			{"license", "GPL-3.0"},
+			{"license", "GPL-3.0-or-later"},
 			{"language", "Go"},
 			{"independentEngine", true},
 		}},
@@ -228,8 +228,14 @@ func printFixture(name string) int {
 		logf("print-fixture: no fixture '%s'", name)
 		return exitFailed
 	}
-	defer f.Close()
-	_, _ = io.Copy(os.Stdout, f)
+	_, copyErr := io.Copy(os.Stdout, f)
+	if err := f.Close(); err != nil && copyErr == nil {
+		copyErr = err
+	}
+	if copyErr != nil {
+		logf("print-fixture: %v", copyErr)
+		return exitFailed
+	}
 	return exitOK
 }
 
@@ -254,13 +260,13 @@ func main() {
 		}
 		code = printFixture(name)
 	case command == "version" && len(args) == 0:
-		os.Stdout.WriteString("dnp3-interop " + adapter + " " + adapterVersion + " (go-dnp3 " + upstreamVersion + ", " + upstreamRevision + ")\n")
+		_, _ = os.Stdout.WriteString("dnp3-interop " + adapter + " " + adapterVersion + " (go-dnp3 " + upstreamVersion + ", " + upstreamRevision + ")\n")
 		code = exitOK
 	case command == "help" || command == "--help" || command == "-h":
-		os.Stdout.WriteString(usage)
+		_, _ = os.Stdout.WriteString(usage)
 		code = exitOK
 	default:
-		os.Stderr.WriteString(usage)
+		_, _ = os.Stderr.WriteString(usage)
 	}
 	os.Exit(code)
 }

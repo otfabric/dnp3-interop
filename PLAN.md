@@ -7,7 +7,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 1 | Foundation: contract, fixture format, validation, version manifest, tooling | done |
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
-| 4 | First published images; consumption from a library's tests | done: v0.1.0 to v0.4.1 published; a library pins the current release's digests |
+| 4 | First published images; consumption from a library's tests | done: v0.1.0 to v0.4.2 published; a library pins the current release's digests |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | DSC go-dnp3 done (both roles); dnp3py done (both roles; the outstation serves the `dnp3py` fixture); Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication, and more | done as container contract 1.1 (v0.2.0), 1.2 (v0.3.0: point types, dual end point, security statistics) and 1.3 (v0.4.0, fixed in v0.4.1) |
 | 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 to v0.4.1 qualified, results attached to their releases |
@@ -74,7 +74,7 @@ in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ### DSC Systems go-dnp3 (done)
 
-Evaluation: both roles, v0.8.1 (GPL-3.0), an engine of its own; pure Go, so
+Evaluation: both roles, v0.8.1 (GPL-3.0-or-later), an engine of its own; pure Go, so
 both architectures build natively. The adapter is GPL-3.0-or-later.
 
 - Go adapter, both roles, the ten client operations of contract 1.0 but

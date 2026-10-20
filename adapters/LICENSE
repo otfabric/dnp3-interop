@@ -1,6 +1,6 @@
 The adapter programs in this directory are MIT-licensed like the rest of the
 repository (see ../LICENSE), with one exception: an adapter that links a
-GPL-3.0 library (adapters/dscsystems/) is licensed under the GNU
+GPL-3.0-or-later library (adapters/dscsystems/) is licensed under the GNU
 General Public License, version 3 or (at your option) any later version, and
 says so in its SPDX-License-Identifier headers. The full text is in
 ../licenses/GPL-3.0.txt.

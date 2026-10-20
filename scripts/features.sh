@@ -170,7 +170,7 @@ start() {
     [[ "${1:-}" == "--" ]] && shift
     docker rm -f "${cname}" >/dev/null 2>&1
     docker run -d --name "${cname}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" \
-        -e "DNP3_INTEROP_DEBUG=${SERVER_DEBUG:-1}" -v "${PKI}:/pki:ro" "${dargs[@]}" \
+        -e "DNP3_INTEROP_DEBUG=${SERVER_DEBUG:-1}" -v "${PKI}:/pki:ro" ${dargs[@]+"${dargs[@]}"} \
         "$(image_of "${adapter}")" server "$@" >/dev/null
 }
 
@@ -181,13 +181,20 @@ client() {
     while [[ $# -gt 0 && "$1" != "--" ]]; do dargs+=("$1"); shift; done
     [[ "${1:-}" == "--" ]] && shift
     docker run --rm --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" -v "${PKI}:/pki:ro" \
-        "${dargs[@]}" "$(image_of "${adapter}")" client "$@" 2>/dev/null | keep
+        ${dargs[@]+"${dargs[@]}"} "$(image_of "${adapter}")" client "$@" 2>/dev/null | keep
 }
 
 # keep: passes a result document through, and keeps it in REPORT_DIR, when
 # set, for scripts/validate-documents.py.
 keep() {
-    if [[ -n "${REPORT_DIR:-}" ]]; then tee "${REPORT_DIR}/feature-${BASHPID}-${RANDOM}${RANDOM}.json"; else cat; fi
+    [[ -n "${REPORT_DIR:-}" ]] || { cat; return; }
+    # A file of its own for every document, also from the subshells of a
+    # pipeline: mktemp, not $BASHPID (bash 4; macOS's /bin/bash is 3.2). BSD
+    # mktemp takes no suffix, so .json is added after.
+    local file
+    file=$(mktemp "${REPORT_DIR}/feature-XXXXXXXXXX") || { cat; return; }
+    tee "${file}"
+    mv "${file}" "${file}.json"
 }
 
 # The serial line: the outstation holds one end of a pseudo-terminal pair,
@@ -241,8 +248,8 @@ reverse_op() {
     fi
     docker rm -f "${listener}" "${outst}" >/dev/null 2>&1
     docker run -d --name "${listener}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" -v "${PKI}:/pki:ro" \
-        "$(image_of "${client}")" client "$@" --listen --connect-timeout-ms 30000 "${ctls[@]}" >/dev/null
-    start "${server}" "${outst}" -- --connect "${listener}:20000" "${stls[@]}"
+        "$(image_of "${client}")" client "$@" --listen --connect-timeout-ms 30000 ${ctls[@]+"${ctls[@]}"} >/dev/null
+    start "${server}" "${outst}" -- --connect "${listener}:20000" ${stls[@]+"${stls[@]}"}
     docker wait "${listener}" >/dev/null 2>&1
     docker logs "${listener}" 2>/dev/null | keep
     # The caller runs this in a subshell: the outstation's events go to a file.

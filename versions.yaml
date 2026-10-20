@@ -5,7 +5,7 @@
 # source of truth for a build: scripts/check-versions.sh fails when this file
 # disagrees with them.
 
-interop_version: "0.4.1"
+interop_version: "0.4.2"
 contract_version: "1.3"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -59,10 +59,11 @@ implementations:
     license: "MIT"
     language: "Python"
     independent_engine: true
-    roles: [client]
+    roles: [server, client]
     note: >-
-      Client role only: the outstation cannot serve the baseline fixture (no
-      double-bit inputs, octet strings or per-point variations).
+      The outstation serves only the dnp3py fixture: it cannot serve the
+      baseline fixture (no double-bit inputs, octet strings or per-point
+      variations).
 
   dscsystems:
     priority: P1
@@ -72,7 +73,7 @@ implementations:
     module: "github.com/dscsystems/go-dnp3"
     version: "v0.8.1"            # latest release
     revision: "70ff72bb09755db183d1bd69859adc72cd663aec"
-    license: "GPL-3.0"
+    license: "GPL-3.0-or-later"
     language: "Go"
     independent_engine: true
     roles: [server, client]
