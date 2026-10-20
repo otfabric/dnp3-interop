@@ -18,7 +18,8 @@
 # For a pairing that involves the adapter at that version, a matching case
 # may fail and is counted as "known bug" rather than as a failure. If no
 # matching case fails any more, the run fails: the entry is stale and the pin
-# can move.
+# can move. An entry whose text ends in "(intermittent)" is a race that a run
+# may not hit, and is exempt from that.
 stepfunc:server	1.7.0	--mode sbo	the first SELECT after start fails with NO_SELECT: the master's confirm of the null unsolicited response arrives between SELECT and OPERATE and the outstation counts it as an intervening request
 dscsystems:server	v0.8.1	^freeze --clear	FREEZE AND CLEAR leaves a counter that has no frozen counter of the same index uncleared
 dscsystems:server	v0.8.1	^freeze, unchanged frozen value	a freeze raises frozen counter events even for frozen values that did not change
@@ -30,3 +31,4 @@ stepfunc:client	1.7.0	\[attributes\] signed	the master decodes a signed integer 
 dscsystems:server	v0.8.1	\[freeze\] at time 0	FREEZE AT TIME with time 0 and interval 0 is refused (PARAMETER_ERROR) instead of freezing at once	features
 dnp3py:server	0.6.0	\[events\] IIN2.3 clears	IIN2.3 EVENT_BUFFER_OVERFLOW stays set after the master has confirmed the events	features
 dnp3py:client	0.6.0	\[link\] a poll of an outstation that confirms	the master does not acknowledge CONFIRMED_USER_DATA, so an outstation that asks for link-layer confirms never gets an answer	features
+dscsystems:server	v0.8.1	\[outstations\] (a control of the second|the (first|second) )	the multidrop bus loses a request that arrives on a new connection before that outstation's session has re-attached (intermittent)	features

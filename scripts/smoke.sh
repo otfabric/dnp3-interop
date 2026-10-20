@@ -110,6 +110,9 @@ if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "secure authentication without the feature" "${IMAGE}" client integrity-poll --host nowhere \
         --sa-update-key 000102030405060708090a0b0c0d0e0f
 fi
+if jq -e '.features.multipleOutstationsServer' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "--outstations that take in the master's address" "${IMAGE}" server --outstations 2 --remote-addr 1025
+fi
 if jq -e '.features.manageClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "manage with an unknown function" "${IMAGE}" client manage --host nowhere --function reboot
 fi

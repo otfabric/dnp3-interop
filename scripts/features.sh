@@ -36,6 +36,8 @@
 #   deadbands (contract 1.3) an analog deadband written (g34v3) holds back
 #           an event of a smaller change and lets a larger one through, and
 #           reads back (g34) where declared
+#   outstations (contract 1.3) two outstations on one port: each reached by
+#           its link address with its own database, no answer from a third
 #   manage  (contract 1.3) the management functions 15..19: accepted and
 #           reported where declared, refused elsewhere
 #   broadcast (contract 1.3) a DIRECT OPERATE NO ACK to 0xFFFF: carried out,
@@ -568,6 +570,28 @@ suite() {
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
         fi
 
+        # ---- several outstations (contract 1.3) ----
+        if has "${server}" multipleOutstationsServer; then
+            name="fs-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json --outstations 2
+            if wait_ready "${name}"; then
+                local ao='[.objects[]? | select(.group == 40) | .value] | join(" ")'
+                doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 9 --remote-addr 1025 --host "${name}")
+                check "${pair}: [outstations] a control of the second" "ok=true error=-" "$(outcome "${doc}")"
+                check "${pair}: [outstations] the second has it" "9" \
+                    "$(client "${client}" -- read --group 40 --variation 0 --start 0 --stop 0 --remote-addr 1025 --host "${name}" | jq -r "${ao}")"
+                check "${pair}: [outstations] the first does not" "0" \
+                    "$(client "${client}" -- read --group 40 --variation 0 --start 0 --stop 0 --remote-addr 1024 --host "${name}" | jq -r "${ao}")"
+                doc=$(client "${client}" -- integrity-poll --remote-addr 1026 --timeout-ms 1500 --host "${name}")
+                check "${pair}: [outstations] no third" "ok=false error=timeout" "$(outcome "${doc}")"
+            else
+                fail "${pair}: [outstations] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: several outstations (needs server:multipleOutstationsServer)"
+        fi
+
         # ---- management functions (contract 1.3) ----
         if has "${client}" manageClient && has_role "${server}" server; then
             name="fm-${server}-${RUN_ID}"
@@ -863,8 +887,10 @@ for server in "${servers[@]}"; do
     read -r p f s k < "${WORK}/tally-${server}"
     PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
-# A known bug that no longer shows is a stale entry.
+# A known bug that no longer shows is a stale entry, unless it is marked
+# "(intermittent)".
 while IFS=$'\t' read -r bug_adapter _ bug_text; do
+    [[ "${bug_text}" == *"(intermittent)" ]] && continue
     grep -qxF "${bug_text}" "${WORK}/reproduced" || fail "known bug of ${bug_adapter} did not reproduce: ${bug_text}"
 done < "${WORK}/active"
 finish
