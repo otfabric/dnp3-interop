@@ -487,13 +487,14 @@ private:
 int run_server(const std::vector<std::string>& argv)
 {
     std::string fixturePath, bindAddress, readyFile;
-    int64_t port = 20000, selectTimeout = 5000, confirmTimeout = 5000;
+    int64_t port = 20000, selectTimeout = 5000, confirmTimeout = 5000, count = 1;
     std::optional<int64_t> localAddr, remoteAddr;
     Transport transport;
     try
     {
         std::set<std::string> flags = {"fixture",           "bind-address",       "port",      "ready-file",
-                                       "select-timeout-ms", "confirm-timeout-ms", "local-addr", "remote-addr"};
+                                       "select-timeout-ms", "confirm-timeout-ms", "local-addr", "remote-addr",
+                                       "outstations"};
         flags.insert(kServerTransportFlags.begin(), kServerTransportFlags.end());
         Args args(argv, flags, {});
         transport = parse_transport(args, true);
@@ -503,6 +504,7 @@ int run_server(const std::vector<std::string>& argv)
         port = args.integer("port", 20000, 1, 65535);
         selectTimeout = args.integer("select-timeout-ms", 5000, 1, 3600000);
         confirmTimeout = args.integer("confirm-timeout-ms", 5000, 1, 3600000);
+        count = args.integer("outstations", 1, 1, 16);
         if (args.has("local-addr"))
             localAddr = args.integer("local-addr", 0, 0, 65519);
         if (args.has("remote-addr"))
@@ -529,6 +531,12 @@ int run_server(const std::vector<std::string>& argv)
         fx.points[type];
     const uint16_t local = static_cast<uint16_t>(localAddr.value_or(fx.address));
     const uint16_t remote = static_cast<uint16_t>(remoteAddr.value_or(fx.masterAddress));
+    if (local + count - 1 > 65519 || (remote >= local && remote <= local + count - 1))
+    {
+        logf("server: --outstations %lld from link address %u leaves the range or meets the master's",
+             static_cast<long long>(count), local);
+        return kExitUsage;
+    }
 
     // Signals are taken by sigwait below; block them before any thread starts.
     sigset_t signals;
@@ -569,10 +577,19 @@ int run_server(const std::vector<std::string>& argv)
         config.link.RemoteAddr = remote;
         config.link.KeepAliveTimeout = TimeDuration::Max();
 
-        auto outstation = channel->AddOutstation("outstation", std::make_shared<Commands>(fx),
-                                                 std::make_shared<Application>(fx), config);
-        outstation->Apply(initial_values(fx));
-        outstation->Enable();
+        // --outstations N (contract 1.3): N outstations at consecutive link
+        // addresses, each with its own copy of the fixture, on one channel.
+        std::vector<std::shared_ptr<IOutstation>> outstations;
+        for (int64_t i = 0; i < count; i++)
+        {
+            config.link.LocalAddr = static_cast<uint16_t>(local + i);
+            auto outstation = channel->AddOutstation("outstation-" + std::to_string(local + i),
+                                                     std::make_shared<Commands>(fx), std::make_shared<Application>(fx),
+                                                     config);
+            outstation->Apply(initial_values(fx));
+            outstation->Enable();
+            outstations.push_back(outstation);
+        }
 
         // A TCP or TLS server listens once it exists; a UDP socket is bound
         // and a serial device open when the channel says so, which it does
@@ -604,7 +621,8 @@ int run_server(const std::vector<std::string>& argv)
         sigwait(&signals, &sig);
         logf("server: signal %d, stopping", sig);
         std::remove(readyFile.c_str());
-        outstation->Disable();
+        for (auto& outstation : outstations)
+            outstation->Disable();
         channel->Shutdown();
         manager.Shutdown();
     }

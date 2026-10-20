@@ -188,6 +188,9 @@ fn print_capabilities() -> i32 {
             // functions; the master has no group 90.
             "manageServer": false,
             "manageClient": false,
+            // Contract 1.3: the library's server picks an outstation by the
+            // master's IP address, not by link address.
+            "multipleOutstationsServer": false,
             // FREEZE AT TIME both ways (the outstation schedules it); the
             // outstation freezes counters only, the master sends any group.
             "freezeAtTimeServer": true,
