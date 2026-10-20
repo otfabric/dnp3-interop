@@ -15,7 +15,7 @@ next to the licence texts.
 | `adapters/dnp3py/` (imports dnp3py) | MIT |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
 | Image `dnp3-interop-stepfunc` | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
-| Image `dnp3-interop-dscsystems` | GPL-3.0 (it contains DSC go-dnp3) |
+| Image `dnp3-interop-dscsystems` | GPL-3.0-or-later (it contains DSC go-dnp3) |
 | Image `dnp3-interop-dnp3py` | MIT (and the Python licence) |
 
 Each adapter is a separate program in a separate image; no image contains two
@@ -23,7 +23,7 @@ implementations. Nothing in this repository is linked into a consumer: a
 library that tests against the images talks to them over TCP and reads their
 output, and is not affected by their licences.
 
-The dscsystems adapter is a derivative work of the GPL-3.0 DSC go-dnp3 library
+The dscsystems adapter is a derivative work of the GPL-3.0-or-later DSC go-dnp3 library
 and carries `SPDX-License-Identifier: GPL-3.0-or-later`; the others are MIT.
 
 ## Image `dnp3-interop-opendnp3`
@@ -71,7 +71,7 @@ For any other use, obtain a commercial licence from Step Function I/O
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| DSC go-dnp3 (DSC Systems) | v0.8.1, commit `70ff72bb09755db183d1bd69859adc72cd663aec` | GPL-3.0 | https://github.com/dscsystems/go-dnp3 |
+| DSC go-dnp3 (DSC Systems) | v0.8.1, commit `70ff72bb09755db183d1bd69859adc72cd663aec` | GPL-3.0-or-later | https://github.com/dscsystems/go-dnp3 |
 | go.bug.st/serial, golang.org/x/sys (linked by DSC go-dnp3's channel package) | the versions in `adapters/dscsystems/go.sum` | BSD-3-Clause | https://github.com/bugst/go-serial, https://go.googlesource.com/sys |
 | Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |

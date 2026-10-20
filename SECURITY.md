@@ -14,19 +14,19 @@ Vulnerabilities in the bundled implementations themselves (opendnp3, Step Functi
 
 | Version | Supported |
 |---------|-----------|
-| Latest release | Yes |
-| Older releases | No; pull the latest images |
+| v0.4.x (latest, v0.4.1) | Yes |
+| < v0.4 | No; pull the latest images |
 
 ## Security Considerations
 
 ### These are test fixtures, not products
 
-The images run **unauthenticated, unencrypted DNP3 outstations** that accept polls, controls, restarts and time writes from anyone who can reach them, and clients that send commands to whatever address they are given. That is their purpose.
+The images run **DNP3 outstations, unauthenticated and unencrypted by default,** that accept polls, controls, restarts and time writes from anyone who can reach them, and clients that send commands to whatever address they are given. That is their purpose.
 
 - **Never attach a server to a plant, control or other production network**
 - **Never point a client at a real outstation**: `operate`, `restart`, `time-sync` and the other operations act on what they are sent to
 - `compose.yaml` and the `run-*` Makefile targets publish ports on `127.0.0.1` only. Keep it that way; the self-tests use private Docker networks and publish nothing
-- There is no TLS and no secure authentication in contract 1.0; when they are added, the keys and certificates are test material baked into the images and published with them, and protect nothing
+- TLS and secure authentication (contract 1.1) are optional. The self-tests make throw-away certificates per run (`scripts/test-pki.sh`); keys passed with `--tls-key` or `--sa-update-key` are test material and protect nothing. The images contain no certificates or keys
 
 ### Image hardening
 

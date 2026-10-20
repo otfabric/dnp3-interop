@@ -12,7 +12,7 @@
 Docker (with buildx), `jq`, GNU make and Python 3. Nothing else: compilers, Cargo and the Go and Python toolchains run inside the image builds.
 
 ```sh
-make ci     # validate, lint, build, smoke, cross-stack self-test, document schemas
+make ci     # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
 ```
 
 Run `make` for all targets.
@@ -24,7 +24,7 @@ Run `make` for all targets.
 3. `make interop`: the result documents of all pairings must stay identical. If two stacks disagree, find out which one is right by the standard before touching the expectation.
 4. If behaviour visible to consumers changed, update the contract or fixture documentation in the same change.
 
-Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except `adapters/dscsystems/`, which links a GPL-3.0 library and is `GPL-3.0-or-later`.
+Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except `adapters/dscsystems/`, which links a GPL-3.0-or-later library and is `GPL-3.0-or-later`.
 
 ## Moving an upstream pin
 
@@ -33,6 +33,8 @@ Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except 
 3. Record the new version, and anything it changed, in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [RELEASE.md](RELEASE.md).
 
 The rule is the latest upstream release. A newer release that fails the self-tests is not adopted as the pin, but it is not dropped either: list its bug in [tests/known-bugs.tsv](tests/known-bugs.tsv), build it as a candidate (`make candidate-<adapter> CANDIDATE_VERSION=<version>`) and record in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) what the older pin costs. When the candidate run reports that the known bug no longer reproduces, move the pin.
+
+An entry may also cover a pinned version, when no adapter can avoid the bug and another check covers the behaviour it breaks. An entry that no longer reproduces is stale and fails the run. The columns are described in the header of [tests/known-bugs.tsv](tests/known-bugs.tsv).
 
 Every Dockerfile names its pin `ARG UPSTREAM_VERSION` and `ARG UPSTREAM_SHA`. The **Upstream candidates** workflow resolves the latest release of every stack every week with `scripts/latest-upstream.py`, builds and self-tests each adapter whose pin is behind, writes one decision table and keeps a tracking issue open while a pin is behind. `make candidate-<adapter> CANDIDATE_VERSION=<version>` (opendnp3: also `CANDIDATE_SHA=<commit>`, since it is pinned by commit) runs the same locally. opendnp3 is archived: a commit after its last tag is not a release and is never a candidate.
 
@@ -48,7 +50,7 @@ Both architectures are built and self-tested natively, on an amd64 and an arm64 
 
 1. Specify it first: the operation, its flags, when it succeeds and its result fields in the contract; the outstation behaviour in [docs/FIXTURES.md](docs/FIXTURES.md).
 2. Implement it in every published adapter whose upstream can do it; the others declare the feature false.
-3. Add cases to [tests/cases.tsv](tests/cases.tsv) with the expected outcome, and a value check in `scripts/interop.sh` if the outcome line cannot show what matters.
+3. Add cases to [tests/cases.tsv](tests/cases.tsv) with the expected outcome, and a value check in `scripts/interop.sh` if the outcome line cannot show what matters; or, for a transport or optional feature, a check in `scripts/features.sh`.
 4. Add the feature to the capability documents and to [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [COVERAGE.md](COVERAGE.md).
 5. Extend the schemas in `schemas/` if documents gained fields.
 

@@ -21,6 +21,7 @@ Tags are immutable. A fix is a new version.
 ## v0.4.1
 
 **Date:** 2026-10-20
+**Previous release:** v0.4.0
 
 ## Summary
 
@@ -36,6 +37,7 @@ A fix to the dscsystems adapter; container contract 1.3 unchanged.
 ## v0.4.0
 
 **Date:** 2026-10-20
+**Previous release:** v0.3.0
 
 ## Summary
 
@@ -64,6 +66,7 @@ still carry `schemaVersion` `"1.0"`.
 ## v0.3.0
 
 **Date:** 2026-10-20
+**Previous release:** v0.2.0
 
 ## Summary
 
@@ -84,6 +87,7 @@ carry `schemaVersion` `"1.0"`.
 ## v0.2.0
 
 **Date:** 2026-10-20
+**Previous release:** v0.1.0
 
 ## Summary
 
@@ -106,6 +110,7 @@ consumers are unaffected (documents still carry `schemaVersion` `"1.0"`).
 ## v0.1.0
 
 **Date:** 2026-10-20
+**Previous release:** none, first release
 
 ## Summary
 
@@ -132,7 +137,6 @@ outstation, and a fourth as master, behind container contract 1.0.
 - opendnp3 is archived; 3.1.2 is its last release. Its sources need `<cstdint>` included explicitly with GCC 14. Its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes and synchronizes time only when the outstation sets NEED_TIME; both outstations set PARAMETER_ERROR along with a NOT_SUPPORTED command status, so such a refusal is `rejected` with no command status.
 - The stepfunc outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT, and fails the first SELECT after start with NO_SELECT because the master's confirm of its null unsolicited response arrives between SELECT and OPERATE (listed in `tests/known-bugs.tsv`); its master cannot send DIRECT OPERATE NO ACK or the `_NR` freezes.
 - The Step Function I/O dnp3 crate is under a non-commercial, non-production licence; its image is published for interoperability testing only.
-
 - DSC go-dnp3 v0.8.1: FREEZE AND CLEAR clears only counters that have a frozen counter; a freeze raises events for unchanged frozen values; neither its master nor its outstation filters link addresses (all three in `tests/known-bugs.tsv`). Its outstation carries out a restart (events discarded, DEVICE_RESTART and NEED_TIME set again), so restart cases run on a fresh outstation.
 
 ### For consumers
