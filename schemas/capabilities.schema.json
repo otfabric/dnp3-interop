@@ -33,7 +33,7 @@
       "required": ["integrityPoll", "eventPoll", "read", "readAllObjectsClient", "directOperate", "selectBeforeOperate", "parameterErrorWithNotSupported", "directOperateNoAckServer", "directOperateNoAckClient",
                    "timeSyncLan", "timeSyncNonLan", "timeSyncOnDemand", "restart", "restartDelayClient", "unsolicited", "assignClassServer", "assignClassClient",
                    "freeze", "freezeNoAckServer", "freezeNoAckClient", "octetStrings", "tcp", "udp", "tls", "serial", "fileTransfer",
-                   "secureAuthentication"],
+                   "fileServer", "fileClient", "fileDeleteClient", "secureAuthentication"],
       "additionalProperties": { "type": "boolean" }
     },
     "pointTypes": {
@@ -42,6 +42,18 @@
                           "analogInputs", "analogOutputs", "octetStrings"] }
     },
     "commandTypes": { "type": "array", "items": { "enum": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"] } },
-    "clientOperations": { "type": "array", "items": { "type": "string" } }
+    "clientOperations": { "type": "array", "items": { "type": "string" } },
+    "secureAuthentication": {
+      "description": "Contract 1.1: what secure authentication (SAv5) has, in an image that declares the feature secureAuthentication.",
+      "type": "object",
+      "required": ["macAlgorithms", "keyWrapAlgorithms", "criticalFunctions", "aggressiveMode"],
+      "properties": {
+        "macAlgorithms": { "type": "array", "items": { "enum": ["hmac-sha1-4", "hmac-sha1-8", "hmac-sha1-10", "hmac-sha256-8",
+                                                                "hmac-sha256-16", "aes-gmac"] } },
+        "keyWrapAlgorithms": { "type": "array", "items": { "enum": ["aes-128", "aes-256"] } },
+        "criticalFunctions": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+        "aggressiveMode": { "type": "boolean" }
+      }
+    }
   }
 }

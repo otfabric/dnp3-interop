@@ -10,7 +10,8 @@
     "adapter": { "type": "string" },
     "operation": {
       "enum": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
-               "disable-unsolicited", "assign-class", "freeze", "monitor"]
+               "disable-unsolicited", "assign-class", "freeze", "monitor",
+               "file-get", "file-put", "file-ls", "file-info", "file-delete"]
     },
     "ok": { "type": "boolean" },
     "error": {
@@ -20,7 +21,8 @@
           "type": "object",
           "required": ["code", "message"],
           "properties": {
-            "code": { "enum": ["connect-failed", "timeout", "rejected", "command-failed", "connection-lost", "failed"] },
+            "code": { "enum": ["connect-failed", "timeout", "rejected", "command-failed", "connection-lost", "file-error",
+                              "auth-failed", "failed"] },
             "message": { "type": "string" }
           }
         }
@@ -47,17 +49,50 @@
       ]
     },
     "restartDelayMs": { "type": ["integer", "null"], "minimum": 0 },
+    "file": {
+      "description": "Contract 1.1. file-get: name, size and content; file-info: an entry.",
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["name", "size", "content"],
+          "properties": { "name": { "type": "string" }, "size": { "type": "integer", "minimum": 0 },
+                          "content": { "type": "string", "pattern": "^([0-9a-f]{2})*$" } } },
+        { "$ref": "#/$defs/fileEntry" }
+      ]
+    },
+    "files": { "description": "Contract 1.1. file-ls: the entries.", "type": "array", "items": { "$ref": "#/$defs/fileEntry" } },
+    "fileStatus": {
+      "description": "Contract 1.1. File operations: the file status of the outstation's last answer.",
+      "oneOf": [
+        { "type": "null" },
+        { "enum": ["SUCCESS", "PERMISSION_DENIED", "INVALID_MODE", "FILE_NOT_FOUND", "FILE_LOCKED", "TOO_MANY_OPEN",
+                   "INVALID_HANDLE", "WRITE_BLOCK_SIZE", "COMM_LOST", "CANNOT_ABORT", "NOT_OPENED", "HANDLE_EXPIRED",
+                   "BUFFER_OVERRUN", "FATAL", "BLOCK_SEQ", "UNDEFINED"] }
+      ]
+    },
     "elapsedMs": { "type": "number", "minimum": 0 }
   },
   "allOf": [
     { "if": { "properties": { "operation": { "const": "operate" } } }, "then": { "required": ["commandStatus"] } },
     { "if": { "properties": { "operation": { "const": "restart" } } }, "then": { "required": ["restartDelayMs"] } },
+    { "if": { "properties": { "operation": { "enum": ["file-get", "file-put", "file-ls", "file-info", "file-delete"] } } },
+      "then": { "required": ["fileStatus"] } },
     { "if": { "properties": { "operation": { "enum": ["integrity-poll", "event-poll", "read"] } } },
       "else": { "properties": { "iin": { "type": "null" } } } },
     { "if": { "properties": { "ok": { "const": true } } }, "then": { "properties": { "error": { "type": "null" } } },
       "else": { "properties": { "error": { "type": "object" } } } }
   ],
   "$defs": {
+    "fileEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "size", "permissions"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "enum": ["file", "directory"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "permissions": { "type": "string", "pattern": "^[r-][w-][x-][r-][w-][x-][r-][w-][x-]$" },
+        "time": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" }
+      }
+    },
     "object": {
       "type": "object",
       "additionalProperties": false,

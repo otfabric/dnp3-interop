@@ -118,6 +118,23 @@ def semantic_errors(fx):
     for p in fx.get("frozenCounters", []):
         if p.get("index") not in indexes["counters"]:
             errors.append(f"frozenCounters[{p.get('index')}]: there is no counter with this index to freeze")
+    files = [f.get("name") for f in fx.get("files", [])]
+    dirs = list(fx.get("directories", []))
+    for n in set(files):
+        if files.count(n) > 1:
+            errors.append(f"files: {n} is listed twice")
+    for n in set(dirs):
+        if dirs.count(n) > 1:
+            errors.append(f"directories: {n} is listed twice")
+    parents = {n.rsplit("/", 1)[0] for n in files + dirs if isinstance(n, str)}
+    implied = set(dirs)
+    for p in parents:
+        while p:
+            implied.add(p)
+            p = p.rsplit("/", 1)[0]
+    for n in files:
+        if n in implied:
+            errors.append(f"files: {n} is also a directory")
     out = fx.get("outstation", {})
     if out.get("address") is not None and out.get("address") == out.get("masterAddress"):
         errors.append("outstation: address and masterAddress are equal")

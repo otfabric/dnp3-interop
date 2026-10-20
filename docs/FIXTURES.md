@@ -92,6 +92,22 @@ Cross-field rules, checked by `make validate` and by every adapter:
   g21v9, g21v10, g30v3, g30v4) keeps the default flags `["ONLINE"]`: a master
   reads it as online whatever the outstation holds.
 
+### Files
+
+*Fixture format 1.0, used from container contract 1.1.* Files the
+outstation serves by DNP3 file transfer (group 70); see
+[file transfer](CONTAINER_CONTRACT.md#file-transfer). Only an adapter with
+the feature `fileServer` serves a fixture that has `files` or `directories`;
+every other adapter refuses it (exit 4).
+
+| Field | Meaning |
+|-------|---------|
+| `files` | `[{ "name": "/data/blocks.bin", "content": "<hex>" }]`: absolute names of path elements of letters, digits, `.`, `_` and `-` (not starting with `.`); content up to 65536 octets, lower-case hex |
+| `directories` | Further directories, empty at start: `["/logs"]`. The directories that hold files exist without being listed |
+
+A name is a file or a directory, not both, and is listed once. Writes may
+create or replace files in any directory that exists; deletes remove files.
+
 ## Outstation behaviour
 
 ### Link layer
@@ -266,6 +282,18 @@ start, cold restart 5000 ms, warm restart 1000 ms.
 | analog output | 0 | 0 | ONLINE | 1 | g40v1 | g42v1 | target analog input 4, range ±1000000 |
 | analog output | 1 | 0 | ONLINE | 1 | g40v3 | g42v3 | float, select required, range ±100 |
 | octet string | 0 | `48656c6c6f` ("Hello") | | 0 | g110v5 | | |
+
+## The files fixture
+
+`fixtures/files/fixture.json`: outstation 1024, master 1, NEED_TIME at start, one binary input,
+and for file transfer:
+
+| Name | Type | Content |
+|------|------|---------|
+| `/readme.txt` | file | "Hello from the dnp3-interop files fixture.\n" (43 octets) |
+| `/data` | directory | |
+| `/data/blocks.bin` | file | 3000 octets, octet *i* = (7*i* + 3) mod 256: several blocks with any block size |
+| `/logs` | directory | empty |
 
 ## Adding a fixture
 

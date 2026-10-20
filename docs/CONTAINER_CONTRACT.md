@@ -1,6 +1,6 @@
 # Container contract
 
-Version: **1.0** (`contract_version` in [versions.yaml](../versions.yaml))
+Version: **1.1** (`contract_version` in [versions.yaml](../versions.yaml))
 
 Every adapter image exposes the same commands, flags, JSON documents and exit
 codes. Consumers depend on this document, not on any adapter's source. A
@@ -11,6 +11,7 @@ and changes only with the major version.
 | Version | Change |
 |---------|--------|
 | 1.0 | First release |
+| 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -29,6 +30,9 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 - [Commands](#commands)
 - [`server`](#server)
 - [`client`](#client)
+- [Transports](#transports)
+- [File transfer](#file-transfer)
+- [Secure authentication](#secure-authentication)
 - [Object documents](#object-documents)
 - [`print-capabilities`](#print-capabilities)
 - [`print-fixture`](#print-fixture)
@@ -42,17 +46,18 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 | Image | `ghcr.io/otfabric/dnp3-interop-<adapter>` |
 | Entrypoint | `dnp3-interop` (`/usr/local/bin/dnp3-interop`) |
 | Default command | `server` |
-| Port | 20000/tcp |
+| Port | 20000/tcp (20000/udp with `--transport udp`) |
 | User | non-root, uid 10001 |
 | Fixtures | `/fixtures/<name>/fixture.json` (baked in; mount over `/fixtures` to replace) |
 | Readiness file | `/run/dnp3-interop/ready` |
 | Health check | built in: `test -f /run/dnp3-interop/ready` |
 | Licences | `/licenses/` |
+| Tools | `/bin/sh`; `socat` in images with the feature `serial`, for bridging a serial device (see [Serial](#serial)) |
 
-Contract 1.0 covers DNP3 over TCP. UDP, TLS and serial links, file transfer
-(group 70) and secure authentication (group 120) are not in it yet; the
-capability document has a feature for each, all false. See
-[PLAN.md](../PLAN.md).
+Contract 1.0 covers DNP3 over TCP. Contract 1.1 adds UDP, TLS and serial
+links, file transfer (group 70) and secure authentication (group 120). An
+image says which of them it has in its capability document; what it lacks is
+a usage error (exit 2).
 
 ## Commands
 
@@ -119,13 +124,16 @@ One JSON object per line on stdout.
 
 | `event` | Other fields | When |
 |---------|--------------|------|
-| `ready` | `adapter`, `address` (`ip:port`), `fixture`, `linkAddress`, `masterAddress` | Once, when the outstation accepts connections |
-| `connection-opened` | | A master connected |
-| `connection-closed` | | The connection ended |
+| `ready` | `adapter`, `address` (`ip:port`; the device with `--transport serial`), `fixture`, `linkAddress`, `masterAddress`, `transport` (`tcp`, `tls`, `udp` or `serial`; 1.1) | Once, when the outstation accepts connections |
+| `connection-opened` | | A master connected (TCP and TLS only) |
+| `connection-closed` | | The connection ended (TCP and TLS only) |
 | `command` | `function`, `type`, `index`, `code` or `value`, `status` | A select or operate reached the outstation's control handler |
 | `time-sync` | `time` | The master wrote the outstation's time (either procedure) |
 | `restart` | `type` (`cold` or `warm`) | A restart request was accepted |
 | `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only where the library tells the application (opendnp3) |
+| `file` | `action`, `name`, `status` (1.1) | See [file transfer](#file-transfer) |
+| `auth` | `user`, `function` (1.1) | See [secure authentication](#secure-authentication) |
+| `auth-error` | `user`, `code` (1.1) | See [secure authentication](#secure-authentication) |
 | `stopped` | | Once, after a clean stop |
 
 `command`:
@@ -158,8 +166,8 @@ Runs one bounded operation as a master and prints one result document.
 dnp3-interop client <operation> --host HOST [--port N] [common flags] [operation flags]
 ```
 
-Every operation: open the TCP connection, run the operation, close the
-connection. The master does nothing on its own: no integrity poll at
+Every operation: open the connection (TCP by default; see
+[transports](#transports)), run the operation, close the connection. The master does nothing on its own: no integrity poll at
 startup, no enabling or disabling of unsolicited responses, no time
 synchronization, no event poll on IIN bits. The one automatic action the
 libraries take, and that cannot be turned off, is to clear the outstation's
@@ -192,6 +200,7 @@ does not do it leaves the bit set.
 | `assign-class` | `--class C` (required, 0..3), `--group G` (required), `--start N --stop N` | ASSIGN CLASS: g60v(C+1), then group G variation 0, range or all objects | As `enable-unsolicited`. Only with the feature `assignClassClient` |
 | `freeze` | `--clear`, `--no-ack` | IMMEDIATE FREEZE (or FREEZE AND CLEAR with `--clear`) with g20v0, all objects; `--no-ack` sends the `_NR` function codes | Null response without a request error; with `--no-ack` when the request was sent. `--no-ack` only with the feature `freezeNoAckClient` |
 | `monitor` | `--duration-ms N` (1000) | Nothing | The duration passed with the connection still up. What arrived unsolicited is in `objects` |
+| `file-get`, `file-put`, `file-ls`, `file-info`, `file-delete` | see [file transfer](#file-transfer) | 1.1 | |
 
 `--classes` is a comma-separated list of class numbers; `event-poll` takes
 1..3. A list with a number outside that range is a usage error.
@@ -238,6 +247,7 @@ past argument parsing, including failures.
 | `objects` | array | Every measurement received, solicited and unsolicited, in order: see [Object documents](#object-documents) |
 | `commandStatus` | string or null | `operate` only: the status the outstation echoed, by name; null when no echo arrived, none was expected, or the response carried a [request error](#request-errors) |
 | `restartDelayMs` | number or null | `restart` only: the delay the outstation announced, in milliseconds |
+| `file`, `files`, `fileStatus` | | File operations only (1.1): see [file transfer](#file-transfer) |
 | `elapsedMs` | number | Wall-clock duration |
 
 `iin` names, in this order: `BROADCAST`, `CLASS_1_EVENTS`,
@@ -277,14 +287,218 @@ other value.
 
 | Code | Meaning | Exit |
 |------|---------|------|
-| `connect-failed` | No TCP connection within `--connect-timeout-ms` | 3 |
+| `connect-failed` | No connection within `--connect-timeout-ms`: no TCP connection, a failed TLS handshake, a serial device that cannot be opened | 3 |
 | `timeout` | The outstation did not answer in time | 1 |
 | `rejected` | A [request error](#request-errors) in the response | 1 |
 | `command-failed` | `operate`: the echoed status is not SUCCESS and there is no request error (`commandStatus` says which) | 1 |
 | `connection-lost` | The connection closed during the operation | 1 |
+| `file-error` | A file operation: the outstation answered with a file status other than SUCCESS (`fileStatus` says which). 1.1 | 1 |
+| `auth-failed` | Secure authentication failed: the outstation refused the master's authentication, or the session key change failed. 1.1 | 1 |
 | `failed` | Anything else; see `message` | 1 |
 
 `message` is for people and not part of the contract.
+
+## Transports
+
+*Contract 1.1.* Accepted by `server` and by every `client` operation. An
+image that lacks the feature a flag needs (`udp`, `tls`, `serial`) treats
+the flag as a usage error (exit 2).
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--transport T` | `tcp` | `tcp`, `udp` or `serial`. TLS is `tcp` with the TLS flags |
+
+### TLS
+
+Feature `tls`. DNP3 over TLS (IEEE 1815-2012 annex, IEC 62351-3) on a TCP
+port; TLS 1.2 or 1.3. Every library the images use requires **mutual**
+authentication: the outstation demands a client certificate, the master
+verifies the outstation's. None can skip verification, so the contract has
+no "insecure" switch.
+
+| `server` flag | Meaning |
+|---------------|---------|
+| `--tls-cert PATH` | The outstation's certificate (PEM). Turns TLS on |
+| `--tls-key PATH` | Its private key (PEM, PKCS #8, unencrypted). Required with `--tls-cert` |
+| `--tls-ca PATH` | The CA (PEM) a master's certificate must be signed by. Required with `--tls-cert` |
+
+| `client` flag | Meaning |
+|---------------|---------|
+| `--tls` | Connect with TLS |
+| `--tls-ca PATH` | The CA (PEM) the outstation's certificate must be signed by. Required with `--tls` |
+| `--tls-cert PATH`, `--tls-key PATH` | The master's certificate and key (PEM; PKCS #8 key). Required with `--tls` |
+| `--tls-server-name NAME` | The name the outstation's certificate must carry (subject alternative name). Default: `--host`. The opendnp3 master does not check the name |
+
+A handshake that fails (an untrusted certificate, no client certificate, a
+name that does not match) is `connect-failed` for the master when it fails
+before the connection is established. With TLS 1.3 a master learns that
+the outstation refused *its* certificate only after its side of the
+handshake is done: its operation fails, with an error code that depends on
+the library (`connection-lost`, `timeout` or `failed`). Certificate files
+that cannot be read or parsed: the server exits 1, the client fails with
+`failed`.
+
+**Providing certificates.** The images contain no certificates. Mount a
+directory with PEM files and pass the paths, for example
+`-v "$PWD/pki:/pki:ro" ... server --tls-cert /pki/server.pem --tls-key
+/pki/server.key --tls-ca /pki/ca.pem`. The files must be readable by uid
+10001. Certificates need the extensions TLS libraries insist on: the CA
+`basicConstraints=critical,CA:TRUE` and `keyUsage=keyCertSign`; the outstation's
+`extendedKeyUsage=serverAuth` and a `subjectAltName` with the name masters
+use; the master's `extendedKeyUsage=clientAuth`. ECDSA P-256 and RSA 2048 keys
+work with every image. `scripts/test-pki.sh` makes such a set for tests.
+
+### UDP
+
+Feature `udp`. DNP3 over UDP (IEEE 1815 annex): one link-layer stream over
+datagrams, without connections.
+
+| Flag | Role | Default | Meaning |
+|------|------|---------|---------|
+| `--port N` | both | 20000 | `server`: the UDP port to listen on. `client`: the outstation's UDP port |
+| `--udp-peer HOST:PORT` | `server` | none | The master's endpoint: where responses and unsolicited responses go. Required by the opendnp3 outstation, whose socket is connected to one peer (exit 2 without it); without it, other outstations answer the endpoint a request came from |
+| `--udp-local-port N` | `client` | 20000 | The master's own UDP port; 0 picks a free one |
+
+There is no connection: a client is `connected` once its socket is open, and
+an outstation that does not answer is `timeout`, never `connect-failed`.
+`--connect-timeout-ms` is not used. The go-dnp3 outstation (dscsystems)
+keeps answering the first endpoint it heard from for its whole life, so give
+masters a fixed endpoint (`--udp-local-port`, a fixed IP) or restart the
+outstation per master.
+
+### Serial
+
+Feature `serial`. DNP3 over a serial line.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--serial-device PATH` | required | The device: a UART or a pseudo-terminal |
+| `--baud N` | 9600 | |
+| `--data-bits N` | 8 | 7 or 8 |
+| `--parity P` | `none` | `none`, `even` or `odd` |
+| `--stop-bits N` | 1 | 1 or 2 |
+
+No flow control. A `client` needs no `--host` with `--transport serial`;
+`--host`, `--port`, `--bind-address` and the TLS flags are usage errors with
+it. A device that cannot be opened: the server exits 1, the client fails with
+`connect-failed` (exit 3) after `--connect-timeout-ms`. The client is
+`connected` once the device is open.
+
+**Bridging.** The images carry `socat`, so a pseudo-terminal in a container
+can stand for a serial port and be bridged to TCP. An outstation:
+
+```sh
+docker run --entrypoint /bin/sh IMAGE -c '
+  socat pty,link=/tmp/ttyDNP3,raw,echo=0 pty,link=/tmp/ttyLINE,raw,echo=0 &
+  while [ ! -e /tmp/ttyDNP3 ] || [ ! -e /tmp/ttyLINE ]; do sleep 0.05; done
+  socat -t 0.05 tcp-listen:20001,reuseaddr,fork file:/tmp/ttyLINE,raw,echo=0 &
+  exec dnp3-interop server --transport serial --serial-device /tmp/ttyDNP3'
+```
+
+The outstation holds one end of a pseudo-terminal pair for its whole life;
+each TCP connection is attached to the other end, so masters can come and
+go. A master in another container (or a library on the host) reaches that
+line with `socat pty,link=/tmp/ttyDNP3,raw,echo=0 tcp:OUTSTATION:20001` and
+opens its own end of the pseudo-terminal. What the outstation sends while no
+master is attached waits in the line, as on a real one. The bytes on the line are exactly what a
+serial port would carry; timing (inter-character gaps, baud rate) is not
+emulated.
+
+## File transfer
+
+*Contract 1.1.* DNP3 file transfer (group 70, IEEE 1815 clause 4.6 and
+annex A.37) with the function codes OPEN_FILE, CLOSE_FILE, DELETE_FILE,
+GET_FILE_INFO, READ and WRITE. Features:
+
+| Feature | Meaning |
+|---------|---------|
+| `fileServer` | The outstation serves the `files` of its fixture |
+| `fileClient` | The master has `file-get`, `file-put`, `file-ls` and `file-info` |
+| `fileDeleteClient` | The master has `file-delete` |
+| `fileTransfer` | `fileServer` or `fileClient` (the 1.0 feature) |
+
+**Outstation.** It serves the files of its fixture's `files` section (the
+`files` fixture has some; see [FIXTURES.md](FIXTURES.md)): a master can read
+them, list their directories, ask for their descriptors, replace or create a
+file in an existing directory, and delete files. Like the points, the files
+belong to the process: restart the container to return to the fixture. File
+authentication (AUTHENTICATE_FILE) is not used. An outstation without
+`fileServer` refuses a fixture with `files` (exit 4); one with it but given a
+fixture without `files` refuses the file function codes (IIN2
+NO_FUNC_CODE_SUPPORT).
+
+Server event `file`, for every file request the outstation answered:
+
+| Field | Meaning |
+|-------|---------|
+| `action` | `read` (opened for reading), `write` (written and closed), `delete`, `info` (GET_FILE_INFO), `list` (a directory opened for reading) |
+| `name` | The file name the master sent |
+| `status` | The file status the outstation answered, by name (below) |
+
+**Master operations.** Every one takes `--name NAME`, an absolute file name
+(`/data/readme.txt`; `/` is the root directory).
+
+| Operation | Flags | Sends | Succeeds when | Result fields |
+|-----------|-------|-------|---------------|---------------|
+| `file-get` | `--name` | OPEN_FILE (read), READ of the blocks, CLOSE_FILE | The whole file arrived | `file`: `name`, `size`, `content` |
+| `file-put` | `--name`, `--content HEX` | OPEN_FILE (write, with the size), WRITE of the blocks, CLOSE_FILE | Every block was accepted | |
+| `file-ls` | `--name` (a directory) | As `file-get`, of the directory | The listing arrived | `files`: the entries |
+| `file-info` | `--name` | GET_FILE_INFO | The descriptor arrived | `file`: the entry |
+| `file-delete` | `--name` | DELETE_FILE | The outstation answered SUCCESS | |
+
+An entry (`file-ls`, `file-info`) is
+`{ "name", "type", "size", "permissions", "time" }`: `type` `file` or
+`directory`, `size` in octets (what the outstation reports for a
+directory), `permissions` the nine permission bits as `rwxr-x---`, `time` the
+creation time the outstation reports. `name` is the entry's name as the
+outstation sends it (the last path element). `content` is lower-case hex.
+`file-get` of a directory fails with whatever status the outstation answers.
+
+`fileStatus` (string or null): the file status of the outstation's last
+answer, by name, or null when there was none. A status other than SUCCESS is
+the error `file-error`. Names (IEEE 1815 table 4-8): `SUCCESS` (0),
+`PERMISSION_DENIED`, `INVALID_MODE`, `FILE_NOT_FOUND`, `FILE_LOCKED`,
+`TOO_MANY_OPEN`, `INVALID_HANDLE`, `WRITE_BLOCK_SIZE`, `COMM_LOST`,
+`CANNOT_ABORT` (9), `NOT_OPENED` (16), `HANDLE_EXPIRED`, `BUFFER_OVERRUN`,
+`FATAL`, `BLOCK_SEQ` (20), `UNDEFINED` for any other value.
+
+## Secure authentication
+
+*Contract 1.1.* Feature `secureAuthentication`: DNP3 Secure Authentication
+version 5 (IEEE 1815-2012 clause 7), challenge-reply mode, in every role the
+image has. The master and the outstation share a user number and that user's
+**update key**; the master establishes session keys with it (Session Key
+Status Request g120v4, Session Key Status g120v5, Session Key Change g120v6)
+before its first request and whenever they expire. The outstation then
+challenges (g120v1) every critical request, and the master answers with a
+MAC (g120v2) over the challenge and the request. Aggressive mode, remote key
+management (g120v8, v10-v15) and authentication of unsolicited responses are
+not in the contract.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--sa-update-key HEX` | none | The update key, 16 octets (AES-128 key wrap) or 32 (AES-256). Turns secure authentication on |
+| `--sa-user N` | 1 | The user number, 1..65535 |
+| `--sa-mac NAME` | `hmac-sha256-16` | The MAC algorithm: `hmac-sha1-4`, `hmac-sha1-8`, `hmac-sha1-10`, `hmac-sha256-8`, `hmac-sha256-16`, `aes-gmac`. One the image does not support (its capability document lists them) is a usage error |
+
+Accepted by `server` and every `client` operation. An outstation with secure
+authentication answers a critical request from a master without it with a
+challenge the master cannot answer: the master's operation fails (`timeout`
+or `auth-failed`).
+
+Which requests are critical is the outstation's choice within the standard;
+the capability document lists the function codes an image's outstation
+challenges (`secureAuthentication.criticalFunctions`).
+
+Server events:
+
+| `event` | Fields | When |
+|---------|--------|------|
+| `auth` | `user`, `function` (the function code of the request, a number) | A critical request was authenticated and is executed |
+| `auth-error` | `user`, `code` (the error code of the g120v7 object, a number: 1 authentication failed, 4 unexpected response, 7 authorization failed, 11 unknown user, ...) | The outstation sent an authentication error |
+
+The master's error is `auth-failed` when the outstation refused its
+authentication or a session key change failed.
 
 ## Object documents
 

@@ -89,11 +89,30 @@
       "type": "array",
       "items": { "$ref": "#/$defs/point", "properties": {
         "value": { "type": "string", "pattern": "^([0-9a-f]{2}){1,255}$" } }, "unevaluatedProperties": false }
+    },
+    "files": {
+      "description": "Files the outstation serves by DNP3 file transfer (group 70). Only adapters with the feature fileServer serve a fixture that has them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "content"],
+        "properties": {
+          "name": { "$ref": "#/$defs/fileName" },
+          "content": { "type": "string", "pattern": "^([0-9a-f]{2}){0,65536}$" }
+        }
+      }
+    },
+    "directories": {
+      "description": "Directories the outstation serves besides those that hold files: empty ones.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/fileName" }
     }
   },
   "$defs": {
     "linkAddress": { "type": "integer", "minimum": 0, "maximum": 65519 },
     "index": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "fileName": { "type": "string", "pattern": "^(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+$", "maxLength": 200 },
     "point": {
       "type": "object",
       "required": ["index", "value"],
