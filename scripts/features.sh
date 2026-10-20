@@ -887,10 +887,8 @@ for server in "${servers[@]}"; do
     read -r p f s k < "${WORK}/tally-${server}"
     PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
-# A known bug that no longer shows is a stale entry, unless it is marked
-# "(intermittent)".
+# A known bug that no longer shows is a stale entry.
 while IFS=$'\t' read -r bug_adapter _ bug_text; do
-    [[ "${bug_text}" == *"(intermittent)" ]] && continue
     grep -qxF "${bug_text}" "${WORK}/reproduced" || fail "known bug of ${bug_adapter} did not reproduce: ${bug_text}"
 done < "${WORK}/active"
 finish
