@@ -683,6 +683,9 @@ def print_capabilities():
             "serial": False,
             # Not in the library.
             "fileTransfer": False,
+            "fileServer": False,
+            "fileClient": False,
+            "fileDeleteClient": False,
             "secureAuthentication": False,
         },
         "pointTypes": [],
