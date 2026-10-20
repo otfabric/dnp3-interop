@@ -7,10 +7,10 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 1 | Foundation: contract, fixture format, validation, version manifest, tooling | done |
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
-| 4 | First published images; consumption from a library's tests | v0.1.0 being released |
-| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py done as master; Triangle MicroWorks on hold |
-| 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | not started |
-| 7 | Release qualification | workflow written, not exercised |
+| 4 | First published images; consumption from a library's tests | images published: v0.1.0 (2026-10-20); consumption by a library pending |
+| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
+| 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | in progress, as container contract 1.1 |
+| 7 | Release qualification: image scanning, SBOMs, compatibility report | in progress |
 
 ## Phase 1 - Foundation (done)
 
@@ -40,10 +40,18 @@ Met: `make smoke-opendnp3` passes 32 of 32 checks; opendnp3 against itself passe
 
 Met on linux/arm64 (2026-10-19): `make smoke-stepfunc` 32 of 32; `make interop` 344 checks passed, none failed, 8 known-bug hits, 6 skipped for undeclared capabilities. The known bug is the stepfunc outstation's first SELECT after start, when the master's confirm of the null unsolicited response arrives between SELECT and OPERATE; select-before-operate is checked separately after that and passes. Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). Since run on linux/amd64 and linux/arm64 by CI as well.
 
-## Phase 4 - First published images
+## Phase 4 - First published images (images published)
 
-- `v0.1.0` through the release workflow: linux/amd64 and linux/arm64, both images to GHCR, `manifest.json` with the digests.
-- A library pins those digests and runs its tests against them without a checkout of this repository.
+- Done: `v0.1.0` (2026-10-20) through the release workflow: linux/amd64 and linux/arm64, all four images to GHCR, publicly pullable, with `manifest.json` and `checksums.txt` on the [GitHub release](https://github.com/otfabric/dnp3-interop/releases/tag/v0.1.0). The release run self-tested exactly the images it pushed.
+
+  | Image | Digest |
+  |-------|--------|
+  | `ghcr.io/otfabric/dnp3-interop-stepfunc:v0.1.0` | `sha256:3ae308559ae9ad423b3e53f5206aa5ccb16ed60c4816fcba8aeff29cb5903f9b` |
+  | `ghcr.io/otfabric/dnp3-interop-opendnp3:v0.1.0` | `sha256:461bcec60491d6c94cf51055b75655fd6e8a142c06e73e1eb9e6eca377677ce7` |
+  | `ghcr.io/otfabric/dnp3-interop-dscsystems:v0.1.0` | `sha256:bd019730340dc708d45e4e7da6514e551ac8086aace67e5988fec651614c4fe7` |
+  | `ghcr.io/otfabric/dnp3-interop-dnp3py:v0.1.0` | `sha256:a8518fa9e98e54ceb82ad67af5d52bed8efb0085c185742dd14c523d7e5f7013` |
+
+- Pending: a library pins those digests and runs its tests against them without a checkout of this repository (otfabric/go-dnp3 is building that harness).
 
 The stepfunc image is published although its upstream licence is
 non-commercial: the images exist for interoperability testing only, which the
