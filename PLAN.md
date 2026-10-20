@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: freeze at time and analog freeze
+
+- `freeze --at immediately|+MS|EPOCH_MS [--interval-ms N]` (FREEZE AT TIME with g50v2) and `freeze --group 30`; features `freezeAtTimeServer/Client`, `analogFreezeServer/Client`.
+- FREEZE AT TIME: stepfunc and go-dnp3 outstations, stepfunc, go-dnp3 and dnp3py masters. Analog freeze: go-dnp3's outstation; stepfunc, opendnp3 and dnp3py masters.
+
+**Gate:** `make features` freezes at once and at a time, and freezes analogs, for every pairing that declares it.
+
 ### Contract 1.3: several controls in one request
 
 - `operate-multi` with `commandStatuses`, the fixture's `maxControlsPerRequest` and the `controls` fixture; features `multipleControlsClient`, `maxControlsServer`.

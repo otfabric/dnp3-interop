@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -568,6 +568,21 @@ that succeed and not the others: a request can partly succeed.
 An outstation whose fixture sets `maxControlsPerRequest` carries out that
 many controls of a request and answers TOO_MANY_OPS for the rest (feature
 `maxControlsServer`).
+
+## Freeze at time and analog freeze
+
+*Contract 1.3.* More flags of `freeze`:
+
+| Flag | Meaning |
+|------|---------|
+| `--group G` | 20 (default): the counters. 30: the analog inputs, which a freeze copies into the frozen analog inputs of the same index. Feature `analogFreezeClient` (master), `analogFreezeServer` (outstation) |
+| `--at T` | FREEZE AT TIME (FREEZE AT TIME NO ACK with `--no-ack`): a g50v2 with the time and interval, then the objects of `--group`. T is `immediately` (time 0), `+MS` (from now) or milliseconds since the epoch. Not with `--clear`. Feature `freezeAtTimeClient` (master), `freezeAtTimeServer` (outstation) |
+| `--interval-ms N` | With `--at`: repeat every N ms (default 0: once) |
+
+An outstation freezes at the time given, once or every interval; time 0 with
+interval 0 freezes at once (IEEE 1815-2012 A.23.2). A time already past with
+no interval is refused. It succeeds when the outstation accepted the request,
+not when the freeze happens.
 
 ## Device attributes
 
