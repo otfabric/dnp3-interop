@@ -25,8 +25,9 @@ The Step Function I/O dnp3 crate is distributed under a non-commercial,
 non-production licence. Its image exists for interoperability testing only;
 see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Planned: the Triangle MicroWorks DNP3 Source Code Library (C), and dnp3py's
-outstation role. See [PLAN.md](PLAN.md).
+Planned: dnp3py's outstation role. On hold: the Triangle MicroWorks DNP3
+Source Code Library (C), whose licensed source has no agreed way into the
+builds yet. See [PLAN.md](PLAN.md).
 
 **Docs:** [docs/CONTAINER_CONTRACT.md](docs/CONTAINER_CONTRACT.md) (commands, JSON documents, exit codes) · [docs/FIXTURES.md](docs/FIXTURES.md) (the simulated outstation and its behaviour) · [docs/CAPABILITIES.md](docs/CAPABILITIES.md) · [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) (pins, cross-stack matrix, findings) · [COVERAGE.md](COVERAGE.md) · [REQUIREMENTS.md](REQUIREMENTS.md) · [PLAN.md](PLAN.md) · [RELEASE.md](RELEASE.md)
 

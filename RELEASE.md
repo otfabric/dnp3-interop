@@ -57,5 +57,6 @@ outstation, and a fourth as master, behind container contract 1.0.
 
 ### Not in this release
 
-- The Triangle MicroWorks adapter, and dnp3py as outstation.
+- dnp3py as outstation.
+- The Triangle MicroWorks adapter, which is on hold.
 - UDP, TLS and serial links, file transfer, secure authentication.

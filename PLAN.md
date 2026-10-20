@@ -8,7 +8,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
 | 4 | First published images; consumption from a library's tests | v0.1.0 being released |
-| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py done as master; Triangle MicroWorks waiting for its source |
+| 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done; dnp3py done as master; Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | not started |
 | 7 | Release qualification | workflow written, not exercised |
 
@@ -97,15 +97,21 @@ opendnp3 server); the four-adapter run has 1114 checks passed, none failed,
 19 known-bug hits, 117 skipped. Open: the outstation role, which needs a
 second fixture within dnp3py's limits and cases for it.
 
-### Triangle MicroWorks DNP3 SCL (waiting)
+### Triangle MicroWorks DNP3 SCL (on hold)
+
+**On hold** since 2026-10-20, by decision of the owner of this repository:
+nothing is built, published or tested for it, and no work is planned until
+the hold is lifted.
 
 The ANSI C DNP Source Code Library
 (https://products.trianglemicroworks.com/products/source-code-libraries/dnp-scl-pages/ansi-c-source-code)
-is licensed per customer and not public. The adapter will build from an
-archive supplied at build time (`adapters/tmw/vendor/`, ignored by git and by
-the Docker build context), verified against a SHA-256 recorded in
-`versions.yaml`. Waiting for the owner of this repository to say how the
-archive reaches local builds and CI.
+is licensed per customer and not public. When the hold is lifted, the
+adapter would build from an archive supplied at build time
+(`adapters/tmw/vendor/`, already ignored by git and by the Docker build
+context), verified against a SHA-256 recorded in `versions.yaml`. What has to
+be settled first is how the archive reaches local builds and CI (a private
+repository, a build secret, a self-hosted runner) without putting it in this
+public repository or in a public image.
 
 ## Phase 6 - Expanded coverage
 
@@ -115,7 +121,7 @@ each other (REQUIREMENTS.md R8.3):
 - UDP and TLS: both P0 libraries have them; needs transport flags in the contract and, for TLS, test certificates baked into the images.
 - Serial: both P0 libraries have it; needs a virtual serial link between two containers (socat pty pair).
 - File transfer (g70): stepfunc master against the go-dnp3 outstation, and go-dnp3 in both roles.
-- Secure authentication v5 (g120): go-dnp3 in both roles; a second stack only with Triangle MicroWorks.
+- Secure authentication v5 (g120): go-dnp3 in both roles; a second stack only with Triangle MicroWorks, which is on hold.
 - Further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
 
 ## Phase 7 - Release qualification (open)

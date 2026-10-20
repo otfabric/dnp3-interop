@@ -80,7 +80,7 @@ implementations:
 
   tmw:
     priority: P2
-    status: planned
+    status: on-hold              # since 2026-10-20, by the owner's decision; nothing is built
     upstream: "Triangle MicroWorks DNP3 Source Code Library"
     repository: "proprietary; source supplied at build time"
     license: "commercial"

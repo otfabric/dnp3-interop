@@ -48,7 +48,8 @@ framework.
   | P2 | Triangle MicroWorks DNP3 Source Code Library | C | commercial | yes |
 
   P0 adapters are mandatory, P1 strongly recommended (dnp3py) or recommended
-  (go-dnp3), P2 is industry validation.
+  (go-dnp3), P2 is industry validation. The P2 adapter is on hold (see
+  [PLAN.md](PLAN.md)).
 
 - R2.2 Each is its own image. No image contains two implementations.
 - R2.3 An adapter that wraps another adapter's protocol engine says so
@@ -58,8 +59,8 @@ framework.
   passes the smoke test and the cross-stack self-test for the roles it
   declares. An upstream that cannot be made to do so is documented and left
   out; it does not block the others.
-- R2.5 Source that is not public (the Triangle MicroWorks library) is
-  supplied at build time and never committed to this repository; the
+- R2.5 Source that is not public (the Triangle MicroWorks library, on hold)
+  is supplied at build time and never committed to this repository; the
   repository holds the adapter, the build instructions and the checksum of
   the source it was verified with.
 

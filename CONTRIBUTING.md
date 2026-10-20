@@ -56,7 +56,7 @@ Additive changes bump the contract's minor version; anything a consumer could br
 
 ## Proprietary upstream source
 
-The Triangle MicroWorks adapter will build from a source archive supplied at build time (see [PLAN.md](PLAN.md#triangle-microworks-dnp3-scl-waiting)). Never commit that source, a part of it or anything derived from it beyond the adapter's own code; `adapters/tmw/vendor/` is ignored by git and by the Docker build context for that reason.
+The Triangle MicroWorks adapter is on hold (see [PLAN.md](PLAN.md#triangle-microworks-dnp3-scl-on-hold)); when it resumes, it builds from a source archive supplied at build time. Never commit that source, a part of it or anything derived from it beyond the adapter's own code; `adapters/tmw/vendor/` is ignored by git and by the Docker build context for that reason.
 
 ## Adding a fixture
 
