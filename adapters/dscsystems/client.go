@@ -352,7 +352,7 @@ func runClient(argv []string) int {
 		return exitUsage
 	}
 	op := argv[0]
-	if !slices.Contains(operations, op) && !slices.Contains(fileOperations, op) {
+	if !slices.Contains(operations, op) && !slices.Contains(fileOperations, op) && !slices.Contains(attributeOperations, op) {
 		logf("client: unknown operation '%s'", op)
 		return exitUsage
 	}
@@ -364,6 +364,10 @@ func runClient(argv []string) int {
 		flags = append(flags, "name")
 	case "file-put":
 		flags = append(flags, "name", "content")
+	case "attribute-read":
+		flags = append(flags, "set", "variation")
+	case "attribute-write":
+		flags = append(flags, "set", "variation", "text", "uint", "int")
 	case "event-poll", "enable-unsolicited", "disable-unsolicited":
 		flags = append(flags, "classes")
 	case "read":
@@ -388,6 +392,7 @@ func runClient(argv []string) int {
 		port, local, remote, connectTimeout, timeout, collect, duration int64
 		req                                                             request
 		freq                                                            fileRequest
+		areq                                                            attributeRequest
 		tr                                                              transport
 		sec                                                             security
 	)
@@ -419,10 +424,13 @@ func runClient(argv []string) int {
 		}
 	}
 	fileOp := slices.Contains(fileOperations, op)
+	attributeOp := slices.Contains(attributeOperations, op)
 	switch {
 	case err != nil, op == "monitor":
 	case fileOp:
 		freq, err = parseFileOperation(op, a)
+	case attributeOp:
+		areq, err = parseAttributeOperation(op, a)
 	default:
 		req, err = parseOperation(op, a)
 	}
@@ -469,6 +477,7 @@ func runClient(argv []string) int {
 	var fail *failure
 	var res result
 	var fres fileResult
+	var attributes []object
 	switch {
 	case !connected:
 		fail = &failure{"connect-failed", "no connection to " + addr}
@@ -494,6 +503,11 @@ func runClient(argv []string) int {
 			name := "SUCCESS"
 			fres.status = &name
 		}
+	case attributeOp:
+		opCtx, opCancel := context.WithTimeout(ctx, 3*time.Duration(timeout)*time.Millisecond+2*time.Second)
+		err := areq(opCtx, session, &attributes)
+		opCancel()
+		fail = classify(err, session.Connected())
 	default:
 		// The library bounds every request by the response timeout; this only
 		// guards against a task that never reports.
@@ -571,6 +585,12 @@ func runClient(argv []string) int {
 	if op == "restart" {
 		// The library does not hand the announced delay to the caller.
 		doc = append(doc, field{"restartDelayMs", nil})
+	}
+	if op == "attribute-read" {
+		if attributes == nil {
+			attributes = []object{}
+		}
+		doc = append(doc, field{"attributes", attributes})
 	}
 	if fileOp {
 		switch {

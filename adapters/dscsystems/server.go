@@ -409,7 +409,7 @@ func runServer(argv []string) int {
 		files.Handler = fileEvents{h}
 	}
 	ctrl := &controls{fx: fx}
-	session := outstation.New(outstation.Config{
+	config := outstation.Config{
 		LocalAddr:      uint16(local),
 		RemoteAddr:     uint16(remote),
 		Database:       counts,
@@ -421,7 +421,9 @@ func runServer(argv []string) int {
 		Log:            libraryLog(),
 
 		SecureAuthentication: sec.outstation(),
-	}, &application{fx: fx}, ctrl)
+	}
+	attributeConfig(fx, &config)
+	session := outstation.New(config, &application{fx: fx}, ctrl)
 	ctrl.session = session
 	if err := configure(session.Database(), fx); err != nil {
 		logf("server: fixture %s: %v", path, err)
