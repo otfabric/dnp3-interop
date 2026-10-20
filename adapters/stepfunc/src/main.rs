@@ -150,6 +150,9 @@ fn print_capabilities() -> i32 {
             "dualEndpointServer": true,
             "dualEndpointClient": true,
             "dualEndpointClientTls": false,
+            // Not in the library: no secure authentication, no g121/g122.
+            "securityStatisticsServer": false,
+            "securityStatisticsClient": false,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],

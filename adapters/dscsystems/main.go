@@ -69,6 +69,7 @@ const usage = `usage: dnp3-interop <command>
   TRANSPORT: [--transport tcp|udp|serial]
              serial: --serial-device PATH [--baud N] [--data-bits 7|8] [--parity none|even|odd] [--stop-bits 1|2]
   SA: [--sa-update-key HEX [--sa-user N] [--sa-mac hmac-sha256-16]]
+      server: [--sa-statistics-class 1|2|3] [--sa-statistics-threshold N]
 
 See docs/CONTAINER_CONTRACT.md in https://github.com/otfabric/dnp3-interop
 `
@@ -146,6 +147,10 @@ func printCapabilities() int {
 			{"dualEndpointServer", true},
 			{"dualEndpointClient", true},
 			{"dualEndpointClientTls", true},
+			// Security statistics: served with secure authentication on;
+			// the adapter decodes g121/g122 itself (the library drops them).
+			{"securityStatisticsServer", true},
+			{"securityStatisticsClient", true},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
