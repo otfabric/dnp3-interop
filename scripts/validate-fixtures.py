@@ -77,9 +77,8 @@ def value_errors(kind, p):
             errors.append(f"{where}: value {v} does not fit a 16-bit variation")
         return errors
     if kind in ANALOG:
-        if s in INTEGER_ANALOG[kind] or (p.get("class", 0) and e in INTEGER_ANALOG_EVENT[kind]):
-            if v != int(v):
-                errors.append(f"{where}: value {v} is not an integer, but a variation of the point is")
+        if (s in INTEGER_ANALOG[kind] or (p.get("class", 0) and e in INTEGER_ANALOG_EVENT[kind])) and v != int(v):
+            errors.append(f"{where}: value {v} is not an integer, but a variation of the point is")
         if s in SIXTEEN_BIT[kind] or (p.get("class", 0) and e in SIXTEEN_BIT_EVENT[kind]):
             if not -32768 <= v <= 32767:
                 errors.append(f"{where}: value {v} does not fit a 16-bit variation")
@@ -152,6 +151,16 @@ def semantic_errors(fx):
         if key in seen:
             errors.append(f"deviceAttributes: set {key[0]} variation {key[1]} is listed twice")
         seen.add(key)
+        # The schema counts characters (maxLength: 255); the length octet on
+        # the wire also limits the UTF-8 encoding to 255 octets.
+        value = a.get("value")
+        if a.get("type") == "visibleString" and isinstance(value, str):
+            octets = len(value.encode("utf-8"))
+            if octets > 255:
+                errors.append(
+                    f"deviceAttributes: set {key[0]} variation {key[1]}: value takes {octets} octets of UTF-8; "
+                    "a device attribute carries at most 255"
+                )
     out = fx.get("outstation", {})
     if out.get("address") is not None and out.get("address") == out.get("masterAddress"):
         errors.append("outstation: address and masterAddress are equal")

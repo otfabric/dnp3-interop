@@ -120,7 +120,7 @@ the feature `deviceAttributesServer` serves a fixture with `deviceAttributes`.
 
 | Field | Meaning |
 |-------|---------|
-| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt", "value", "writable": false }]`; a `visibleString` value has at most 255 characters (the stepfunc and dscsystems adapters count octets). Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
+| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt", "value", "writable": false }]`; a `visibleString` value has at most 255 characters and must also fit in 255 octets of UTF-8 (the length octet on the wire); an adapter refuses a longer one (exit 4). Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
 
 A writable attribute accepts a WRITE of the same type, which replaces its
 value until the outstation restarts.

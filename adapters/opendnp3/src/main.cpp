@@ -109,6 +109,11 @@ int print_capabilities()
           {"fileServer", false},
           {"fileClient", false},
           {"fileDeleteClient", false},
+          // Contract 1.3: append and AUTHENTICATE_FILE, neither role.
+          {"fileAppendServer", false},
+          {"fileAppendClient", false},
+          {"fileAuthServer", false},
+          {"fileAuthClient", false},
           {"secureAuthentication", false},
           // Contract 1.2. The master decodes command events (g13, g43) and
           // g50v4; the library knows no frozen analogs, and its outstation
@@ -153,7 +158,12 @@ int print_capabilities()
           {"freezeAtTimeServer", false},
           {"freezeAtTimeClient", false},
           {"analogFreezeServer", false},
-          {"analogFreezeClient", true}}},
+          {"analogFreezeClient", true},
+          // Contract 1.3: opendnp3 3.x has no group 34 in either role.
+          {"deadbandWriteServer", false},
+          {"deadbandWriteClient", false},
+          {"deadbandReadServer", false},
+          {"deadbandReadClient", false}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},
@@ -167,7 +177,8 @@ int print_capabilities()
 
 int print_fixture(const std::string& name)
 {
-    if (name.empty() || name.find('/') != std::string::npos || name.find("..") != std::string::npos)
+    if (name.empty() || name.find('/') != std::string::npos || name.find('\\') != std::string::npos
+        || name.find("..") != std::string::npos)
     {
         adapter::logf("print-fixture: '%s' is not a fixture name", name.c_str());
         return adapter::kExitUsage;

@@ -28,7 +28,7 @@ var timed = map[[2]uint8]bool{
 	{2, 2}: true, {2, 3}: true, {4, 2}: true, {4, 3}: true, {11, 2}: true, {21, 5}: true, {21, 6}: true,
 	{22, 5}: true, {22, 6}: true, {23, 5}: true, {23, 6}: true, {32, 3}: true, {32, 4}: true, {32, 7}: true,
 	{32, 8}: true, {42, 3}: true, {42, 4}: true, {42, 7}: true, {42, 8}: true,
-	{13, 2}: true, {33, 3}: true, {33, 4}: true, {33, 7}: true, {33, 8}: true,
+	{13, 2}: true, {31, 3}: true, {31, 4}: true, {33, 3}: true, {33, 4}: true, {33, 7}: true, {33, 8}: true,
 	{43, 3}: true, {43, 4}: true, {43, 7}: true, {43, 8}: true,
 }
 
@@ -508,29 +508,27 @@ func runClient(argv []string) int {
 		UseLinkConfirms:      a.has("link-confirms"),
 		KeepAlive:            time.Duration(keepAlive) * time.Millisecond,
 	}, h)
-	inner, addr, err := clientChannel(tr, host, port)
-	if err != nil {
-		// Certificate files that cannot be used.
-		emit(object{{"schemaVersion", schemaVersion}, {"adapter", adapter}, {"operation", op}, {"ok", false},
-			{"error", object{{"code", "failed"}, {"message", err.Error()}}}, {"connected", false}, {"iin", nil},
-			{"objects", []object{}}, {"elapsedMs", time.Since(started).Milliseconds()}})
-		return exitFailed
-	}
-	ch := statisticsChannel{Channel: inner, h: h}
+	// Certificate files that cannot be used fail the operation before it
+	// starts; the result document is the complete one all the same.
+	inner, addr, channelErr := clientChannel(tr, host, port)
 	ctx, cancel := context.WithCancel(context.Background())
 	runDone := make(chan struct{})
-	go func() {
-		_ = session.Run(ctx, ch)
-		close(runDone)
-	}()
-
 	connected := false
-	for deadline := time.Now().Add(time.Duration(connectTimeout) * time.Millisecond); time.Now().Before(deadline); {
-		if session.Connected() {
-			connected = true
-			break
+	if channelErr == nil {
+		ch := statisticsChannel{Channel: inner, h: h}
+		go func() {
+			_ = session.Run(ctx, ch)
+			close(runDone)
+		}()
+		for deadline := time.Now().Add(time.Duration(connectTimeout) * time.Millisecond); time.Now().Before(deadline); {
+			if session.Connected() {
+				connected = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-		time.Sleep(10 * time.Millisecond)
+	} else {
+		close(runDone)
 	}
 
 	var fail *failure
@@ -538,6 +536,8 @@ func runClient(argv []string) int {
 	var fres fileResult
 	var attributes []object
 	switch {
+	case channelErr != nil:
+		fail = &failure{"failed", channelErr.Error()}
 	case !connected:
 		fail = &failure{"connect-failed", "no connection to " + addr}
 	case op == "monitor":
@@ -706,6 +706,8 @@ func classify(err error, connected bool) *failure {
 		return &failure{"rejected", err.Error()}
 	case errors.Is(err, dnp3.ErrNoConnection), errors.Is(err, dnp3.ErrClosed), !connected:
 		return &failure{"connection-lost", err.Error()}
+	case errors.Is(err, errPartialEcho):
+		return &failure{"failed", err.Error()}
 	}
 	// CommandResult.Err: a status other than SUCCESS; the caller decides
 	// between rejected and command-failed from the IIN.

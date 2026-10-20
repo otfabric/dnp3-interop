@@ -17,19 +17,22 @@ arrived in, which the SOE handler interface does not carry.
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import signal
 import struct
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC
 from importlib.metadata import version as package_version
 
 from dnp3.application.fragment import ObjectBlock, RequestFragment
 from dnp3.application.header import RequestHeader
+from dnp3.application.parser import ParseError as FragmentParseError
 from dnp3.application.qualifiers import ObjectHeader, PrefixCode, RangeCode
 from dnp3.core.enums import CommandStatus, FunctionCode
+from dnp3.core.exceptions import DNP3Error
 from dnp3.core.flags import AnalogQuality, BinaryQuality, CounterQuality
 from dnp3.database import (
     AnalogInputConfig,
@@ -56,9 +59,23 @@ from dnp3.master.master import (
     _decode_object_layout,
     _iter_object_slots,
 )
-from dnp3.master.tcp_runner import LinkError, LinkResetPolicy, MasterRunnerError, MasterTcpRunner, ResponseTimeoutError
+from dnp3.master.tcp_runner import (
+    LinkError,
+    LinkResetPolicy,
+    MasterRunnerError,
+    MasterTcpRunner,
+    ResponseTimeoutError,
+)
 from dnp3.objects.layout import layout_for
-from dnp3.outstation import CommandResult, Outstation, OutstationConfig, OutstationTcpRunner, UnsolicitedConfig
+from dnp3.outstation import (
+    CommandResult,
+    Outstation,
+    OutstationConfig,
+    OutstationTcpRunner,
+    UnsolicitedConfig,
+)
+from dnp3.transport.reassembler import ReassemblyError
+from dnp3.transport_io.channel import ChannelError
 
 ADAPTER = "dnp3py"
 SCHEMA_VERSION = "1.0"
@@ -75,10 +92,10 @@ OPERATIONS = [
 USAGE = """usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
-         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [--transport tcp] [LINK]
          (serves fixtures within dnp3py's limits: fixtures/dnp3py)
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [LINK] [operation flags]
+         [--collect-ms N] [--transport tcp] [LINK] [operation flags]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
@@ -234,9 +251,18 @@ class Args:
             v = float(self.required(name))
         except ValueError:
             v = None
-        if v is None or v != v or v in (float("inf"), float("-inf")):
+        if v is None or not math.isfinite(v):
             raise UsageError(f"--{name} must be a number")
         return v
+
+    def transport(self):
+        """--transport: tcp, the one transport dnp3py has; udp and serial need features it lacks."""
+        t = self.str("transport", "tcp")
+        if t in ("udp", "serial"):
+            raise UsageError(f"--transport {t}: this image has TCP only (feature {t} is false)")
+        if t != "tcp":
+            raise UsageError("--transport must be tcp, udp or serial")
+        return t
 
     def classes(self, name, default, minimum):
         out = []
@@ -262,6 +288,9 @@ class Recorder:
         self.iin = None
         self.statuses = []
         self.delay_ms = None
+        # operate-multi: the statuses of the last request's echo (the OPERATE,
+        # or the SELECT when the select failed); None until one is sent.
+        self.echo = None
 
     def record(self, blocks, info):
         unsolicited = info.is_unsolicited
@@ -560,14 +589,21 @@ def parse_operate_multi(a):
         else:
             raise UsageError(f"--controls: '{item}' is not a control type with a value in its range")
 
+    async def echo(c, function):
+        """Sends the request and keeps the statuses of its echo, and only those, in recorder.echo."""
+        c.recorder.echo = []
+        before = len(c.recorder.statuses)
+        await c.request(function, objs)
+        c.recorder.echo = c.recorder.statuses[before:]
+        return c.recorder.echo
+
     async def run(c):
         if mode == "direct":
-            await c.request(FunctionCode.DIRECT_OPERATE, objs)
+            await echo(c, FunctionCode.DIRECT_OPERATE)
             return
-        await c.request(FunctionCode.SELECT, objs)
-        last = c.recorder.statuses[-len(objs):]
-        if len(last) == len(objs) and not any(last) and not (c.recorder.iin or 0) & REQUEST_ERRORS:
-            await c.request(FunctionCode.OPERATE, objs)
+        selected = await echo(c, FunctionCode.SELECT)
+        if len(selected) == len(objs) and not any(selected) and not (c.recorder.iin or 0) & REQUEST_ERRORS:
+            await echo(c, FunctionCode.OPERATE)
 
     run.count = len(objs)
     return run
@@ -618,7 +654,10 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
     try:
         await asyncio.wait_for(runner.open(), connect_timeout)
         connected = True
-    except Exception as exc:  # noqa: BLE001 - dnp3py's ChannelConnectionError, OSError, a timeout: no connection
+    # What opening can raise: the channel's ChannelConnectionError and
+    # ChannelTimeoutError (both ChannelError), the runner's MasterRunnerError,
+    # an OSError the channel does not wrap, and wait_for's TimeoutError.
+    except (ChannelError, MasterRunnerError, OSError, TimeoutError) as exc:
         failure = Failure("connect-failed", f"no connection to {host}:{port}: {exc}")
 
     if connected:
@@ -635,16 +674,39 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             failure = Failure("connection-lost", str(exc))
         except MasterRunnerError as exc:
             failure = Failure("failed", str(exc))
-        except Exception as exc:  # noqa: BLE001 - the contract wants a result document in every case
+        # The contract wants a result document in every case: the rest of
+        # what dnp3py raises (its DNP3Error hierarchy, the fragment parser's
+        # ParseError, the channel's and the reassembler's errors when the
+        # runner does not wrap them), an OSError, and what decoding a
+        # malformed response raises in the decoders (ValueError, struct.error,
+        # an index or key out of range, an out-of-range timestamp).
+        except (
+            DNP3Error,
+            FragmentParseError,
+            ChannelError,
+            ReassemblyError,
+            OSError,
+            ValueError,
+            struct.error,
+            LookupError,
+            ArithmeticError,
+        ) as exc:
             failure = Failure("failed", f"{type(exc).__name__}: {exc}")
 
     command_status = recorder.statuses[-1] if recorder.statuses else None
     command_statuses = None
-    if op == "operate-multi" and len(recorder.statuses) >= request.count:
-        # The statuses of the last response: the OPERATE, or the SELECT that failed.
-        command_statuses = recorder.statuses[-request.count:]
-        command_status = next((s for s in command_statuses if s != 0), 0)
-    recorder.command_statuses = command_statuses
+    if op == "operate-multi":
+        # One status per control echoed in the last response: the OPERATE, or
+        # the SELECT that failed. The first refusal decides, not the last
+        # status received.
+        command_status = None
+        if recorder.echo:
+            command_statuses = recorder.echo
+            command_status = next((s for s in command_statuses if s != 0), 0)
+    # One status per control or null: a partial echo has no entry for the
+    # controls without one, so its commandStatuses is null as no echo is.
+    partial = op == "operate-multi" and command_statuses is not None and len(command_statuses) < request.count
+    recorder.command_statuses = None if partial else command_statuses
     if failure is None and connected and op != "monitor":
         if (recorder.iin or 0) & REQUEST_ERRORS and not getattr(request, "no_response", False):
             message = "the outstation refused the request (IIN2)"
@@ -655,6 +717,8 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             recorder.command_statuses = None
         elif op in ("operate", "operate-multi") and command_status is not None and command_status != 0:
             failure = Failure("command-failed", f"the outstation answered {status_name(command_status)}")
+        elif partial:
+            failure = Failure("failed", f"the outstation echoed {len(command_statuses)} of {request.count} controls")
         elif op in ("operate", "operate-multi") and command_status is None and not getattr(request, "no_response", False):
             failure = Failure("failed", "the outstation's echo did not carry a status")
         elif op == "restart" and recorder.delay_ms is None:
@@ -683,7 +747,7 @@ def client_main(argv):
     if op not in OPERATIONS:
         log(f"client: unknown operation '{op}'")
         return EXIT_USAGE
-    flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms"}
+    flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "transport"}
     switches = set()
     flags |= {
         "event-poll": {"classes"}, "enable-unsolicited": {"classes"}, "disable-unsolicited": {"classes"},
@@ -697,6 +761,7 @@ def client_main(argv):
         switches = {"clear", "no-ack"}
     try:
         a = Args(argv[1:], flags, switches)
+        a.transport()
         host = a.required("host")
         port = a.integer("port", 20000, 1, 65535)
         local = a.integer("local-addr", 1, 0, 65519)
@@ -713,7 +778,8 @@ def client_main(argv):
     if request is not None and no_response:
         inner = request
 
-        async def request(c):  # noqa: F811 - marks the request as one without a response
+        # A request without a response: the same request, marked as such.
+        async def request(c):
             await inner(c)
 
         request.no_response = True
@@ -1115,7 +1181,8 @@ def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
 def server_main(argv):
     try:
         a = Args(argv, ["fixture", "bind-address", "port", "ready-file", "select-timeout-ms", "confirm-timeout-ms",
-                        "local-addr", "remote-addr"])
+                        "local-addr", "remote-addr", "transport"])
+        a.transport()
         path = a.str("fixture", DEFAULT_FIXTURE)
         bind = a.str("bind-address", "0.0.0.0")
         port = a.integer("port", 20000, 1, 65535)
@@ -1139,6 +1206,12 @@ def server_main(argv):
     return asyncio.run(serve(outstation, fx, bind, port, ready_file, local, remote))
 
 
+def write_ready_file(path):
+    """Creates the readiness file, empty."""
+    with open(path, "w", encoding="utf-8"):
+        pass
+
+
 async def serve(outstation, fx, bind, port, ready_file, local, remote):
     runner = EventRunner(outstation=outstation, host=bind, port=port)
     task = asyncio.create_task(runner.run())
@@ -1152,8 +1225,7 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
             return EXIT_FAILED
         await asyncio.sleep(0.01)
     try:
-        with open(ready_file, "w", encoding="utf-8"):
-            pass
+        await asyncio.to_thread(write_ready_file, ready_file)
     except OSError as e:
         log(f"server: cannot write the readiness file {ready_file}: {e}")
         return EXIT_FAILED
@@ -1164,18 +1236,24 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     done, _ = await asyncio.wait([task, asyncio.create_task(stop.wait())], return_when=asyncio.FIRST_COMPLETED)
-    if task in done:
-        log(f"server: the runner ended: {task.exception() if not task.cancelled() else 'cancelled'}")
+    signalled = stop.is_set()
+    if task in done and not signalled:
+        log(f"server: the runner ended without a signal: {task.exception() if not task.cancelled() else 'cancelled'}")
     try:
         os.remove(ready_file)
     except OSError:
         pass
     await runner.stop()
     task.cancel()
-    try:
-        await asyncio.wait_for(task, 2)
-    except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
-        pass
+    # Wait for the cancelled runner, at most 2 s; how it ended was logged
+    # above when it ended on its own.
+    finished, _ = await asyncio.wait({task}, timeout=2)
+    if signalled and task in finished and not task.cancelled() and task.exception() is not None:
+        log(f"server: the runner ended: {task.exception()}")
+    # A clean stop is one asked for by SIGTERM or SIGINT; a runner that ends
+    # on its own is a failure, without the stopped event.
+    if not signalled:
+        return EXIT_FAILED
     emit({"event": "stopped"})
     return EXIT_OK
 
@@ -1224,6 +1302,10 @@ def print_capabilities():
             "fileServer": False,
             "fileClient": False,
             "fileDeleteClient": False,
+            "fileAppendServer": False,
+            "fileAppendClient": False,
+            "fileAuthServer": False,
+            "fileAuthClient": False,
             "secureAuthentication": False,
             # Contract 1.2: the decoders know none of g13, g31, g33, g43, g50v4.
             "commandEventsServer": False,
@@ -1264,6 +1346,12 @@ def print_capabilities():
             "freezeAtTimeClient": True,
             "analogFreezeServer": False,
             "analogFreezeClient": True,
+            # Contract 1.3: neither role reads or writes group 34 (the
+            # outstation's deadbands are configuration only).
+            "deadbandWriteServer": False,
+            "deadbandWriteClient": False,
+            "deadbandReadServer": False,
+            "deadbandReadClient": False,
         },
         "pointTypes": list(SERVED),
         # Contract 1.2: what the outstation does differently from the master.
@@ -1273,7 +1361,6 @@ def print_capabilities():
             "read": False,
             "unsolicited": False,
             "octetStrings": False,
-            "timeSyncOnDemand": True,
         },
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": OPERATIONS,

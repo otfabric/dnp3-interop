@@ -43,7 +43,7 @@ const OPERATIONS: [&str; 13] = [
 ];
 
 /// Variations with a time stamp; objects of other variations carry no `time`.
-const TIMED: [(u8, u8); 28] = [
+const TIMED: [(u8, u8); 30] = [
     (2, 2),
     (2, 3),
     (4, 2),
@@ -64,6 +64,8 @@ const TIMED: [(u8, u8); 28] = [
     (42, 7),
     (42, 8),
     (13, 2),
+    (31, 3),
+    (31, 4),
     (33, 3),
     (33, 4),
     (33, 7),
@@ -841,9 +843,10 @@ pub fn run(argv: &[String]) -> i32 {
     flags.extend(transport::CLIENT_FLAGS);
     let mut switches: Vec<&str> = transport::CLIENT_SWITCHES.to_vec();
     match op {
-        "file-get" | "file-ls" | "file-info" => {
-            flags.extend(["name", "file-user", "file-password"])
-        }
+        "file-get" | "file-ls" => flags.extend(["name", "file-user", "file-password"]),
+        // GET_FILE_INFO carries no authentication key: the credentials are
+        // a usage error here, as any flag an operation does not take.
+        "file-info" => flags.push("name"),
         "file-put" => {
             flags.extend(["name", "content", "file-user", "file-password"]);
             switches.push("append");
@@ -919,29 +922,34 @@ pub fn run(argv: &[String]) -> i32 {
     };
 
     let started = Instant::now();
-    let runtime = match tokio::runtime::Runtime::new() {
-        Ok(r) => r,
-        Err(e) => {
-            logf!("client: {e}");
-            return EXIT_FAILED;
-        }
-    };
     let received = Arc::new(Mutex::new(Received::default()));
     let mut file_result = FileResult::default();
-    let (connected, failure, command_status, restart_delay) = runtime.block_on(execute(
-        transport,
-        &mut file_result,
-        host,
-        port,
-        local,
-        remote,
-        Duration::from_millis(connect_timeout),
-        Duration::from_millis(timeout),
-        Duration::from_millis(collect),
-        (keep_alive > 0).then(|| Duration::from_millis(keep_alive)),
-        operation,
-        received.clone(),
-    ));
+    // A runtime that cannot be created is a failure of the operation like
+    // any other: it gets its result document (contract: `failed`, exit 1).
+    let (connected, failure, command_status, restart_delay) = match new_runtime() {
+        Ok(runtime) => runtime.block_on(execute(
+            transport,
+            &mut file_result,
+            Settings {
+                host,
+                port,
+                local,
+                remote,
+                connect_timeout: Duration::from_millis(connect_timeout),
+                timeout: Duration::from_millis(timeout),
+                collect: Duration::from_millis(collect),
+                keep_alive: (keep_alive > 0).then(|| Duration::from_millis(keep_alive)),
+            },
+            operation,
+            received.clone(),
+        )),
+        Err(e) => (
+            false,
+            Some(fail("failed", format!("cannot create the runtime: {e}"))),
+            None,
+            None,
+        ),
+    };
 
     let r = received.lock().unwrap_or_else(|e| e.into_inner());
     let reads = matches!(op, "integrity-poll" | "event-poll" | "read");
@@ -986,21 +994,51 @@ pub fn run(argv: &[String]) -> i32 {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The tokio runtime of the operation. One operation needs no worker
+/// threads: a current-thread runtime starts none, so it cannot fail for want
+/// of them (tokio panics, not errs, when the OS refuses a worker thread).
+fn new_runtime() -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+}
+
+/// The master's settings from the command line.
+struct Settings {
+    /// The outstation's host, or the address to listen on with --listen.
+    host: String,
+    port: u16,
+    /// The master's link address.
+    local: u16,
+    /// The outstation's link address.
+    remote: u16,
+    /// --connect-timeout-ms.
+    connect_timeout: Duration,
+    /// --timeout-ms.
+    timeout: Duration,
+    /// --collect-ms.
+    collect: Duration,
+    /// --keep-alive-ms, None for 0.
+    keep_alive: Option<Duration>,
+}
+
 async fn execute(
     transport: Transport,
     file_result: &mut FileResult,
-    host: String,
-    port: u16,
-    local: u16,
-    remote: u16,
-    connect_timeout: Duration,
-    timeout: Duration,
-    collect: Duration,
-    keep_alive: Option<Duration>,
+    settings: Settings,
     operation: Op,
     received: Arc<Mutex<Received>>,
 ) -> (bool, Option<Failure>, Option<u8>, Option<u64>) {
+    let Settings {
+        host,
+        port,
+        local,
+        remote,
+        connect_timeout,
+        timeout,
+        collect,
+        keep_alive,
+    } = settings;
     let (Ok(master_address), Ok(outstation_address)) = (
         EndpointAddress::try_new(local),
         EndpointAddress::try_new(remote),
@@ -1081,20 +1119,31 @@ async fn execute(
         ),
         (Kind::Udp, _) => {
             // No connection to wait for: the channel is "connected" once its
-            // socket exists. An outstation that cannot be resolved is not
-            // there to connect to.
-            let Some(destination) = transport::resolve(&address) else {
-                return (
-                    false,
-                    Some(fail("connect-failed", format!("cannot resolve {address}"))),
-                    None,
-                    None,
-                );
-            };
+            // socket is open. Resolving the outstation and opening the socket
+            // are bounded by --connect-timeout-ms, and either failing is
+            // connect-failed (contract 1.1, UDP).
+            let local = SocketAddr::from(([0, 0, 0, 0], transport.udp_local_port));
+            let destination =
+                match tokio::time::timeout(connect_timeout, open_udp(&address, local)).await {
+                    Ok(Ok(destination)) => destination,
+                    Ok(Err(message)) => {
+                        return (false, Some(fail("connect-failed", message)), None, None)
+                    }
+                    Err(_) => {
+                        return (
+                            false,
+                            Some(fail(
+                                "connect-failed",
+                                format!("cannot resolve {address} in time"),
+                            )),
+                            None,
+                            None,
+                        )
+                    }
+                };
             udp_destination = Some(destination);
-            let _ = tx.send(true);
             spawn_master_udp(
-                SocketAddr::from(([0, 0, 0, 0], transport.udp_local_port)),
+                local,
                 LinkReadMode::Datagram,
                 Timeout::from_secs(1).expect("valid timeout"),
                 config,
@@ -1175,19 +1224,46 @@ async fn execute(
     if let Err(e) = channel.enable().await {
         return (false, Some(fail("failed", format!("{e}"))), None, None);
     }
-
-    let connected = tokio::time::timeout(connect_timeout, async {
-        loop {
-            if *rx.borrow_and_update() {
-                return true;
-            }
-            if rx.changed().await.is_err() {
-                return false;
-            }
+    if udp_destination.is_some() {
+        // The library opens its socket in a task of its own, retries a
+        // failure forever and does not say when it succeeded: with a fixed
+        // port, wait for the socket in the kernel's table.
+        let port = transport.udp_local_port;
+        let bound = port == 0
+            || tokio::time::timeout(connect_timeout, async {
+                while !transport::udp_bound(port) {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .is_ok();
+        if !bound {
+            return (
+                false,
+                Some(fail(
+                    "connect-failed",
+                    format!("cannot open the UDP socket on port {port}"),
+                )),
+                None,
+                None,
+            );
         }
-    })
-    .await
-    .unwrap_or(false);
+    }
+
+    // UDP has no connection: it is connected once the socket is open.
+    let connected = udp_destination.is_some()
+        || tokio::time::timeout(connect_timeout, async {
+            loop {
+                if *rx.borrow_and_update() {
+                    return true;
+                }
+                if rx.changed().await.is_err() {
+                    return false;
+                }
+            }
+        })
+        .await
+        .unwrap_or(false);
     if !connected {
         return (
             false,
@@ -1375,6 +1451,12 @@ pub fn attribute_value(v: &AttrValue) -> (&'static str, Value) {
         AttrValue::OctetString(o) => ("octetString", json!(to_hex(o))),
         AttrValue::BitString(o) => ("bitString", json!(to_hex(o))),
         AttrValue::Dnp3Time(t) => ("time", json!(format_time(t.raw_value()))),
+        // The library parses g0 type 254 (list) and 255 (extended list) into
+        // the same AttrList; an extended list holds 256..511 octets, two per
+        // item, so at least 128 items, and a plain one at most 127.
+        AttrValue::AttrList(list) if list.iter().count() >= 128 => {
+            ("extendedAttributeList", json!(null))
+        }
         AttrValue::AttrList(_) => ("attributeList", json!(null)),
     }
 }
@@ -1486,4 +1568,22 @@ fn freeze_time(text: &str) -> Result<u64, UsageError> {
         Some(ms) if ms < (1 << 48) => Ok(ms),
         _ => usage("--at must be immediately, +MS or milliseconds since the epoch"),
     }
+}
+
+/// Resolves the outstation and checks that the master's UDP socket can be
+/// opened (the library binds it later, in its own task, and only logs a
+/// failure). Errors are the message of a connect-failed.
+async fn open_udp(address: &str, local: SocketAddr) -> Result<SocketAddr, String> {
+    let destination = tokio::net::lookup_host(address)
+        .await
+        .ok()
+        .and_then(|mut addrs| addrs.next())
+        .ok_or_else(|| format!("cannot resolve {address}"))?;
+    // The probe is closed again before the library binds the same address.
+    drop(
+        tokio::net::UdpSocket::bind(local)
+            .await
+            .map_err(|e| format!("cannot open the UDP socket on {local}: {e}"))?,
+    );
+    Ok(destination)
 }

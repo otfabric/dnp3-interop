@@ -6,6 +6,11 @@
 
 #include <opendnp3/channel/TLSConfig.h>
 
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+
+#include <memory>
+
 using namespace opendnp3;
 
 namespace adapter
@@ -48,6 +53,28 @@ TLSConfig tls_config(const Transport& t)
     return TLSConfig(t.ca, t.cert, t.key, false, false, true, true);
 }
 } // namespace
+
+std::string tls_files_error(const Transport& t)
+{
+    // The calls of opendnp3's SSLContext::ApplyConfig, through asio:
+    // load_verify_file, use_certificate_chain_file, use_private_key_file.
+    std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> ctx(SSL_CTX_new(TLS_method()), SSL_CTX_free);
+    if (!ctx)
+        return "cannot create a TLS context";
+    const auto failed = [](const std::string& what, const std::string& path) {
+        char reason[256] = {0};
+        ERR_error_string_n(ERR_get_error(), reason, sizeof(reason));
+        ERR_clear_error();
+        return "cannot load the " + what + " " + path + ": " + reason;
+    };
+    if (SSL_CTX_load_verify_locations(ctx.get(), t.ca.c_str(), nullptr) != 1)
+        return failed("CA", t.ca);
+    if (SSL_CTX_use_certificate_chain_file(ctx.get(), t.cert.c_str()) != 1)
+        return failed("certificate", t.cert);
+    if (SSL_CTX_use_PrivateKey_file(ctx.get(), t.key.c_str(), SSL_FILETYPE_PEM) != 1)
+        return failed("private key", t.key);
+    return "";
+}
 
 Transport parse_transport(const Args& args, bool server)
 {

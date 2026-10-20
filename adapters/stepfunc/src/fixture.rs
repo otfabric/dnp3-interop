@@ -548,6 +548,26 @@ mod tests {
         assert_eq!(fx.address, 1024);
         assert_eq!(fx.points("binaryInputs").len(), 5);
     }
+
+    /// The attributes fixture with the text of its first attribute replaced.
+    fn with_text(text: &str) -> Result<super::Fixture, String> {
+        let mut fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/attributes/fixture.json"))
+                .expect("attributes");
+        fx["deviceAttributes"][0]["value"] = serde_json::json!(text);
+        super::load(&fx.to_string())
+    }
+
+    #[test]
+    fn visible_strings_are_counted_in_characters() {
+        assert!(with_text(&"a".repeat(255)).is_ok());
+        assert!(with_text(&"a".repeat(256)).is_err());
+        // 200 characters within the schema's limit, 400 octets beyond what
+        // a device attribute carries.
+        let err = with_text(&"\u{e9}".repeat(200)).err().expect("too long");
+        assert!(err.contains("400 octets"), "{err}");
+        assert!(with_text(&"\u{e9}".repeat(127)).is_ok());
+    }
 }
 
 fn check_attributes(list: &Value, out: &mut Fixture, errors: &mut Vec<String>) {
@@ -590,9 +610,11 @@ fn check_attributes(list: &Value, out: &mut Fixture, errors: &mut Vec<String>) {
         };
         let v = o.get("value");
         let value = match o.get("type").and_then(Value::as_str) {
+            // At most 255 characters, as the fixture schema counts them
+            // (maxLength: Unicode code points).
             Some("visibleString") => v
                 .and_then(Value::as_str)
-                .filter(|s| s.len() <= 255)
+                .filter(|s| s.chars().count() <= 255)
                 .map(|s| AttributeValue::Text(s.to_string())),
             Some("unsignedInt") => v
                 .and_then(Value::as_u64)
@@ -615,6 +637,17 @@ fn check_attributes(list: &Value, out: &mut Fixture, errors: &mut Vec<String>) {
             ));
             continue;
         };
+        // The length octet on the wire limits the UTF-8 encoding to 255
+        // octets: a valid string the outstation cannot send.
+        if let AttributeValue::Text(t) = &value {
+            if t.len() > 255 {
+                errors.push(format!(
+                    "deviceAttributes[{i}]: value takes {} octets; a device attribute carries at most 255",
+                    t.len()
+                ));
+                continue;
+            }
+        }
         if !seen.insert((set, variation)) {
             errors.push(format!(
                 "deviceAttributes: set {set} variation {variation} is listed twice"

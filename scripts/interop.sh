@@ -148,7 +148,7 @@ hit_known_bug() {
 shared_server() { SERVER_TAG=shared server_name "$1"; }
 for adapter in "${ADAPTERS[@]}"; do
     serves "${adapter}" || continue
-    name=$(SERVER_TAG=shared start_server "${adapter}" "${SERVER_ARGS[@]}")
+    name=$(SERVER_TAG=shared start_server "${adapter}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"})
     wait_ready "${name}" || exit 1
 done
 
@@ -217,7 +217,7 @@ suite() {
                 continue
             fi
             if [[ "${state}" == "rw" ]]; then
-                name=$(SERVER_TAG=rw start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || { fail "${pair}: server did not start"; continue; }
+                name=$(SERVER_TAG=rw start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || { fail "${pair}: server did not start"; continue; }
             else
                 name=$(shared_server "${server}")
             fi
@@ -266,7 +266,7 @@ suite() {
         [[ "${FIXTURE_NAME}" == baseline ]] || continue
 
         # Controls, their events, once; the values a later poll reports.
-        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
         run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
         run_client "${client}" operate --type g41v1 --index 0 --value 42 --host "${name}" >/dev/null
         check "${pair}" "controls produce class 1 events" "g11v2:0=true g2v2:1=true g42v1:0=42" \
@@ -284,7 +284,7 @@ suite() {
 
         # Select-before-operate as the first request after the null unsolicited
         # response of the outstation was confirmed (see tests/known-bugs.tsv).
-        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
         run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --collect-ms 500 --host "${name}" >/dev/null
         check "${pair}" "select-before-operate of a select-required output" "SUCCESS" \
             "$(run_client "${client}" operate --type g12v1 --index 1 --code LATCH_ON --mode sbo --host "${name}" | jq -r '.commandStatus')"
@@ -296,7 +296,7 @@ suite() {
 
         # A freeze without acknowledgement still freezes.
         if supported "${client}" "${server}" "server:freezeNoAckServer,client:freezeNoAckClient"; then
-            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
             run_client "${client}" freeze --no-ack --host "${name}" >/dev/null
             check "${pair}" "a freeze without acknowledgement copies the counters" "g21v1:0=123456 g21v2:1=65535" \
                 "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
@@ -307,7 +307,7 @@ suite() {
 
         # Direct operate without acknowledgement still operates.
         if supported "${client}" "${server}" "server:directOperateNoAckServer,client:directOperateNoAckClient"; then
-            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --mode direct-no-ack --host "${name}" >/dev/null
             run_client "${client}" operate --type g41v2 --index 0 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
             check "${pair}" "direct operate no ack operates" "g10v2:0=true g40v1:0=7" \
@@ -318,13 +318,13 @@ suite() {
         fi
 
         # A restart is answered, also by a master that does not report the delay.
-        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
         check "${pair}" "a cold restart is accepted" "true" \
             "$(run_client "${client}" restart --type cold --host "${name}" | jq -r '.ok')"
         stop_server "${name}"
 
         # Freeze, then freeze and clear.
-        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
         run_client "${client}" freeze --host "${name}" >/dev/null
         check "${pair}" "a freeze copies the counters" "g21v1:0=123456 g21v2:1=65535" \
             "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
@@ -339,7 +339,7 @@ suite() {
 
         # Unsolicited responses: buffered events arrive once a class is enabled.
         if supported "${client}" "${server}" "server:unsolicited,client:unsolicited"; then
-            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
             check "${pair}" "enabling class 1 delivers its events unsolicited" "g11v2u:0=true g2v2u:1=true" \
                 "$(objects "$(run_client "${client}" enable-unsolicited --classes 1 --collect-ms 2000 --host "${name}")")"
@@ -352,7 +352,7 @@ suite() {
 
         # A class assignment moves the events of the binary outputs.
         if supported "${client}" "${server}" "server:assignClassServer,client:assignClassClient"; then
-            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
             run_client "${client}" assign-class --class 2 --group 10 --host "${name}" >/dev/null
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
             check "${pair}" "an assigned class takes the events" "g11v2:0=true" \
@@ -366,7 +366,7 @@ suite() {
 
         # Time synchronization clears NEED_TIME, by either procedure.
         for procedure in lan non-lan; do
-            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
             run_client "${client}" time-sync --procedure "${procedure}" --host "${name}" >/dev/null
             got=$(run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --host "${name}" | jq -c '.iin - ["DEVICE_RESTART"]')
             check "${pair}" "time-sync ${procedure} clears NEED_TIME" "[]" "${got}"

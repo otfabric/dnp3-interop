@@ -97,7 +97,7 @@ def main():
         raise SystemExit(f"usage: latest-upstream.py {'|'.join(RESOLVERS)}")
     adapter = sys.argv[1]
     dockerfile = (ROOT / "adapters" / adapter / "Dockerfile").read_text()
-    match = re.search(r"^ARG UPSTREAM_VERSION=(.+)$", dockerfile, re.M)
+    match = re.search(r"^ARG UPSTREAM_VERSION=(.+)$", dockerfile, re.MULTILINE)
     if not match:
         raise SystemExit(f"adapters/{adapter}/Dockerfile has no ARG UPSTREAM_VERSION=<pin>")
     pin = match.group(1).strip()

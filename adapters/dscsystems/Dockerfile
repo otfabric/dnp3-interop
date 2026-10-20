@@ -3,8 +3,8 @@
 # Build from the repository root:
 #   docker build -f adapters/dscsystems/Dockerfile -t dnp3-interop-dscsystems:dev .
 #
-# DSC go-dnp3 is GPL-3.0. The adapter links it statically and is licensed
-# GPL-3.0-or-later; this image is distributed under GPL-3.0. See
+# DSC go-dnp3 is GPL-3.0-or-later. The adapter links it statically and is
+# licensed GPL-3.0-or-later; so is this image. See
 # THIRD_PARTY_NOTICES.md. The pin is below, in go.mod (with its checksum in
 # go.sum) and in versions.yaml.
 
