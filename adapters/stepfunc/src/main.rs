@@ -55,7 +55,7 @@ const USAGE: &str = "usage: dnp3-interop <command>
       enable-unsolicited   [--classes 1,2,3]
       disable-unsolicited  [--classes 1,2,3]
       assign-class         --class C --group G [--start N --stop N]
-      freeze               [--clear]
+      freeze               [--clear] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
       monitor              [--duration-ms N]
       file-get             --name NAME
       file-put             --name NAME --content HEX
@@ -63,6 +63,8 @@ const USAGE: &str = "usage: dnp3-interop <command>
       file-info            --name NAME
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
+      deadband-write       --deadbands INDEX:VALUE,...
   print-capabilities
   print-fixture [NAME]
   version

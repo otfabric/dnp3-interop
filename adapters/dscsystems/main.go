@@ -54,7 +54,7 @@ const usage = `usage: dnp3-interop <command>
       restart              [--type cold|warm]
       enable-unsolicited   [--classes 1,2,3]
       disable-unsolicited  [--classes 1,2,3]
-      freeze               [--clear]
+      freeze               [--clear] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
       monitor              [--duration-ms N]
       file-get             --name NAME
       file-put             --name NAME --content HEX
@@ -64,6 +64,7 @@ const usage = `usage: dnp3-interop <command>
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      deadband-write       --deadbands INDEX:VALUE,...
   print-capabilities
   print-fixture [NAME]
   version
