@@ -25,7 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "fixtures" / "schema" / "dnp3-fixture.schema.json"
 
 TYPES = ["binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters",
-         "analogInputs", "analogOutputs", "octetStrings"]
+         "analogInputs", "analogOutputs", "octetStrings", "frozenAnalogInputs", "timeAndIntervals"]
+ANALOG = ("analogInputs", "analogOutputs", "frozenAnalogInputs")
 
 # Static variations whose value field is 16 bits wide, per point type.
 SIXTEEN_BIT = {
@@ -33,21 +34,24 @@ SIXTEEN_BIT = {
     "frozenCounters": {2, 6, 10},
     "analogInputs": {2, 4},
     "analogOutputs": {2},
+    "frozenAnalogInputs": {2, 6},
 }
 # Static variations that carry an integer (not floating point) value.
-INTEGER_ANALOG = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2}}
-DEFAULT_STATIC = {"counters": 1, "frozenCounters": 1, "analogInputs": 1, "analogOutputs": 1}
+INTEGER_ANALOG = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2}, "frozenAnalogInputs": {1, 2, 5, 6}}
+DEFAULT_STATIC = {"counters": 1, "frozenCounters": 1, "analogInputs": 1, "analogOutputs": 1, "frozenAnalogInputs": 1}
 # Event variations whose value field is 16 bits wide.
 SIXTEEN_BIT_EVENT = {
     "counters": {2, 6},
     "frozenCounters": {2, 6},
     "analogInputs": {2, 4},
     "analogOutputs": {2, 4},
+    "frozenAnalogInputs": {2, 6},
 }
-INTEGER_ANALOG_EVENT = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2, 3, 4}}
-DEFAULT_EVENT = {"counters": 1, "frozenCounters": 1, "analogInputs": 1, "analogOutputs": 1}
+INTEGER_ANALOG_EVENT = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2, 3, 4}, "frozenAnalogInputs": {1, 2, 5, 6}}
+DEFAULT_EVENT = {"counters": 1, "frozenCounters": 1, "analogInputs": 1, "analogOutputs": 1, "frozenAnalogInputs": 1}
 # Static variations without a flags octet: such a point is reported ONLINE.
-NO_FLAGS = {"binaryInputs": {1}, "counters": {5, 6}, "frozenCounters": {9, 10}, "analogInputs": {3, 4}}
+NO_FLAGS = {"binaryInputs": {1}, "counters": {5, 6}, "frozenCounters": {9, 10}, "analogInputs": {3, 4},
+            "frozenAnalogInputs": {5, 6}}
 
 
 def is_float32(v):
@@ -69,7 +73,7 @@ def value_errors(kind, p):
         if (s in SIXTEEN_BIT[kind] or (p.get("class", 0) and e in SIXTEEN_BIT_EVENT[kind])) and v > 65535:
             errors.append(f"{where}: value {v} does not fit a 16-bit variation")
         return errors
-    if kind in ("analogInputs", "analogOutputs"):
+    if kind in ANALOG:
         if s in INTEGER_ANALOG[kind] or (p.get("class", 0) and e in INTEGER_ANALOG_EVENT[kind]):
             if v != int(v):
                 errors.append(f"{where}: value {v} is not an integer, but a variation of the point is")
@@ -135,6 +139,10 @@ def semantic_errors(fx):
     for n in files:
         if n in implied:
             errors.append(f"files: {n} is also a directory")
+    for kind in ("binaryOutputs", "analogOutputs"):
+        for p in fx.get(kind, []):
+            if "commandEventVariation" in p and "commandEventClass" not in p:
+                errors.append(f"{kind}[{p.get('index')}]: commandEventVariation needs commandEventClass")
     out = fx.get("outstation", {})
     if out.get("address") is not None and out.get("address") == out.get("masterAddress"):
         errors.append("outstation: address and masterAddress are equal")

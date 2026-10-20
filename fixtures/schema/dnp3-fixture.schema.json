@@ -47,7 +47,9 @@
         "staticVariation": { "enum": [2] },
         "eventVariation": { "enum": [1, 2] },
         "target": { "$ref": "#/$defs/index" },
-        "selectRequired": { "type": "boolean" } }, "unevaluatedProperties": false }
+        "selectRequired": { "type": "boolean" },
+        "commandEventClass": { "$ref": "#/$defs/eventClass" },
+        "commandEventVariation": { "enum": [1, 2] } }, "unevaluatedProperties": false }
     },
     "counters": {
       "type": "array",
@@ -83,7 +85,33 @@
         "target": { "$ref": "#/$defs/index" },
         "selectRequired": { "type": "boolean" },
         "min": { "type": "number" },
-        "max": { "type": "number" } }, "unevaluatedProperties": false }
+        "max": { "type": "number" },
+        "commandEventClass": { "$ref": "#/$defs/eventClass" },
+        "commandEventVariation": { "enum": [1, 2, 3, 4, 5, 6, 7, 8] } }, "unevaluatedProperties": false }
+    },
+    "frozenAnalogInputs": {
+      "description": "Frozen analog inputs, groups 31 and 33.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/point", "properties": {
+        "value": { "type": "number" },
+        "flags": { "$ref": "#/$defs/analogFlags" },
+        "staticVariation": { "enum": [1, 2, 5, 6, 7, 8] },
+        "eventVariation": { "enum": [1, 2, 5, 6] } }, "unevaluatedProperties": false }
+    },
+    "timeAndIntervals": {
+      "description": "Time and interval objects, group 50 variation 4. Static only: they produce no events.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "time", "interval", "units"],
+        "properties": {
+          "index": { "$ref": "#/$defs/index" },
+          "time": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+          "interval": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+          "units": { "type": "integer", "minimum": 0, "maximum": 11 }
+        }
+      }
     },
     "octetStrings": {
       "type": "array",
@@ -112,6 +140,7 @@
   "$defs": {
     "linkAddress": { "type": "integer", "minimum": 0, "maximum": 65519 },
     "index": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "eventClass": { "enum": [1, 2, 3] },
     "fileName": { "type": "string", "pattern": "^(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+$", "maxLength": 200 },
     "point": {
       "type": "object",

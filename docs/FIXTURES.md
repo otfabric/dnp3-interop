@@ -92,6 +92,20 @@ Cross-field rules, checked by `make validate` and by every adapter:
   g21v9, g21v10, g30v3, g30v4) keeps the default flags `["ONLINE"]`: a master
   reads it as online whatever the outstation holds.
 
+### More point types
+
+*Fixture format 1.0, used from container contract 1.2.* An adapter serves a
+fixture with these only if it declares them (`pointTypes`, feature
+`commandEventsServer`); every other adapter refuses it (exit 4).
+
+| Field | Meaning |
+|-------|---------|
+| `frozenAnalogInputs` | Points like analog inputs (`index`, `value`, `flags`, `class`), groups 31 and 33. Static variations 1, 2, 5, 6, 7, 8 (default 1; the ones with a time of freeze are left out), event variations 1, 2, 5, 6 (default 1). Their events come from freezes of analog inputs, which no master in the contract sends |
+| `timeAndIntervals` | `[{ "index", "time": "YYYY-MM-DDTHH:MM:SS.mmmZ", "interval", "units" }]`: group 50 variation 4 objects, static only, read by range (not in class 0) |
+| `commandEventClass`, `commandEventVariation` | On `binaryOutputs` and `analogOutputs`: the class (1..3) and variation (g13: 1, 2; g43: 1..8) of the command events the outstation records when a control of the point reaches its control handler: OPERATE, DIRECT OPERATE and DIRECT OPERATE NO ACK, not SELECT. The event carries the commanded state or value and the status the outstation answered, refusals included (OUT_OF_RANGE, ...) |
+
+The value rules of analog inputs apply to frozen analog inputs.
+
 ### Files
 
 *Fixture format 1.0, used from container contract 1.1.* Files the
@@ -294,6 +308,22 @@ and for file transfer:
 | `/data` | directory | |
 | `/data/blocks.bin` | file | 3000 octets, octet *i* = (7*i* + 3) mod 256: several blocks with any block size |
 | `/logs` | directory | empty |
+
+## The extended fixture
+
+`fixtures/extended/fixture.json`: outstation 1024, master 1, NEED_TIME at
+start, no unsolicited responses.
+
+| Type | Index | Value | Class | Notes |
+|------|------:|-------|------:|-------|
+| binary input | 0 | true | 0 | |
+| binary input | 1 | false | 1 | target of binary output 0 |
+| binary output | 0 | false | 1 | target binary input 1; command events g13v2 in class 2 |
+| analog input | 0 | 0 | 1 | target of analog output 0 |
+| analog output | 0 | 0 | 1 | target analog input 0, range ±1000000; command events g43v3 in class 2 |
+| frozen analog input | 0 | 1500 | 0 | g31v1 |
+| frozen analog input | 1 | 49.5 | 0 | g31v7 (float), flags ONLINE, OVER_RANGE |
+| time and interval | 0 | 2026-01-01T00:00:00.000Z, every 15 minutes (units 3) | | g50v4 |
 
 ## Adding a fixture
 
