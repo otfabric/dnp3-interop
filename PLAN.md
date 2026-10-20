@@ -151,6 +151,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.2: security statistics
+
+- g121/g122 object documents, `--sa-statistics-class` and `--sa-statistics-threshold`, features `securityStatisticsServer` and `securityStatisticsClient`.
+- go-dnp3 in both roles (its master decoded by the adapter); no other stack has them.
+
+**Gate:** `make features` reads g121 and the g122 events after a refused key change, and checks the refusal of g121 without secure authentication.
+
 ## Phase 7 - Release qualification
 
 - Every check of the smoke and cross-stack self-tests is recorded (`results-*.tsv` beside the documents when `REPORT_DIR` is set); `scripts/compat-report.py` turns them and the capability documents into a compatibility report: adapters, totals, a client × server matrix, failures, known-bug hits, skips by reason, declared features.
