@@ -21,6 +21,8 @@
 #           user and of a master without authentication
 #   reverse (contract 1.2) dual end point: the outstation dials a master
 #           that listens, over TCP and, where declared, TLS
+#   stats   (contract 1.2) security statistics: g121 by read and g122 events
+#           from an outstation with secure authentication on
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -343,6 +345,37 @@ suite() {
             skip "${pair}: dual end point (needs server:dualEndpointServer,client:dualEndpointClient)"
         fi
 
+        # ---- security statistics (contract 1.2) ----
+        if has "${server}" securityStatisticsServer && has "${client}" securityStatisticsClient; then
+            name="fx-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- "${SA[@]}" --sa-statistics-class 2 --sa-statistics-threshold 1
+            if wait_ready "${name}"; then
+                client "${client}" -- integrity-poll --host "${name}" "${SA[@]}" >/dev/null
+                client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" \
+                    --sa-update-key 0f0e0d0c0b0a09080706050403020100 --sa-user 3 >/dev/null
+                doc=$(client "${client}" -- read --group 121 --variation 1 --start 0 --stop 17 --host "${name}" "${SA[@]}")
+                check "${pair}: [stats] g121 has the 18 statistics, association 0" "18 0-17 [0]" \
+                    "$(jq -r '"\(.objects | length) \(.objects[0].index)-\(.objects[-1].index) \([.objects[].association] | unique | tostring)"' <<<"${doc}" 2>/dev/null)"
+                check "${pair}: [stats] a refused key change is counted (statistics 10 and 14)" "true true" \
+                    "$(jq -r '"\(.objects[] | select(.index == 10) | .value > 0) \(.objects[] | select(.index == 14) | .value > 0)"' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- event-poll --classes 2 --host "${name}" "${SA[@]}")
+                check "${pair}: [stats] g122 events in the configured class" "true true" \
+                    "$(jq -r '"\((.objects | length) > 0 and all(.objects[]; .group == 122 and .variation == 2)) \(any(.objects[]; .index == 14))"' <<<"${doc}" 2>/dev/null)"
+            else
+                fail "${pair}: [stats] server did not start"
+            fi
+            stop_server "${name}"
+            name="fy-${server}-${RUN_ID}"
+            start "${server}" "${name}" --
+            if wait_ready "${name}"; then
+                check "${pair}: [stats] without secure authentication g121 is refused" "ok=false error=rejected" \
+                    "$(outcome "$(client "${client}" -- read --group 121 --variation 1 --start 0 --stop 17 --host "${name}")")"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: security statistics (needs server:securityStatisticsServer,client:securityStatisticsClient)"
+        fi
+
         # ---- point types of the extended fixture (contract 1.2) ----
         if serves_extended "${server}"; then
             name="fp-${server}-${RUN_ID}"
@@ -386,7 +419,12 @@ suite() {
         # ---- secure authentication ----
         if has "${server}" secureAuthentication && has "${client}" secureAuthentication; then
             name="fa-${server}-${RUN_ID}"
-            start "${server}" "${name}" -- "${SA[@]}"
+            # No statistics events (contract 1.2) in the polls of these checks.
+            if has "${server}" securityStatisticsServer; then
+                start "${server}" "${name}" -- "${SA[@]}" --sa-statistics-threshold 1000000
+            else
+                start "${server}" "${name}" -- "${SA[@]}"
+            fi
             if wait_ready "${name}"; then
                 sa_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" "${SA[@]}"; }
                 basics "${pair}" sa "sa_run ${client} ${name}"
