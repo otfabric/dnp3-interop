@@ -153,7 +153,9 @@ jobs:
             done
           } > out/compatibility-report.md
           cp artifacts/qualify-scan/vulnerabilities.md out/ 2>/dev/null || echo "The scan produced no summary." > out/vulnerabilities.md
-          tar -czf out/sboms.tar.gz -C artifacts/qualify-scan --wildcards 'sbom-*.cdx.json' 2>/dev/null || true
-          tar -czf out/vulnerability-scans.tar.gz -C artifacts/qualify-scan --wildcards 'vulns-*.json' 2>/dev/null || true
+          # tar does not expand wildcards when it creates an archive: the shell does.
+          shopt -s nullglob
+          (cd artifacts/qualify-scan 2>/dev/null && sboms=(sbom-*.cdx.json) && [[ ${#sboms[@]} -gt 0 ]] && tar -czf ../../out/sboms.tar.gz "${sboms[@]}") || echo "no SBOMs"
+          (cd artifacts/qualify-scan 2>/dev/null && scans=(vulns-*.json) && [[ ${#scans[@]} -gt 0 ]] && tar -czf ../../out/vulnerability-scans.tar.gz "${scans[@]}") || echo "no scan results"
           ls -l out
           gh release upload "${VERSION}" out/* --clobber
