@@ -23,7 +23,7 @@ import (
 type frames struct {
 	buf  []byte
 	fn   func(app []byte)
-	link func(control byte)
+	link func(header []byte)
 }
 
 func (f *frames) feed(p []byte) {
@@ -53,7 +53,7 @@ func (f *frames) feed(p []byte) {
 			return
 		}
 		if f.link != nil {
-			f.link(f.buf[3])
+			f.link(f.buf[:10])
 		}
 		var data []byte
 		for off := 10; off < size; {
@@ -88,16 +88,27 @@ func first(fn func(app []byte)) func(segment []byte) {
 
 // linkInbound reports a REQUEST_LINK_STATUS from the master (contract 1.3):
 // a keep-alive, which the library answers without telling the application.
-func linkInbound(control byte) {
+//
+// It also marks a frame to a broadcast address (0xFFFD..0xFFFF), whose
+// request inbound then reports (contract 1.3).
+func linkInbound(header []byte) {
 	const prm, requestLinkStatus = 0x40, 9
+	control := header[3]
 	if control&prm != 0 && control&0x0F == requestLinkStatus {
 		emit(object{{"event", "link-status"}})
 	}
+	broadcastFrame = binary.LittleEndian.Uint16(header[4:6]) >= 0xFFFD
 }
+
+// broadcastFrame is set when the frame being read is to a broadcast address.
+var broadcastFrame bool
 
 func inbound(app []byte) {
 	if len(app) >= 2 {
 		requestFunction.Store(int32(app[1]))
+		if broadcastFrame {
+			emit(object{{"event", "broadcast"}, {"function", app[1]}})
+		}
 	}
 }
 
