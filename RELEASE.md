@@ -20,7 +20,7 @@ Tags are immutable. A fix is a new version.
 
 ## v0.2.0
 
-**Date:** 2026-10-20 (not yet tagged)
+**Date:** 2026-10-20
 
 ## Summary
 
