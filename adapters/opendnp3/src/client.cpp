@@ -397,7 +397,10 @@ int run_client(const std::vector<std::string>& argv)
     else if (op == "assign-class")
         flags.insert({"class", "group", "start", "stop"});
     else if (op == "freeze")
+    {
         switches.insert({"clear", "no-ack"});
+        flags.insert({"group", "at", "interval-ms"});
+    }
     else if (op == "monitor")
         flags.insert("duration-ms");
 
@@ -676,8 +679,14 @@ int run_client(const std::vector<std::string>& argv)
             {
                 if (args.has("no-ack"))
                     throw UsageError{"--no-ack: opendnp3's master cannot send a freeze without response"};
+                if (args.has("at") || args.has("interval-ms"))
+                    throw UsageError{"--at: opendnp3's master cannot send FREEZE AT TIME (its requests carry no g50v2)"};
                 fc = args.has("clear") ? FunctionCode::FREEZE_CLEAR : FunctionCode::IMMED_FREEZE;
-                headers.push_back(Header::AllObjects(20, 0));
+                // Counters, or analog inputs with --group 30 (contract 1.3).
+                const auto group = args.integer("group", 20, 20, 30);
+                if (group != 20 && group != 30)
+                    throw UsageError{"--group must be 20 or 30"};
+                headers.push_back(Header::AllObjects(static_cast<uint8_t>(group), 0));
             }
             start = [task, fc, headers, op](IMaster& m, State& s, std::shared_ptr<ISOEHandler>) {
                 m.PerformFunction(op, fc, headers, task(s));

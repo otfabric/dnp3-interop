@@ -161,6 +161,12 @@ func printCapabilities() int {
 			// fixture's maxControlsPerRequest.
 			{"multipleControlsClient", true},
 			{"maxControlsServer", true},
+			// FREEZE AT TIME both ways; the outstation also freezes analog
+			// inputs (g30 in a freeze), the master counters only.
+			{"freezeAtTimeServer", true},
+			{"freezeAtTimeClient", true},
+			{"analogFreezeServer", true},
+			{"analogFreezeClient", false},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},

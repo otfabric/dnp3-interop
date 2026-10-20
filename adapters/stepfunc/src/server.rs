@@ -311,42 +311,79 @@ impl OutstationApplication for Application {
         freeze_type: FreezeType,
         database: &mut DatabaseHandle,
     ) -> Result<(), RequestError> {
-        let clear = match freeze_type {
-            FreezeType::ImmediateFreeze => false,
-            FreezeType::FreezeAndClear => true,
+        let fx = self.fx.clone();
+        let interval = match freeze_type {
+            FreezeType::ImmediateFreeze => {
+                freeze(&fx, database, indices, false);
+                return Ok(());
+            }
+            FreezeType::FreezeAndClear => {
+                freeze(&fx, database, indices, true);
+                return Ok(());
+            }
+            FreezeType::FreezeAtTime(interval) => interval,
             _ => return Err(RequestError::NotSupported),
         };
-        let fx = self.fx.clone();
-        database.transaction(|db| {
-            let t = now();
-            for p in fx.points("counters") {
-                let selected = match indices {
-                    FreezeIndices::All => true,
-                    FreezeIndices::Range(a, b) => p.index >= a && p.index <= b,
-                };
-                if !selected {
-                    continue;
-                }
-                let current: Option<Counter> = db.get(p.index);
-                let Some(counter) = current else { continue };
-                if fx.find("frozenCounters", p.index).is_some() {
-                    db.update(
-                        p.index,
-                        &FrozenCounter::new(counter.value, counter.flags, t),
-                        UpdateOptions::detect_event(),
-                    );
-                }
-                if clear {
-                    db.update(
-                        p.index,
-                        &Counter::new(0, counter.flags, t),
-                        UpdateOptions::detect_event(),
-                    );
+        // FREEZE AT TIME (contract 1.3): the library hands over the time and
+        // interval of g50v2; the outstation schedules the freezes.
+        let start_ms = now_ms();
+        let (first_ms, period) = match interval {
+            FreezeInterval::FreezeOnceImmediately => {
+                freeze(&fx, database, indices, false);
+                return Ok(());
+            }
+            FreezeInterval::FreezeOnceAtTime(t) => (t.raw_value(), None),
+            FreezeInterval::PeriodicallyFreeze(t, ms) => (t.raw_value(), Some(ms)),
+            FreezeInterval::PeriodicallyFreezeRelative(ms) => (start_ms + u64::from(ms), Some(ms)),
+        };
+        let mut db = database.clone();
+        tokio::spawn(async move {
+            let mut at = first_ms;
+            loop {
+                let wait = at.saturating_sub(now_ms());
+                tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                freeze(&fx, &mut db, indices, false);
+                match period {
+                    Some(ms) if ms > 0 => at += u64::from(ms),
+                    _ => break,
                 }
             }
         });
         Ok(())
     }
+}
+
+/// Freezes the selected counters: every frozen counter of the same index
+/// takes the counter's value; FREEZE AND CLEAR then clears the counter.
+fn freeze(fx: &Fixture, database: &mut DatabaseHandle, indices: FreezeIndices, clear: bool) {
+    database.transaction(|db| {
+        let t = now();
+        for p in fx.points("counters") {
+            let selected = match indices {
+                FreezeIndices::All => true,
+                FreezeIndices::Range(a, b) => p.index >= a && p.index <= b,
+            };
+            if !selected {
+                continue;
+            }
+            let current: Option<Counter> = db.get(p.index);
+            let Some(counter) = current else { continue };
+            if fx.find("frozenCounters", p.index).is_some() {
+                db.update(
+                    p.index,
+                    &FrozenCounter::new(counter.value, counter.flags, t),
+                    UpdateOptions::detect_event(),
+                );
+            }
+            if clear {
+                db.update(
+                    p.index,
+                    &Counter::new(0, counter.flags, t),
+                    UpdateOptions::detect_event(),
+                );
+            }
+        }
+    });
 }
 
 struct Information;
