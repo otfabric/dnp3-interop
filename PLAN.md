@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: broadcast
+
+- `operate --mode direct-no-ack --broadcast`, the server event `broadcast`, IIN1.0 in `iin`; features `broadcastServer`, `broadcastEventServer`, `broadcastClient`.
+- Sent by go-dnp3's master; carried out by the stepfunc, opendnp3 and go-dnp3 outstations.
+
+**Gate:** `make features` broadcasts a control and sees it carried out, IIN1.0 and the server's event, for every outstation that declares it.
+
 ### Contract 1.3: link layer
 
 - `--link-confirms` (client and server), `client --keep-alive-ms`, the server event `link-status`; features `linkConfirmsServer/Client`, `keepAliveClient`, `linkStatusEventServer`.

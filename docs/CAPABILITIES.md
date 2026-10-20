@@ -118,6 +118,9 @@ serves it and the master sends it.
 | `linkConfirmsClient` | `client --link-confirms` (1.3) | no ³⁷ | no ³⁸ | yes | no ³⁹ |
 | `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | yes | no ³⁹ |
 | `linkStatusEventServer` | The server event `link-status` (1.3) | no ⁴⁰ | no ⁴⁰ | yes | no ⁴⁰ |
+| `broadcastServer` | The outstation carries out a broadcast request and sets IIN1.0 (1.3) | yes | yes | yes | no ⁴¹ |
+| `broadcastEventServer` | The server event `broadcast` (1.3) | yes | no ⁴² | yes ⁴⁰ | no ⁴¹ |
+| `broadcastClient` | `operate --broadcast` (1.3) | no ⁴³ | no ² | yes | no ⁴¹ |
 | `eventBufferServer` | The outstation applies the fixture's `eventBufferSize` and sets IIN2.3 when it overflows (1.3) | yes | yes | yes ³⁶ | yes ³⁶ |
 | `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | yes ²⁵ | no ²⁶ | yes ²⁷ | no ²⁶ |
 | `freezeAtTimeClient` | `freeze --at` (1.3) | yes | no ²⁸ | yes | yes |
@@ -253,6 +256,13 @@ class holds three times it (FIXTURES.md).
 
 ⁴⁰ The library answers REQUEST_LINK_STATUS without telling the application;
 the go-dnp3 adapter reads it off the wire.
+
+⁴¹ dnp3py's outstation ignores broadcast addresses and its master refuses
+them.
+
+⁴² opendnp3 carries out a broadcast without telling the application.
+
+⁴³ stepfunc's master cannot address a broadcast.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
