@@ -39,7 +39,8 @@ json number(double v)
 
 const std::set<std::string> kOperations = {"integrity-poll", "event-poll",          "read",         "operate",
                                            "time-sync",      "restart",             "enable-unsolicited",
-                                           "disable-unsolicited", "assign-class",   "freeze",       "monitor", "operate-multi"};
+                                           "disable-unsolicited", "assign-class",   "freeze",       "monitor", "operate-multi",
+                                           "manage"};
 
 // Everything the stack's threads report, guarded by one mutex.
 struct State
@@ -390,6 +391,8 @@ int run_client(const std::vector<std::string>& argv)
         flags.insert({"type", "index", "code", "count", "on-ms", "off-ms", "value", "mode"});
     else if (op == "operate-multi")
         flags.insert({"controls", "mode"});
+    else if (op == "manage")
+        flags.insert("function");
     else if (op == "time-sync")
         flags.insert("procedure");
     else if (op == "restart")
@@ -689,6 +692,29 @@ int run_client(const std::vector<std::string>& argv)
                     throw UsageError{"--group must be 20 or 30"};
                 headers.push_back(Header::AllObjects(static_cast<uint8_t>(group), 0));
             }
+            start = [task, fc, headers, op](IMaster& m, State& s, std::shared_ptr<ISOEHandler>) {
+                m.PerformFunction(op, fc, headers, task(s));
+            };
+        }
+        else if (op == "manage")
+        {
+            // Contract 1.3: the management functions 15..19; the application
+            // ones carry g90v1 with qualifier 0x06 (all applications).
+            const std::map<std::string, FunctionCode> functions = {
+                {"initialize-data", FunctionCode::INITIALIZE_DATA},
+                {"initialize-application", FunctionCode::INITIALIZE_APPLICATION},
+                {"start-application", FunctionCode::START_APPLICATION},
+                {"stop-application", FunctionCode::STOP_APPLICATION},
+                {"save-configuration", FunctionCode::SAVE_CONFIGURATION}};
+            const auto it = functions.find(args.required("function"));
+            if (it == functions.end())
+                throw UsageError{"--function must be initialize-data, initialize-application, start-application, "
+                                 "stop-application or save-configuration"};
+            const auto fc = it->second;
+            std::vector<Header> headers;
+            if (fc == FunctionCode::INITIALIZE_APPLICATION || fc == FunctionCode::START_APPLICATION
+                || fc == FunctionCode::STOP_APPLICATION)
+                headers.push_back(Header::AllObjects(90, 1));
             start = [task, fc, headers, op](IMaster& m, State& s, std::shared_ptr<ISOEHandler>) {
                 m.PerformFunction(op, fc, headers, task(s));
             };
