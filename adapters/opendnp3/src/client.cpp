@@ -797,7 +797,7 @@ int run_client(const std::vector<std::string>& argv)
                 if (ran && s.timeSync)
                 {
                     // The procedure decides, not the IIN of the probing READ
-                    // (which an outstation may refuse: go-dnp3 rejects a READ
+                    // (which an outstation may refuse: DSC go-dnp3 rejects a READ
                     // without objects) or of whichever response came last.
                     std::lock_guard<std::mutex> l(s.mutex);
                     s.done = *s.timeSync;

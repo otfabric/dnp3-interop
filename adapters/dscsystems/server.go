@@ -59,7 +59,7 @@ func servable(fx *fixture) error {
 		}
 		for i := range len(fx.Points[kind]) {
 			if !seen[uint16(i)] {
-				return fmt.Errorf("%s: the go-dnp3 database holds the indexes 0..n-1 of a type; index %d is missing", kind, i)
+				return fmt.Errorf("%s: the DSC go-dnp3 database holds the indexes 0..n-1 of a type; index %d is missing", kind, i)
 			}
 		}
 	}
@@ -69,11 +69,11 @@ func servable(fx *fixture) error {
 	}
 	for i := range len(fx.TimeIntervals) {
 		if !seen[uint16(i)] {
-			return fmt.Errorf("timeAndIntervals: the go-dnp3 database holds the indexes 0..n-1; index %d is missing", i)
+			return fmt.Errorf("timeAndIntervals: the DSC go-dnp3 database holds the indexes 0..n-1; index %d is missing", i)
 		}
 	}
 	if !fx.NeedTime {
-		return errors.New("outstation.needTime false: go-dnp3 asserts NEED_TIME until a master writes the time")
+		return errors.New("outstation.needTime false: DSC go-dnp3 asserts NEED_TIME until a master writes the time")
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func configure(db *outstation.Database, fx *fixture) error {
 				cfg.StaticVariation, cfg.EventVariation = 0, 0
 			}
 			if !db.Configure(dnpTypes[kind], p.Index, cfg) {
-				return fmt.Errorf("%s[%d]: go-dnp3 refuses static variation %d / event variation %d", kind, p.Index, p.SVar, p.EVar)
+				return fmt.Errorf("%s[%d]: DSC go-dnp3 refuses static variation %d / event variation %d", kind, p.Index, p.SVar, p.EVar)
 			}
 			flags := dnp3.Flags(p.Flags)
 			switch kind {

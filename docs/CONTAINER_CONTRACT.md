@@ -363,7 +363,7 @@ datagrams, without connections.
 
 There is no connection: a client is `connected` once its socket is open, and
 an outstation that does not answer is `timeout`, never `connect-failed`.
-`--connect-timeout-ms` is not used. The go-dnp3 outstation (dscsystems)
+`--connect-timeout-ms` is not used. The DSC go-dnp3 outstation (dscsystems)
 keeps answering the first endpoint it heard from for its whole life, so give
 masters a fixed endpoint (`--udp-local-port`, a fixed IP) or restart the
 outstation per master.
@@ -559,7 +559,7 @@ them). Object documents for groups 121 and 122: `value` the count, `flags`
 (the counter flags), `association`, `time` for g122v2. An outstation without
 secure authentication refuses g121 (`rejected`).
 
-go-dnp3's master drops groups 121 and 122, so the dscsystems adapter reads
+DSC go-dnp3's master drops groups 121 and 122, so the dscsystems adapter reads
 them from the frames itself, from responses that carry nothing but them (a
 class poll that returns other events before them leaves them out).
 

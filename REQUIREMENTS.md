@@ -48,7 +48,7 @@ framework.
   | P2 | Triangle MicroWorks DNP3 Source Code Library | C | commercial | yes |
 
   P0 adapters are mandatory, P1 strongly recommended (dnp3py) or recommended
-  (go-dnp3), P2 is industry validation. The P2 adapter is on hold (see
+  (DSC go-dnp3), P2 is industry validation. The P2 adapter is on hold (see
   [PLAN.md](PLAN.md)).
 
 - R2.2 Each is its own image. No image contains two implementations.
