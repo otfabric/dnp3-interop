@@ -268,6 +268,11 @@ struct Application {
 }
 
 impl OutstationApplication for Application {
+    // Analog deadbands (contract 1.3): the library stores what is written.
+    fn support_write_analog_dead_bands(&mut self) -> bool {
+        true
+    }
+
     fn write_device_attr(&mut self, attr: Attribute) -> MaybeAsync<bool> {
         let (kind, value) = crate::client::attribute_value(&attr.value);
         emit(&json!({

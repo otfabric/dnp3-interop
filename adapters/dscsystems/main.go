@@ -54,7 +54,7 @@ const usage = `usage: dnp3-interop <command>
       restart              [--type cold|warm]
       enable-unsolicited   [--classes 1,2,3]
       disable-unsolicited  [--classes 1,2,3]
-      freeze               [--clear]
+      freeze               [--clear] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
       monitor              [--duration-ms N]
       file-get             --name NAME
       file-put             --name NAME --content HEX
@@ -64,6 +64,7 @@ const usage = `usage: dnp3-interop <command>
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      deadband-write       --deadbands INDEX:VALUE,...
   print-capabilities
   print-fixture [NAME]
   version
@@ -167,12 +168,18 @@ func printCapabilities() int {
 			{"freezeAtTimeClient", true},
 			{"analogFreezeServer", true},
 			{"analogFreezeClient", false},
+			// Analog deadbands (g34v3): written both ways; the outstation
+			// does not serve a read of g34 and the master drops it.
+			{"deadbandWriteServer", true},
+			{"deadbandWriteClient", true},
+			{"deadbandReadServer", false},
+			{"deadbandReadClient", false},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
 			"enable-unsolicited", "disable-unsolicited", "freeze", "monitor",
-			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write", "operate-multi"}},
+			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write", "operate-multi", "deadband-write"}},
 		{"secureAuthentication", object{
 			{"macAlgorithms", supportedMACs},
 			{"keyWrapAlgorithms", keyWrap},

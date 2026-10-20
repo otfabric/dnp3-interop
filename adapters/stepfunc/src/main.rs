@@ -55,7 +55,7 @@ const USAGE: &str = "usage: dnp3-interop <command>
       enable-unsolicited   [--classes 1,2,3]
       disable-unsolicited  [--classes 1,2,3]
       assign-class         --class C --group G [--start N --stop N]
-      freeze               [--clear]
+      freeze               [--clear] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
       monitor              [--duration-ms N]
       file-get             --name NAME
       file-put             --name NAME --content HEX
@@ -63,6 +63,8 @@ const USAGE: &str = "usage: dnp3-interop <command>
       file-info            --name NAME
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
+      deadband-write       --deadbands INDEX:VALUE,...
   print-capabilities
   print-fixture [NAME]
   version
@@ -168,12 +170,17 @@ fn print_capabilities() -> i32 {
             "freezeAtTimeClient": true,
             "analogFreezeServer": false,
             "analogFreezeClient": true,
+            // Analog deadbands (g34): written and read both ways.
+            "deadbandWriteServer": true,
+            "deadbandWriteClient": true,
+            "deadbandReadServer": true,
+            "deadbandReadClient": true,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
             "enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor",
-            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write", "operate-multi"],
+            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write", "operate-multi", "deadband-write"],
     }));
     EXIT_OK
 }

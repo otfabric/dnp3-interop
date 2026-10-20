@@ -31,6 +31,9 @@
 #           of the controls fixture (two per request)
 #   freeze  (contract 1.3) FREEZE AT TIME, at once and scheduled, and the
 #           freeze of analog inputs into frozen analog inputs
+#   deadbands (contract 1.3) an analog deadband written (g34v3) holds back
+#           an event of a smaller change and lets a larger one through, and
+#           reads back (g34) where declared
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -505,6 +508,36 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
+        fi
+
+        # ---- analog deadbands (contract 1.3) ----
+        if has "${server}" deadbandWriteServer && has "${client}" deadbandWriteClient; then
+            name="fb-${server}-${RUN_ID}"
+            start "${server}" "${name}" --
+            if wait_ready "${name}"; then
+                # AO0 drives AI4 (class 2). One change first: stepfunc compares
+                # with the last value reported, RESTART until there is one.
+                client dscsystems -- operate --type g41v1 --index 0 --value 1000 --host "${name}" >/dev/null
+                client dscsystems -- event-poll --classes 1,2,3 --host "${name}" >/dev/null
+                doc=$(client "${client}" -- deadband-write --deadbands 4:100 --host "${name}")
+                check "${pair}: [deadbands] write a deadband" "ok=true error=-" "$(outcome "${doc}")"
+                local ai4='[.objects[]? | select(.group == 32 and .index == 4) | .value] | join(" ")'
+                client dscsystems -- operate --type g41v1 --index 0 --value 1050 --host "${name}" >/dev/null
+                check "${pair}: [deadbands] a change within it reports no event" "" \
+                    "$(client dscsystems -- event-poll --classes 2 --host "${name}" | jq -r "${ai4}")"
+                client dscsystems -- operate --type g41v1 --index 0 --value 1200 --host "${name}" >/dev/null
+                check "${pair}: [deadbands] a change beyond it does" "1200" \
+                    "$(client dscsystems -- event-poll --classes 2 --host "${name}" | jq -r "${ai4}")"
+                if has "${server}" deadbandReadServer && has "${client}" deadbandReadClient; then
+                    check "${pair}: [deadbands] and reads back" "g34v3:4=100" \
+                        "$(objects "$(client "${client}" -- read --group 34 --variation 3 --start 4 --stop 4 --host "${name}")")"
+                fi
+            else
+                fail "${pair}: [deadbands] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: analog deadbands (needs server:deadbandWriteServer,client:deadbandWriteClient)"
         fi
 
         # ---- device attributes (contract 1.3) ----

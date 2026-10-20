@@ -26,8 +26,9 @@ use dnp3::udp::*;
 use std::net::SocketAddr;
 use std::path::Path;
 
-const OPERATIONS: [&str; 12] = [
+const OPERATIONS: [&str; 13] = [
     "operate-multi",
+    "deadband-write",
     "integrity-poll",
     "event-poll",
     "read",
@@ -248,6 +249,27 @@ impl ReadHandler for Handler {
             |x| x.flags.value,
             |x| x.time,
         );
+    }
+
+    fn handle_analog_input_dead_band(
+        &mut self,
+        info: HeaderInfo,
+        iter: &mut dyn Iterator<Item = (AnalogInputDeadBand, u16)>,
+    ) {
+        // g34: the deadband, without flags (contract 1.3).
+        let (group, variation) = group_variation(info.variation);
+        let mut r = self.received.lock().unwrap_or_else(|e| e.into_inner());
+        for (x, index) in iter {
+            let value = match x {
+                AnalogInputDeadBand::U16(v) => f64::from(v),
+                AnalogInputDeadBand::U32(v) => f64::from(v),
+                AnalogInputDeadBand::F32(v) => f64::from(v),
+            };
+            r.objects.push(json!({
+                "group": group, "variation": variation, "index": index,
+                "value": number(value), "unsolicited": self.unsolicited,
+            }));
+        }
     }
 
     fn handle_frozen_analog_input(
@@ -474,6 +496,10 @@ fn variation(g: u8, v: u8) -> Option<Variation> {
         (33, 6) => Group33Var6,
         (33, 7) => Group33Var7,
         (33, 8) => Group33Var8,
+        (34, 0) => Group34Var0,
+        (34, 1) => Group34Var1,
+        (34, 2) => Group34Var2,
+        (34, 3) => Group34Var3,
         (32, 0) => Group32Var0,
         (32, 1) => Group32Var1,
         (32, 2) => Group32Var2,
@@ -526,6 +552,7 @@ enum Op {
     Monitor(Duration),
     File(FileOp),
     AttributeRead(u8, u8),
+    Deadbands(Vec<(u16, f32)>),
     AttributeWrite(OwnedAttribute),
 }
 
@@ -569,6 +596,21 @@ fn task_failure(e: &TaskError, iin: &mut Option<(u8, u8)>) -> Failure {
 fn parse_op(op: &str, args: &Args) -> Result<Op, UsageError> {
     if op == "operate-multi" {
         return parse_operate_multi(args);
+    }
+    if op == "deadband-write" {
+        let mut list = vec![];
+        for item in args.required("deadbands")?.split(',') {
+            let parsed = item
+                .split_once(':')
+                .and_then(|(i, v)| Some((i.parse::<u16>().ok()?, v.parse::<f32>().ok()?)));
+            match parsed {
+                Some((i, v)) if v >= 0.0 => list.push((i, v)),
+                _ => {
+                    return usage("--deadbands items are INDEX:VALUE, VALUE a non-negative number")
+                }
+            }
+        }
+        return Ok(Op::Deadbands(list));
     }
     let range_headers = |g: u8, v: u8| -> Result<ReadHeader, UsageError> {
         let Some(var) = variation(g, v) else {
@@ -802,6 +844,7 @@ pub fn run(argv: &[String]) -> i32 {
         "file-put" => flags.extend(["name", "content"]),
         "attribute-read" => flags.extend(["set", "variation"]),
         "operate-multi" => flags.extend(["controls", "mode"]),
+        "deadband-write" => flags.push("deadbands"),
         "attribute-write" => flags.extend(["set", "variation", "text", "uint", "int"]),
         "event-poll" | "enable-unsolicited" | "disable-unsolicited" => flags.push("classes"),
         "read" => flags.extend(["group", "variation", "start", "stop"]),
@@ -1199,6 +1242,17 @@ async fn execute(
             }
             Op::Empty(fc, headers) => match association
                 .send_and_expect_empty_response(fc, headers)
+                .await
+            {
+                Ok(()) => None,
+                Err(WriteError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
+                Err(WriteError::IinError(_)) => Some(fail(
+                    "rejected",
+                    "the outstation refused the request (IIN2)",
+                )),
+            },
+            Op::Deadbands(list) => match association
+                .write_dead_bands(vec![DeadBandHeader::group34_var3_u16(list)])
                 .await
             {
                 Ok(()) => None,
