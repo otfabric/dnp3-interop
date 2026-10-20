@@ -45,6 +45,7 @@ const char* kUsage = R"(usage: dnp3-interop <command>
       assign-class         --class C --group G [--start N --stop N]
       freeze               [--clear] [--group 20|30]
       monitor              [--duration-ms N]
+      manage               --function initialize-data|initialize-application|start-application|stop-application|save-configuration
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
   print-capabilities
   print-fixture [NAME]
@@ -142,6 +143,9 @@ int print_capabilities()
           {"broadcastServer", true},
           {"broadcastEventServer", false},
           {"broadcastClient", false},
+          // Contract 1.3: the management functions, master only.
+          {"manageServer", false},
+          {"manageClient", true},
           // The outstation refuses FREEZE AT TIME and freezes counters only;
           // the master cannot carry g50v2 but freezes any group.
           {"freezeAtTimeServer", false},
@@ -154,7 +158,7 @@ int print_capabilities()
         {"commandTypes", {"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
         {"clientOperations",
          {"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
-          "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi"}},
+          "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi", "manage"}},
     });
     return adapter::kExitOK;
 }
