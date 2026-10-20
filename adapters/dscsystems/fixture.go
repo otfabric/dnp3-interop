@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var pointTypes = []string{
@@ -653,7 +654,7 @@ func checkAttributes(fx *fixture, top map[string]any, add func(string, ...any)) 
 		switch kind {
 		case "visibleString":
 			text, ok := o["value"].(string)
-			if !ok || len(text) > 255 {
+			if !ok || utf8.RuneCountInString(text) > 255 {
 				add("deviceAttributes[%d]: value must be a string of up to 255 characters", i)
 			}
 			a.Text = text

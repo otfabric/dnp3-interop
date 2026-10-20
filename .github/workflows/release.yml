@@ -153,7 +153,7 @@ jobs:
             | `ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }}` | `${{ steps.digests.outputs.stepfunc }}` |
             | `ghcr.io/otfabric/dnp3-interop-opendnp3:${{ github.ref_name }}` | `${{ steps.digests.outputs.opendnp3 }}` |
             | `ghcr.io/otfabric/dnp3-interop-dscsystems:${{ github.ref_name }}` | `${{ steps.digests.outputs.dscsystems }}` |
-            | `ghcr.io/otfabric/dnp3-interop-dnp3py:${{ github.ref_name }}` (master only) | `${{ steps.digests.outputs.dnp3py }}` |
+            | `ghcr.io/otfabric/dnp3-interop-dnp3py:${{ github.ref_name }}` | `${{ steps.digests.outputs.dnp3py }}` |
 
             ## Pinning in a consumer
 
@@ -164,7 +164,7 @@ jobs:
             DNP3_INTEROP_DNP3PY_IMAGE=ghcr.io/otfabric/dnp3-interop-dnp3py@${{ steps.digests.outputs.dnp3py }}
             ```
 
-            `manifest.json` records the upstream revisions these images were built from. The images contain Apache-2.0 and GPL-3.0 software and the Step Function I/O dnp3 crate, whose licence permits non-commercial, non-production use only; these images are for interoperability testing. See `THIRD_PARTY_NOTICES.md`. Notes: `RELEASE.md`.
+            `manifest.json` records the upstream revisions these images were built from. The images contain Apache-2.0 and GPL-3.0-or-later software and the Step Function I/O dnp3 crate, whose licence permits non-commercial, non-production use only; these images are for interoperability testing. See `THIRD_PARTY_NOTICES.md`. Notes: `RELEASE.md`.
           files: |
             manifest.json
             checksums.txt

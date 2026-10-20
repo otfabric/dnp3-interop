@@ -59,10 +59,11 @@ implementations:
     license: "MIT"
     language: "Python"
     independent_engine: true
-    roles: [client]
+    roles: [server, client]
     note: >-
-      Client role only: the outstation cannot serve the baseline fixture (no
-      double-bit inputs, octet strings or per-point variations).
+      The outstation serves only the dnp3py fixture: it cannot serve the
+      baseline fixture (no double-bit inputs, octet strings or per-point
+      variations).
 
   dscsystems:
     priority: P1
