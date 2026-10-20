@@ -114,6 +114,7 @@ serves it and the master sends it.
 | `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | yes ²² | no ²¹ | yes | no |
 | `multipleControlsClient` | `operate-multi` (1.3) | yes ²³ | yes | yes | yes |
 | `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | yes | no ²⁴ |
+| `eventBufferServer` | The outstation applies the fixture's `eventBufferSize` and sets IIN2.3 when it overflows (1.3) | yes | yes | yes ³⁶ | yes ³⁶ |
 | `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | yes ²⁵ | no ²⁶ | yes ²⁷ | no ²⁶ |
 | `freezeAtTimeClient` | `freeze --at` (1.3) | yes | no ²⁸ | yes | yes |
 | `analogFreezeServer` | The outstation freezes analog inputs into frozen analog inputs (1.3) | no ²⁹ | no ²⁹ | yes | no ²⁹ |
@@ -236,6 +237,9 @@ deadband to write or read.
 master drops g34.
 
 ³⁵ go-dnp3's master opens files for writing only.
+
+³⁶ go-dnp3 counts the size over all types; dnp3py per type and class, so a
+class holds three times it (FIXTURES.md).
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks

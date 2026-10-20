@@ -323,7 +323,7 @@ std::string load_fixture(const std::string& path, Fixture& out)
         const auto& o = fx["outstation"];
         const std::set<std::string> fields = {"address",           "masterAddress",      "unsolicited",
                                               "needTime",          "coldRestartDelayMs", "warmRestartDelayMs",
-                                              "maxControlsPerRequest"};
+                                              "maxControlsPerRequest", "eventBufferSize"};
         for (auto it = o.begin(); it != o.end(); ++it)
         {
             if (!fields.count(it.key()))
@@ -351,6 +351,14 @@ std::string load_fixture(const std::string& path, Fixture& out)
                 c.add("outstation: maxControlsPerRequest must be 1..255");
             else
                 out.maxControlsPerRequest = static_cast<uint16_t>(m.get<int64_t>());
+        }
+        if (o.contains("eventBufferSize"))
+        {
+            const auto& m = o["eventBufferSize"];
+            if (!is_integer(m) || m.get<int64_t>() < 1 || m.get<int64_t>() > 65535)
+                c.add("outstation: eventBufferSize must be 1..65535");
+            else
+                out.eventBufferSize = static_cast<uint16_t>(m.get<int64_t>());
         }
         for (const char* d : {"coldRestartDelayMs", "warmRestartDelayMs"})
         {

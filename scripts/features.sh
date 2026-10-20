@@ -36,6 +36,9 @@
 #   deadbands (contract 1.3) an analog deadband written (g34v3) holds back
 #           an event of a smaller change and lets a larger one through, and
 #           reads back (g34) where declared
+#   events  (contract 1.3) the events fixture's buffer of three overflows:
+#           IIN2.3, the events that did not fit lost, and IIN2.3 cleared
+#           once the master has confirmed what was reported
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -556,6 +559,32 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
+        fi
+
+        # ---- event buffer overflow (contract 1.3) ----
+        if has "${server}" eventBufferServer; then
+            name="fo-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/events/fixture.json
+            if wait_ready "${name}"; then
+                # Ten changes of AI0 (class 2) into a buffer of three.
+                local v
+                for v in 10 20 30 40 50 60 70 80 90 100; do
+                    client dscsystems -- operate --type g41v1 --index 0 --value "${v}" --host "${name}" >/dev/null
+                done
+                doc=$(client "${client}" -- event-poll --classes 1,2,3 --host "${name}")
+                check "${pair}: [events] an overflowing buffer sets IIN2.3" "true" \
+                    "$(jq -r '.iin | index("EVENT_BUFFER_OVERFLOW") != null' <<<"${doc}" 2>/dev/null)"
+                check "${pair}: [events] loses what did not fit, keeps the latest" "true" \
+                    "$(jq -r '[.objects[]? | select(.group == 32) | .value] | length < 10 and .[-1] == 100' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- event-poll --classes 1,2,3 --host "${name}")
+                check "${pair}: [events] IIN2.3 clears once the events are confirmed" "false" \
+                    "$(jq -r '.iin | index("EVENT_BUFFER_OVERFLOW") != null' <<<"${doc}" 2>/dev/null)"
+            else
+                fail "${pair}: [events] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: event buffer overflow (needs server:eventBufferServer)"
         fi
 
         # ---- analog deadbands (contract 1.3) ----

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -425,7 +426,7 @@ func runServer(argv []string) int {
 		LocalAddr:      uint16(local),
 		RemoteAddr:     uint16(remote),
 		Database:       counts,
-		Events:         outstation.EventBufferConfig{MaxEvents: 1000},
+		Events:         outstation.EventBufferConfig{MaxEvents: cmp.Or(fx.EventBuffer, 1000)},
 		ConfirmTimeout: time.Duration(confirmTimeout) * time.Millisecond,
 		SelectTimeout:  time.Duration(selectTimeout) * time.Millisecond,
 

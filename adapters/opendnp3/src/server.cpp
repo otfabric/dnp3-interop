@@ -557,7 +557,7 @@ int run_server(const std::vector<std::string>& argv)
 
 
         OutstationStackConfig config(database_config(fx));
-        config.outstation.eventBufferConfig = EventBufferConfig::AllTypes(1000);
+        config.outstation.eventBufferConfig = EventBufferConfig::AllTypes(fx.eventBufferSize.value_or(1000));
         config.outstation.params.allowUnsolicited = fx.unsolicited;
         config.outstation.params.unsolClassMask = ClassField::None();
         config.outstation.params.selectTimeout = TimeDuration::Milliseconds(selectTimeout);

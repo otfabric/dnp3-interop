@@ -33,6 +33,7 @@ way; this document says what "the same way" is.
 | `needTime` | Whether IIN1.4 NEED_TIME is set at start (default false). It is cleared when a master writes the time |
 | `coldRestartDelayMs`, `warmRestartDelayMs` | The delay the outstation announces for a cold or warm restart, 0..65535 ms. Absent: that restart is refused |
 | `maxControlsPerRequest` | Contract 1.3: the most controls of one request the outstation carries out, 1..255; the rest are answered TOO_MANY_OPS. Absent: the library's default (at least 16) |
+| `eventBufferSize` | Contract 1.3: the most events the outstation buffers, 1..65535: of each type (stepfunc, opendnp3), in all (go-dnp3, one buffer), or of each type in each class (dnp3py, whose class buffer holds three times it). An event that does not fit is lost and the outstation sets IIN2.3 EVENT_BUFFER_OVERFLOW. Absent: the adapter's default (1000; dnp3py 100) |
 
 ### Points
 
@@ -359,6 +360,14 @@ start, at most two controls per request. Binary inputs 0 and 1 (false, no
 events), binary outputs 0 and 1 (targets binary inputs 0 and 1) and 2,
 analog inputs 0 and 1, analog outputs 0 (range ±1000, target analog input 0)
 and 1 (range ±100, target analog input 1). Every outstation serves it.
+
+## The events fixture
+
+`fixtures/events/fixture.json` (contract 1.3): outstation 1024, master 1,
+NEED_TIME at start, an event buffer of three. Analog input 0 (class 2) and
+analog output 0 (range ±100000, target analog input 0, no events): each
+control of the output makes one analog input event. Every outstation serves
+it.
 
 ## The attributes fixture
 
