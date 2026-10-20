@@ -159,6 +159,28 @@ counts only the authentication responses it sends. Its master drops both
 groups: the dscsystems adapter decodes them itself. No other image has
 them, so they are checked go-dnp3 against go-dnp3 only.
 
+### dnp3py's outstation: the dnp3py fixture
+
+dnp3py's outstation serves a fixed layout: one static and one event variation
+per type (g1v2/g2v1, g10v2, g20v1/g22v5, g21v1, g30v1/g32v1, g40v1 or v2),
+binary inputs in class 1, analog inputs in class 2, counters in class 3, no
+events of outputs and frozen counters (it would encode them as g2 and g22),
+integer analog values, no double-bit inputs, octet strings or unsolicited
+responses. Within that it agrees with the other three outstations on every
+case of tests/cases-dnp3py.tsv, with two known bugs: a read of a range
+returns every point of the type, and a control of a point that does not
+exist is answered NOT_SUPPORTED without IIN2.2 (the others set
+PARAMETER_ERROR). The adapter works around more: dnp3py's updates reset a
+point's flags to ONLINE (the adapter passes them back), its analog output
+tracking does the same (turned off; the adapter sets the value), it removes
+events on READ before the confirm, it executes requests from any master
+address (answering its configured master), and it does not tell its handler
+the variation of an analog control or whether a direct operate expects a
+response (the adapter reads both from the request).
+
+With unsolicited responses off, the go-dnp3 outstation answers requests from
+any master address, to that address: a known bug in the dnp3py fixture runs.
+
 ### Dual end point: three stacks, both ways
 
 The outstations of stepfunc (`spawn_outstation_tcp_client`,

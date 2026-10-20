@@ -12,7 +12,7 @@ and changes only with the major version.
 |---------|--------|
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
-| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); additions |
+| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
