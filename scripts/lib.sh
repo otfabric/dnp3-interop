@@ -46,8 +46,10 @@ start_server() {
     local name
     name=$(server_name "${adapter}")
     docker rm -f "${name}" >/dev/null 2>&1
+    # Servers log their frames on stderr (SERVER_DEBUG=0 to turn it off), so
+    # that a failing case can show what the outstation saw.
     docker run -d --name "${name}" --network "${NETWORK}" \
-        --label "dnp3-interop.run=${RUN_ID}" \
+        --label "dnp3-interop.run=${RUN_ID}" -e "DNP3_INTEROP_DEBUG=${SERVER_DEBUG:-1}" \
         "$(image_of "${adapter}")" server "$@" >/dev/null
     echo "${name}"
 }

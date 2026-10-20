@@ -876,6 +876,10 @@ async fn execute(
     if failure.is_none() && !collect.is_zero() {
         tokio::time::sleep(collect).await;
     }
+    // The confirm of the last response may still be on its way out; closing at
+    // once can lose it, and the outstation then keeps events the master has
+    // already reported.
+    tokio::time::sleep(Duration::from_millis(200)).await;
     let _ = channel.disable().await;
     drop(association);
     (true, failure, command_status, restart_delay)

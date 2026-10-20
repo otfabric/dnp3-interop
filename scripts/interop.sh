@@ -139,7 +139,14 @@ check() {
     local client="${1%%->*}" server="${1#*->}" bug
     if [[ "$4" == "$3" ]]; then ok "$1: $2"
     elif [[ -n "${5:-}" ]] && bug=$(known_bug "${client}" "${server}" "$5"); then hit_known_bug "$1" "$2" "${bug}"
-    else fail "$1: $2"; log "    want ${3:-<nothing>}"; log "    got  ${4:-<nothing>}"; fi
+    else
+        fail "$1: $2"; log "    want ${3:-<nothing>}"; log "    got  ${4:-<nothing>}"
+        # The outstation's own account (its frames), while the server exists.
+        if [[ -n "${name:-}" ]] && docker inspect "${name}" >/dev/null 2>&1; then
+            log "    log of ${name}:"
+            docker logs --tail 60 "${name}" 2>&1 | sed 's/^/        /' >&2
+        fi
+    fi
 }
 
 # The integrity poll of the fixture, as objects() prints it: every point in
@@ -184,21 +191,28 @@ suite() {
             fi
             # shellcheck disable=SC2086
             doc=$(run_client "${client}" ${operation} --host "${name}"); CLIENT_EXIT=$?
-            [[ "${state}" == "rw" ]] && stop_server "${name}"
             keep "case${n}-${pair}" "${doc}"
 
             bug=$(known_bug "${client}" "${server}" "${operation}")
             summary=$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)
             if [[ "${summary}" != "${want_summary}" || "${CLIENT_EXIT}" != "${want_exit}" ]]; then
                 if [[ -n "${bug}" ]]; then
+                    [[ "${state}" == "rw" ]] && stop_server "${name}"
                     hit_known_bug "${pair}" "${operation}" "${bug}"
                     continue
                 fi
                 fail "${pair}: ${operation}"
                 log "    want exit=${want_exit} ${want_summary}"
                 log "    got  exit=${CLIENT_EXIT} ${summary:-<no result document>}"
+                log "    message: $(jq -r '.error.message // "-"' <<<"${doc}" 2>/dev/null)"
+                # The outstation's own account of the exchange (its frames, with
+                # DNP3_INTEROP_DEBUG=1), while the server still exists.
+                log "    log of ${name}:"
+                docker logs --tail 60 "${name}" 2>&1 | sed 's/^/        /' >&2
+                [[ "${state}" == "rw" ]] && stop_server "${name}"
                 continue
             fi
+            [[ "${state}" == "rw" ]] && stop_server "${name}"
             ok "${pair}: ${operation}"
             # A pairing a known bug may affect is not held to agreement.
             [[ -n "${bug}" ]] && continue

@@ -568,6 +568,8 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
         except (LinkError, MasterRunnerError):
             pass
     if connected:
+        # Let a confirm of the last response leave before the connection closes.
+        await asyncio.sleep(0.2)
         try:
             await runner.close()
         except (OSError, LinkError, MasterRunnerError):

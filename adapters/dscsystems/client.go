@@ -458,6 +458,12 @@ func runClient(argv []string) int {
 	if fail == nil && collect > 0 {
 		time.Sleep(time.Duration(collect) * time.Millisecond)
 	}
+	// The confirm of the last response may still be on its way out; closing
+	// at once can lose it, and the outstation then keeps events the master
+	// has already reported.
+	if connected {
+		time.Sleep(200 * time.Millisecond)
+	}
 	cancel()
 	select {
 	case <-runDone:

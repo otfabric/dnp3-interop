@@ -295,3 +295,20 @@ It has no double-bit inputs, octet strings or per-point variations (analog
 inputs are always g30v1), no analog output events, and its TCP runner does
 not appear to send unsolicited responses. The adapter has the client role
 only; serving dnp3py would need a second fixture within those limits.
+
+### go-dnp3 refuses a READ without object headers
+
+It answers PARAMETER_ERROR ("request carried no objects but requires them");
+opendnp3 and stepfunc answer a null response. The opendnp3 adapter sends such
+a READ to learn the IIN before its library's time synchronization; it judges
+`time-sync` by the outcome of the synchronization itself, not by the IIN of
+that READ, which the null unsolicited response can make the last one to
+arrive.
+
+### Masters close only after their last confirm
+
+The adapters wait 200 ms after an operation before closing: the libraries
+write the application confirm of the last response asynchronously, and an
+immediate close occasionally lost it, so the outstation kept events the
+master had already reported. The parallel self-test exposed this with
+opendnp3 and go-dnp3 masters.
