@@ -149,6 +149,14 @@ go-dnp3 records a command event for every control that reaches its control
 handler, with the status it answered: a value out of range produces a g43
 with OUT_OF_RANGE. It records none for SELECT.
 
+### Several controls in one request
+
+All four outstations carry out each control of a request on its own: in a
+request with one refused control the others take effect. The stepfunc,
+opendnp3 and go-dnp3 outstations apply a limit the same way: the controls
+within it are carried out, the rest answered TOO_MANY_OPS. dnp3py's ignores
+the limit. stepfunc's master reports only the first refused control.
+
 ### Device attributes: stepfunc and go-dnp3
 
 Both outstations serve the attributes of a private set, accept writes of the

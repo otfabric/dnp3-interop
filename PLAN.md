@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: several controls in one request
+
+- `operate-multi` with `commandStatuses`, the fixture's `maxControlsPerRequest` and the `controls` fixture; features `multipleControlsClient`, `maxControlsServer`.
+- Every master sends them, every outstation carries them out; dnp3py's outstation ignores the limit.
+
+**Gate:** `make features` checks success, a partial refusal, select-before-operate and the limit for every pairing.
+
 ### Contract 1.3: device attributes
 
 - The `attributes` fixture (attribute set 1), `attribute-read` and `attribute-write`, the `attribute-write` event, features `deviceAttributesServer` and `deviceAttributesClient`.
