@@ -43,7 +43,7 @@ export REGISTRY VERSION
 
 # image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop qualify report print-adapters buildx publish buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint images smoke interop features qualify report print-adapters buildx publish buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -72,6 +72,7 @@ documents: ## Run the self-tests keeping every document, and validate them again
 	@rm -rf reports qualify && mkdir -p reports
 	@REPORT_DIR=reports $(MAKE) --no-print-directory -j$(JOBS) smoke
 	@REPORT_DIR=reports $(MAKE) --no-print-directory interop
+	@REPORT_DIR=reports $(MAKE) --no-print-directory features
 	@echo "Validating documents..."
 	@if python3 -c 'import jsonschema' 2>/dev/null; then \
 		python3 scripts/validate-documents.py reports; \
@@ -110,6 +111,9 @@ smoke-%: FORCE ## Smoke test one adapter, e.g. smoke-stepfunc
 interop: ## Cross-stack self-test: every client against every server
 	@scripts/interop.sh $(ADAPTERS)
 
+features: ## Cross-stack self-test of contract 1.1: TLS, UDP, serial, file transfer, secure authentication
+	@scripts/features.sh $(ADAPTERS)
+
 # ── Upstream candidates ───────────────────────────────────────────────────────
 # Builds an adapter on another upstream version than the release pin and runs
 # the self-tests on it against the other adapters at their pins. Bugs of that
@@ -134,6 +138,7 @@ candidate-%: FORCE ## Build one adapter on CANDIDATE_VERSION (opendnp3: and CAND
 	@for a in $(filter-out $*,$(ADAPTERS)); do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate || exit 1; done
 	@VERSION=candidate scripts/smoke.sh $*
 	@VERSION=candidate scripts/interop.sh $(ADAPTERS)
+	@VERSION=candidate scripts/features.sh $(ADAPTERS)
 
 # ── Release qualification ─────────────────────────────────────────────────────
 

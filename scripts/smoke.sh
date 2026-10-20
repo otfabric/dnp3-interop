@@ -82,6 +82,31 @@ expect_exit 2 "a link address out of range" "${IMAGE}" client integrity-poll --h
 expect_exit 2 "server with an unknown flag" "${IMAGE}" server --frobnicate
 expect_exit 2 "server with a link address out of range" "${IMAGE}" server --local-addr 70000
 
+# ---- contract 1.1: flags that are wrong whatever the image has ----
+expect_exit 2 "an unknown transport" "${IMAGE}" client integrity-poll --host nowhere --transport carrier-pigeon
+expect_exit 2 "client --tls without certificates" "${IMAGE}" client integrity-poll --host nowhere --tls
+expect_exit 2 "server --tls-cert without key and CA" "${IMAGE}" server --tls-cert /nowhere.pem
+expect_exit 2 "TLS over UDP" "${IMAGE}" client integrity-poll --host nowhere --transport udp --tls \
+    --tls-ca /a --tls-cert /b --tls-key /c
+expect_exit 2 "serial without a device" "${IMAGE}" client integrity-poll --transport serial
+expect_exit 2 "a file operation without --name" "${IMAGE}" client file-get --host nowhere
+expect_exit 2 "an update key of the wrong length" "${IMAGE}" client integrity-poll --host nowhere --sa-update-key 0011
+if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "secure authentication without the feature" "${IMAGE}" client integrity-poll --host nowhere \
+        --sa-update-key 000102030405060708090a0b0c0d0e0f
+fi
+if ! jq -e '.features.fileClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "a file operation without the feature" "${IMAGE}" client file-get --host nowhere --name /a
+fi
+for feature in udp serial; do
+    if ! jq -e --arg f "${feature}" '.features[$f]' <<<"${caps}" >/dev/null 2>&1; then
+        expect_exit 2 "--transport ${feature} without the feature" "${IMAGE}" client integrity-poll --host nowhere \
+            --transport "${feature}"
+    fi
+done
+if diff -q <(docker run --rm "${IMAGE}" print-fixture files 2>/dev/null) "${ROOT}/fixtures/files/fixture.json" >/dev/null
+then ok "print-fixture files"; else fail "print-fixture files differs from fixtures/files/fixture.json"; fi
+
 if [[ "${serves}" == true ]]; then
     # ---- an invalid fixture stops the server before it listens ----
     bad=$(mktemp -d)
@@ -91,6 +116,15 @@ if [[ "${serves}" == true ]]; then
     chmod 644 "${bad}/fixture.json"
     expect_exit 4 "server with an invalid fixture" -v "${bad}:/bad:ro" "${IMAGE}" server --fixture /bad/fixture.json
     expect_exit 4 "server with a missing fixture" "${IMAGE}" server --fixture /no/such/fixture.json
+    # A fixture with files needs the feature fileServer (contract 1.1).
+    if jq -e '.features.fileServer' <<<"${caps}" >/dev/null 2>&1; then
+        name=$(start_server "${ADAPTER}" --fixture /fixtures/files/fixture.json)
+        if wait_ready "${name}"; then ok "server serves the files fixture"; else fail "server does not serve the files fixture"; fi
+        stop_server "${name}"
+    else
+        expect_exit 4 "server without file transfer refuses the files fixture" "${IMAGE}" server \
+            --fixture /fixtures/files/fixture.json
+    fi
 else
     expect_exit 2 "server of an adapter without the server role" "${IMAGE}" server
 fi

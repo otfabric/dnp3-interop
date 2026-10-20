@@ -10,7 +10,7 @@ outcome of every check (results-*.tsv: smoke per adapter, interop per server
 adapter, and the agreement across pairings). Prints Markdown on stdout:
 
   - the adapters, their upstreams and roles
-  - totals of the smoke and cross-stack self-tests
+  - totals of the smoke, cross-stack and contract 1.1 feature self-tests
   - a client x server matrix of passed, failed, known-bug and skipped checks
   - every failure, every known upstream bug hit, the skips by reason
   - the declared features per adapter
@@ -68,13 +68,16 @@ def main(argv):
     interop = []
     for f in sorted(reports.glob("results-interop-*.tsv")):
         interop.extend(read_results(f))
+    features = []
+    for f in sorted(reports.glob("results-features-*.tsv")):
+        features.extend(read_results(f))
     if not interop:
         print(f"no cross-stack results in {reports}", file=sys.stderr)
         return 1
 
     matrix = defaultdict(Counter)
     failures, known, skips = [], defaultdict(list), Counter()
-    for outcome, label in interop:
+    for outcome, label in interop + features:
         m = PAIR.match(label)
         if m:
             matrix[(m.group(1), m.group(2))][outcome] += 1
@@ -88,6 +91,7 @@ def main(argv):
             skips[f"needs {reason.group(1)}" if reason else re.sub(r"^[a-z0-9]+->[a-z0-9]+: ", "", label)] += 1
 
     totals = Counter(o for o, _ in interop)
+    ftotals = Counter(o for o, _ in features)
     out = [f"# {title}", ""]
     out.append("Generated from the documents of the smoke and cross-stack self-tests of the")
     out.append("reference images. It is about the reference stacks and says nothing about a")
@@ -115,10 +119,14 @@ def main(argv):
         else:
             out.append(f"| smoke `{a}` | {s['ok']} | {s['fail']} | | |")
     out.append(f"| cross-stack | {totals['ok']} | {totals['fail']} | {totals['known']} | {totals['skip']} |")
+    if features:
+        out.append(f"| contract 1.1 features (TLS, UDP, serial, files, SAv5) | {ftotals['ok']} | {ftotals['fail']} "
+                   f"| {ftotals['known']} | {ftotals['skip']} |")
     out.append("")
     out.append("## Pairings")
     out.append("")
-    out.append("Checks per client (rows) and server (columns): passed / failed / known upstream bug / skipped.")
+    out.append("Checks per client (rows) and server (columns), cross-stack and contract 1.1 features together:")
+    out.append("passed / failed / known upstream bug / skipped.")
     out.append("The agreement of documents across pairings is counted for the pairing it names first.")
     out.append("")
     out.append("| Client \\ Server | " + " | ".join(f"`{s}`" for s in servers) + " |")
@@ -160,7 +168,7 @@ def main(argv):
     for f in features:
         out.append(f"| `{f}` | " + " | ".join("yes" if caps[a]["features"].get(f) else "no" for a in adapters) + " |")
     print("\n".join(out))
-    return 1 if totals["fail"] or any(s and s["fail"] for s in smoke.values()) else 0
+    return 1 if totals["fail"] or ftotals["fail"] or any(s and s["fail"] for s in smoke.values()) else 0
 
 
 if __name__ == "__main__":
