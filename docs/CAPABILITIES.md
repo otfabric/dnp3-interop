@@ -274,9 +274,9 @@ them.
 ⁴⁶ stepfunc's server gives each connection one outstation, chosen by the
 master's IP address, not by link address.
 
-⁴⁷ On a multidrop bus, which loses a request that arrives on a new
-connection before that outstation's session has re-attached (intermittent,
-tests/known-bugs.tsv).
+⁴⁷ On the library's multidrop bus; the adapter holds the first read of each
+connection until every outstation's session has re-attached, which the bus
+does not wait for (COMPATIBILITY.md).
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks

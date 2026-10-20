@@ -426,7 +426,6 @@ done < "${CASES}"
 
 # ---- a known bug that no longer shows is a stale entry ----
 while IFS=$'\t' read -r bug_adapter bug_regex bug_text; do
-    [[ "${bug_text}" == *"(intermittent)" ]] && continue
     if ! grep -qxF "${bug_text}" "${WORK}/reproduced"; then
         fail "known bug of ${bug_adapter} did not reproduce: ${bug_text}"
         log "    remove it from tests/known-bugs.tsv; the pin can move to this version"

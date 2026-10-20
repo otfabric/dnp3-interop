@@ -474,7 +474,8 @@ func runServer(argv []string) int {
 	if len(sessions) == 1 {
 		go func() { done <- sessions[0].Run(ctx, sniffChannel{ch}) }()
 	} else {
-		bus := multidrop.New(sniffChannel{ch}, multidrop.Config{Log: libraryLog()})
+		g := newGate(len(sessions))
+		bus := multidrop.New(sniffChannel{gatedLine{Channel: ch, g: g}}, multidrop.Config{Log: libraryLog()})
 		defer func() { _ = bus.Close() }()
 		for i, s := range sessions {
 			station, err := bus.Add(multidrop.Station{LocalAddr: uint16(local + int64(i)), RemoteAddr: uint16(remote)})
@@ -482,7 +483,7 @@ func runServer(argv []string) int {
 				logf("server: %v", err)
 				return exitFailed
 			}
-			go func() { done <- s.Run(ctx, station) }()
+			go func() { done <- s.Run(ctx, gatedStation{Channel: station, g: g}) }()
 		}
 	}
 	for deadline := time.Now().Add(5 * time.Second); !listening(); time.Sleep(10 * time.Millisecond) {
