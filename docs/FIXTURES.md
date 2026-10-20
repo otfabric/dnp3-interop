@@ -309,6 +309,36 @@ and for file transfer:
 | `/data/blocks.bin` | file | 3000 octets, octet *i* = (7*i* + 3) mod 256: several blocks with any block size |
 | `/logs` | directory | empty |
 
+## The dnp3py fixture
+
+`fixtures/dnp3py/fixture.json`: the baseline within what dnp3py's outstation
+serves, so that it can be compared with the others. Outstation 1024, master
+1, NEED_TIME at start, no unsolicited responses, cold restart 5000 ms, warm
+restart 1000 ms.
+
+| Type | Index | Value | Flags | Class | Static | Event | Notes |
+|------|------:|-------|-------|------:|-------:|------:|-------|
+| binary input | 0 | true | ONLINE | 1 | g1v2 | g2v1 | |
+| binary input | 1 | false | ONLINE | 1 | g1v2 | g2v1 | target of binary output 0 |
+| binary input | 2 | true | ONLINE, LOCAL_FORCED | 1 | g1v2 | g2v1 | |
+| binary input | 3 | false | (offline) | 0 | g1v2 | | |
+| binary output | 0 | false | ONLINE | 0 | g10v2 | | target binary input 1 |
+| binary output | 1 | false | ONLINE | 0 | g10v2 | | select required |
+| counter | 0 | 123456 | ONLINE | 3 | g20v1 | g22v5 | |
+| counter | 1 | 65535 | ONLINE | 3 | g20v1 | g22v5 | |
+| counter | 2 | 4294967295 | ONLINE | 0 | g20v1 | | |
+| frozen counter | 0, 1 | 0 | ONLINE | 0 | g21v1 | | |
+| analog input | 0 | -1234 | ONLINE | 2 | g30v1 | g32v1 | |
+| analog input | 1 | 32767 | ONLINE | 0 | g30v1 | | |
+| analog input | 2 | 0 | OVER_RANGE (offline) | 0 | g30v1 | | |
+| analog input | 3 | 0 | ONLINE | 2 | g30v1 | g32v1 | target of analog output 0 |
+| analog output | 0 | 0 | ONLINE | 0 | g40v1 | | target analog input 3, range ±1000000 |
+| analog output | 1 | 0 | ONLINE | 0 | g40v1 | | select required, range ±100 |
+
+Every outstation whose point types cover it serves it;
+`FIXTURE=dnp3py scripts/interop.sh` runs tests/cases-dnp3py.tsv against all
+of them.
+
 ## The extended fixture
 
 `fixtures/extended/fixture.json`: outstation 1024, master 1, NEED_TIME at

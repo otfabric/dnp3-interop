@@ -58,6 +58,7 @@ An image with the feature `secureAuthentication` adds (contract 1.1):
 | `pointTypes` | Point arrays a fixture may use with this adapter as server |
 | `commandTypes` | Control objects the adapter handles as server and sends as client |
 | `clientOperations` | Operations of `client` |
+| `serverFeatures` | Contract 1.2, optional: features whose value for the server role differs from `features`, which then holds the client role's. The self-tests read a `server:` need from here first |
 
 ## Features
 
@@ -72,8 +73,8 @@ serves it and the master sends it.
 | `readAllObjectsClient` | `read` of all objects of a group (qualifier 0x06), not only a range | yes | yes | no ¹¹ | yes |
 | `directOperate` | DIRECT OPERATE of g12v1 and g41v1..v4 | yes | yes | yes | yes |
 | `selectBeforeOperate` | SELECT, then OPERATE, and `selectRequired` points | yes | yes | yes | yes |
-| `parameterErrorWithNotSupported` | Server: the outstation sets IIN2.2 PARAMETER_ERROR with every NOT_SUPPORTED command status, not only for a point that does not exist. A behaviour, not a capability: cases name it either way | yes | yes | no | — |
-| `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | yes | yes | yes | — |
+| `parameterErrorWithNotSupported` | Server: the outstation sets IIN2.2 PARAMETER_ERROR with every NOT_SUPPORTED command status, not only for a point that does not exist. A behaviour, not a capability: cases name it either way | yes | yes | no | no |
+| `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | yes | yes | yes | yes |
 | `directOperateNoAckClient` | `operate --mode direct-no-ack` | no ² | no ² | yes | yes |
 | `timeSyncLan` | RECORD CURRENT TIME and WRITE g50v3 | yes | yes | yes | yes |
 | `timeSyncNonLan` | DELAY MEASURE and WRITE g50v1 | yes | yes | yes | yes |
@@ -81,10 +82,10 @@ serves it and the master sends it.
 | `restart` | COLD RESTART and WARM RESTART with the delay | yes | yes | yes | yes |
 | `restartDelayClient` | `restart` reports the announced delay in `restartDelayMs` | yes | yes | no ¹² | yes |
 | `unsolicited` | ENABLE and DISABLE UNSOLICITED, and events in unsolicited responses | yes | yes | yes | yes |
-| `assignClassServer` | The outstation applies ASSIGN CLASS | no ⁴ | yes | yes | — |
+| `assignClassServer` | The outstation applies ASSIGN CLASS | no ⁴ | yes | yes | no |
 | `assignClassClient` | `assign-class` | yes | yes | no ⁸ | yes |
 | `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes | yes ⁹ | yes |
-| `freezeNoAckServer` | The outstation applies the `_NR` freezes | yes | yes | yes | — |
+| `freezeNoAckServer` | The outstation applies the `_NR` freezes | yes | yes | yes | yes |
 | `freezeNoAckClient` | `freeze --no-ack` | no ² | no ² | no ² | yes |
 | `octetStrings` | g110 in class 0 and reads | yes | yes | yes | yes |
 | `tcp` | DNP3 over TCP | yes | yes | yes | yes |
@@ -92,18 +93,18 @@ serves it and the master sends it.
 | `tls` | DNP3 over TLS (IEC 62351-3), mutual authentication (1.1) | yes | yes ⁵ | yes | no ¹⁴ |
 | `serial` | DNP3 over a serial line (1.1) | yes | yes | yes | no ¹⁴ |
 | `fileTransfer` | File transfer, group 70, in at least one role (`fileServer` or `fileClient`) | yes ⁶ | no ⁷ | yes | no ¹⁴ |
-| `fileServer` | The outstation serves the files of its fixture (1.1) | no ⁶ | no ⁷ | yes | — |
+| `fileServer` | The outstation serves the files of its fixture (1.1) | no ⁶ | no ⁷ | yes | no |
 | `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | yes | no ⁷ | yes | no ¹⁴ |
 | `fileDeleteClient` | `file-delete` (1.1) | no ⁶ | no ⁷ | yes | no ¹⁴ |
 | `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ⁷ | no ⁷ | yes ¹⁵ | no ¹⁴ |
-| `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁶ | no ¹⁶ | yes | — |
+| `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁶ | no ¹⁶ | yes | no |
 | `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes | no ¹⁷ |
 | `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | yes | no ¹⁶ | yes | no ¹⁷ |
 | `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | no ¹⁸ | yes | no ¹⁸ | no ¹⁷ |
-| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | yes | — |
+| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | yes | no |
 | `dualEndpointClient` | `client --listen`: the master listens, over TCP (1.2) | yes | yes | yes | no ¹⁴ |
 | `dualEndpointClientTls` | `client --listen --tls` (1.2) | no ¹⁹ | yes | yes | no ¹⁴ |
-| `securityStatisticsServer` | With secure authentication on, the outstation serves g121 and raises g122 events (1.2) | no ⁷ | no ⁷ | yes | — |
+| `securityStatisticsServer` | With secure authentication on, the outstation serves g121 and raises g122 events (1.2) | no ⁷ | no ⁷ | yes | no |
 | `securityStatisticsClient` | The master reports g121 and g122 objects (1.2) | no ⁷ | no ⁷ | yes ²⁰ | no ¹⁴ |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
@@ -143,11 +144,13 @@ group; `read --group 60 --variation 1..4` works, as a class read.
 ¹² go-dnp3's master returns no delay from `Restart`; `restartDelayMs` is
 null.
 
-¹³ dnp3py has the client role only: its outstation cannot serve the baseline
-fixture (no double-bit inputs, octet strings or per-point variations). "—"
-marks a feature of the server role. The adapter builds the requests its
-master has no call for (everything but the polls) with dnp3py's
-application-layer types, and decodes responses with its decoders.
+¹³ dnp3py's outstation cannot serve the baseline fixture (no double-bit
+inputs, octet strings or per-point variations); it serves the `dnp3py`
+fixture (FIXTURES.md). Its `serverFeatures` turn `read` (it ignores ranges and
+specific variations), `unsolicited` and `octetStrings` off for the server
+role. The adapter builds the requests its master has no call for (everything
+but the polls) with dnp3py's application-layer types, and decodes responses
+with its decoders.
 
 ¹⁴ dnp3py 0.6.0 has TCP only, no file transfer and no secure
 authentication.

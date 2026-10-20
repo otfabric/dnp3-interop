@@ -55,6 +55,14 @@ then ok "print-capabilities"; else fail "print-capabilities is not a valid capab
 if [[ $(wc -l <<<"${caps}") -eq 1 ]]; then ok "print-capabilities is one line"; else fail "print-capabilities printed more than one line"; fi
 serves=false
 jq -e '.roles.server == true' <<<"${caps}" >/dev/null 2>&1 && serves=true
+# The fixture the adapter's own server serves: the baseline, or (dnp3py) the
+# dnp3py fixture when its point types do not cover the baseline's.
+FIXTURE=baseline
+if [[ "${serves}" == true ]] && ! jq -e '.pointTypes | index("doubleBitInputs") and index("octetStrings")' \
+        <<<"${caps}" >/dev/null 2>&1; then
+    FIXTURE=dnp3py
+fi
+FIXTURE_ARGS=(--fixture "/fixtures/${FIXTURE}/fixture.json")
 SERVER_ADAPTER="${ADAPTER}"
 if [[ "${serves}" == false ]]; then
     SERVER_ADAPTER="${SMOKE_SERVER:-opendnp3}"
@@ -64,8 +72,10 @@ version=$(docker run --rm "${IMAGE}" version 2>/dev/null)
 if [[ "${version}" == "dnp3-interop ${ADAPTER} "* ]]; then ok "version"; else fail "version printed: ${version}"; fi
 
 # ---- the baked fixture is the repository's ----
-if diff -q <(docker run --rm "${IMAGE}" print-fixture baseline 2>/dev/null) "${ROOT}/fixtures/baseline/fixture.json" >/dev/null
-then ok "print-fixture baseline"; else fail "print-fixture baseline differs from fixtures/baseline/fixture.json"; fi
+for fixture in baseline dnp3py; do
+    if diff -q <(docker run --rm "${IMAGE}" print-fixture "${fixture}" 2>/dev/null) "${ROOT}/fixtures/${fixture}/fixture.json" >/dev/null
+    then ok "print-fixture ${fixture}"; else fail "print-fixture ${fixture} differs from fixtures/${fixture}/fixture.json"; fi
+done
 expect_exit 1 "print-fixture of an unknown name" "${IMAGE}" print-fixture no-such-fixture
 
 # ---- usage errors never touch the network ----
@@ -116,7 +126,7 @@ if [[ "${serves}" == true ]]; then
     bad=$(mktemp -d)
     trap 'rm -rf "${bad}"; cleanup' EXIT
     chmod 755 "${bad}"
-    jq '.binaryOutputs[0].target = 9' "${ROOT}/fixtures/baseline/fixture.json" > "${bad}/fixture.json"
+    jq '.binaryOutputs[0].target = 9' "${ROOT}/fixtures/${FIXTURE}/fixture.json" > "${bad}/fixture.json"
     chmod 644 "${bad}/fixture.json"
     expect_exit 4 "server with an invalid fixture" -v "${bad}:/bad:ro" "${IMAGE}" server --fixture /bad/fixture.json
     expect_exit 4 "server with a missing fixture" "${IMAGE}" server --fixture /no/such/fixture.json
@@ -148,10 +158,14 @@ if [[ "${CLIENT_EXIT}" == 3 ]] && jq -e '.ok == false and .error.code == "connec
 then ok "connect failure: exit 3 and a result document"; else fail "connect failure: exit ${CLIENT_EXIT}, ${doc}"; fi
 
 # ---- server: readiness, events, operations, clean stop ----
-name=$(start_server "${SERVER_ADAPTER}")
+SERVER_FIXTURE_ARGS=()
+[[ "${SERVER_ADAPTER}" == "${ADAPTER}" ]] && SERVER_FIXTURE_ARGS=("${FIXTURE_ARGS[@]}")
+SERVER_FIXTURE=baseline
+[[ "${SERVER_ADAPTER}" == "${ADAPTER}" ]] && SERVER_FIXTURE="${FIXTURE}"
+name=$(start_server "${SERVER_ADAPTER}" "${SERVER_FIXTURE_ARGS[@]}")
 if wait_ready "${name}"; then ok "server becomes ready"; else fail "server did not become ready"; finish; exit 1; fi
 first=$(docker logs "${name}" 2>/dev/null | head -1)
-if jq -e --arg a "${SERVER_ADAPTER}" '.event == "ready" and .adapter == $a and .fixture == "baseline"
+if jq -e --arg a "${SERVER_ADAPTER}" --arg f "${SERVER_FIXTURE}" '.event == "ready" and .adapter == $a and .fixture == $f
         and .linkAddress == 1024 and .masterAddress == 1 and (.address | type == "string")' <<<"${first}" >/dev/null 2>&1
 then ok "ready event"; else fail "first stdout line is not the ready event: ${first}"; fi
 
@@ -194,8 +208,8 @@ if jq -e '.event == "stopped"' <<<"${last}" >/dev/null 2>&1; then ok "stopped ev
 stop_server "${name}"
 
 # ---- a port that is already taken ----
-name=$(start_server "${ADAPTER}"); wait_ready "${name}"
-docker exec "${name}" /usr/local/bin/dnp3-interop server --ready-file /tmp/second >/dev/null 2>&1
+name=$(start_server "${ADAPTER}" "${FIXTURE_ARGS[@]}"); wait_ready "${name}"
+docker exec "${name}" /usr/local/bin/dnp3-interop server --ready-file /tmp/second "${FIXTURE_ARGS[@]}" >/dev/null 2>&1
 code=$?
 if [[ "${code}" != 0 ]]; then ok "second server on a busy port fails (exit ${code})"; else fail "second server on a busy port exited 0"; fi
 stop_server "${name}"

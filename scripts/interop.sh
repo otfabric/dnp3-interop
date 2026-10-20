@@ -27,7 +27,12 @@
 # any library that consumes the images.
 #
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
-#              REPORT_DIR (keeps every result document when set).
+#              REPORT_DIR (keeps every result document when set),
+#              FIXTURE (default baseline): the fixture the servers serve, with
+#              the cases of tests/cases-<fixture>.tsv (tests/cases.tsv for the
+#              baseline). Only adapters whose pointTypes cover the fixture
+#              serve; the value checks beyond the integrity poll are the
+#              baseline's.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,8 +42,16 @@ source "${SCRIPT_DIR}/lib.sh"
 
 [[ $# -ge 1 ]] || { echo "usage: interop.sh <adapter> [<adapter> ...]" >&2; exit 2; }
 ADAPTERS=("$@")
-FIXTURE="${ROOT}/fixtures/baseline/fixture.json"
+FIXTURE_NAME="${FIXTURE:-baseline}"
+FIXTURE="${ROOT}/fixtures/${FIXTURE_NAME}/fixture.json"
+[[ -f "${FIXTURE}" ]] || { echo "no fixture ${FIXTURE_NAME}" >&2; exit 2; }
+SERVER_ARGS=() SUFFIX=""
 CASES="${ROOT}/tests/cases.tsv"
+if [[ "${FIXTURE_NAME}" != baseline ]]; then
+    SERVER_ARGS=(--fixture "/fixtures/${FIXTURE_NAME}/fixture.json")
+    SUFFIX="-${FIXTURE_NAME}"
+    CASES="${ROOT}/tests/cases-${FIXTURE_NAME}.tsv"
+fi
 KNOWN_BUGS="${ROOT}/tests/known-bugs.tsv"
 require_tools
 WORK=$(mktemp -d)
@@ -53,8 +66,9 @@ for adapter in "${ADAPTERS[@]}"; do
     docker run --rm "$(image_of "${adapter}")" print-capabilities > "${WORK}/caps-${adapter}.json" 2>/dev/null
     version=$(jq -r '.upstream.version' "${WORK}/caps-${adapter}.json")
     log "${adapter}: upstream ${version}"
-    while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text; do
+    while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text bug_fixture; do
         [[ -z "${bug_adapter}" || "${bug_adapter}" == \#* ]] && continue
+        [[ "${bug_fixture:-baseline}" == "${FIXTURE_NAME}" ]] || continue
         if [[ "${bug_adapter%%:*}" == "${adapter}" && "${bug_version}" == "${version}" ]]; then
             printf '%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" >> "${WORK}/active"
             log "known bug in ${adapter} ${version}: ${bug_text}"
@@ -64,6 +78,20 @@ done
 
 # has <adapter> <feature>: the adapter declares the feature.
 has() { jq -e --arg f "$2" '.features[$f] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
+# has_server <adapter> <feature>: the feature as its server role has it
+# (serverFeatures, contract 1.2, where it differs from features).
+has_server() {
+    jq -e --arg f "$2" 'if (.serverFeatures // {}) | has($f) then .serverFeatures[$f] else .features[$f] end == true' \
+        "${WORK}/caps-$1.json" >/dev/null 2>&1
+}
+# serves <adapter>: the adapter's outstation serves the fixture: its point
+# types cover the fixture's.
+serves() {
+    jq -e --slurpfile fx "${FIXTURE}" '.roles.server and ((.pointTypes) as $p
+        | [$fx[0] | keys[] | select(. as $k | ["binaryInputs","doubleBitInputs","binaryOutputs","counters",
+            "frozenCounters","analogInputs","analogOutputs","octetStrings","frozenAnalogInputs","timeAndIntervals"]
+            | index($k))] | all(. as $k | $p | index($k)))' "${WORK}/caps-$1.json" >/dev/null 2>&1
+}
 
 # has_role <adapter> <server|client>
 has_role() { jq -e --arg r "$2" '.roles[$r] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
@@ -73,15 +101,17 @@ has_role() { jq -e --arg r "$2" '.roles[$r] == true' "${WORK}/caps-$1.json" >/de
 # feature written "!<feature>" must be declared false.
 supported() {
     local need side feature adapter
-    has_role "$1" client && has_role "$2" server || return 1
+    has_role "$1" client && serves "$2" || return 1
     [[ "$3" == "-" ]] && return 0
     for need in ${3//,/ }; do
         side="${need%%:*}"; feature="${need#*:}"
         if [[ "${side}" == "server" ]]; then adapter="$2"; else adapter="$1"; fi
+        local test=has
+        [[ "${side}" == server ]] && test=has_server
         if [[ "${feature}" == !* ]]; then
-            has "${adapter}" "${feature#!}" && return 1
+            "${test}" "${adapter}" "${feature#!}" && return 1
         else
-            has "${adapter}" "${feature}" || return 1
+            "${test}" "${adapter}" "${feature}" || return 1
         fi
     done
     return 0
@@ -117,8 +147,8 @@ hit_known_bug() {
 # the outstation get a server of their own.
 shared_server() { SERVER_TAG=shared server_name "$1"; }
 for adapter in "${ADAPTERS[@]}"; do
-    has_role "${adapter}" server || continue
-    name=$(SERVER_TAG=shared start_server "${adapter}")
+    serves "${adapter}" || continue
+    name=$(SERVER_TAG=shared start_server "${adapter}" "${SERVER_ARGS[@]}")
     wait_ready "${name}" || exit 1
 done
 
@@ -175,7 +205,7 @@ want_flags=$(jq -cS '
 suite() {
     local server="$1" n=0 state want_exit want_summary needs operation client pair name doc summary bug got got_flags procedure
     PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
-    if [[ -n "${REPORT_DIR:-}" ]]; then RESULTS_FILE="${REPORT_DIR}/results-interop-${server}.tsv"; : > "${RESULTS_FILE}"; fi
+    if [[ -n "${REPORT_DIR:-}" ]]; then RESULTS_FILE="${REPORT_DIR}/results-interop${SUFFIX}-${server}.tsv"; : > "${RESULTS_FILE}"; fi
     while IFS=$'\t' read -r state want_exit want_summary needs operation; do
         [[ -z "${state}" || "${state}" == \#* ]] && continue
         n=$((n + 1))
@@ -187,13 +217,13 @@ suite() {
                 continue
             fi
             if [[ "${state}" == "rw" ]]; then
-                name=$(SERVER_TAG=rw start_server "${server}"); wait_ready "${name}" || { fail "${pair}: server did not start"; continue; }
+                name=$(SERVER_TAG=rw start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || { fail "${pair}: server did not start"; continue; }
             else
                 name=$(shared_server "${server}")
             fi
             # shellcheck disable=SC2086
             doc=$(run_client "${client}" ${operation} --host "${name}"); CLIENT_EXIT=$?
-            keep "case${n}-${pair}" "${doc}"
+            keep "case${SUFFIX}${n}-${pair}" "${doc}"
 
             bug=$(known_bug "${client}" "${server}" "${operation}")
             summary=$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)
@@ -232,9 +262,11 @@ suite() {
         check "${pair}" "integrity poll returns the fixture" "${want_static}" "$(objects "${doc}")"
         got_flags=$(jq -cS '[.objects[] | select(.flags) | .flags] | sort' <<<"${doc}" 2>/dev/null)
         check "${pair}" "integrity poll returns the flags of the fixture" "${want_flags}" "${got_flags}"
+        # The value checks below use the baseline's points.
+        [[ "${FIXTURE_NAME}" == baseline ]] || continue
 
         # Controls, their events, once; the values a later poll reports.
-        name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
         run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
         run_client "${client}" operate --type g41v1 --index 0 --value 42 --host "${name}" >/dev/null
         check "${pair}" "controls produce class 1 events" "g11v2:0=true g2v2:1=true g42v1:0=42" \
@@ -252,7 +284,7 @@ suite() {
 
         # Select-before-operate as the first request after the null unsolicited
         # response of the outstation was confirmed (see tests/known-bugs.tsv).
-        name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
         run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --collect-ms 500 --host "${name}" >/dev/null
         check "${pair}" "select-before-operate of a select-required output" "SUCCESS" \
             "$(run_client "${client}" operate --type g12v1 --index 1 --code LATCH_ON --mode sbo --host "${name}" | jq -r '.commandStatus')"
@@ -264,7 +296,7 @@ suite() {
 
         # A freeze without acknowledgement still freezes.
         if supported "${client}" "${server}" "server:freezeNoAckServer,client:freezeNoAckClient"; then
-            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
             run_client "${client}" freeze --no-ack --host "${name}" >/dev/null
             check "${pair}" "a freeze without acknowledgement copies the counters" "g21v1:0=123456 g21v2:1=65535" \
                 "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
@@ -275,7 +307,7 @@ suite() {
 
         # Direct operate without acknowledgement still operates.
         if supported "${client}" "${server}" "server:directOperateNoAckServer,client:directOperateNoAckClient"; then
-            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --mode direct-no-ack --host "${name}" >/dev/null
             run_client "${client}" operate --type g41v2 --index 0 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
             check "${pair}" "direct operate no ack operates" "g10v2:0=true g40v1:0=7" \
@@ -286,13 +318,13 @@ suite() {
         fi
 
         # A restart is answered, also by a master that does not report the delay.
-        name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
         check "${pair}" "a cold restart is accepted" "true" \
             "$(run_client "${client}" restart --type cold --host "${name}" | jq -r '.ok')"
         stop_server "${name}"
 
         # Freeze, then freeze and clear.
-        name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+        name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
         run_client "${client}" freeze --host "${name}" >/dev/null
         check "${pair}" "a freeze copies the counters" "g21v1:0=123456 g21v2:1=65535" \
             "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
@@ -307,7 +339,7 @@ suite() {
 
         # Unsolicited responses: buffered events arrive once a class is enabled.
         if supported "${client}" "${server}" "server:unsolicited,client:unsolicited"; then
-            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
             check "${pair}" "enabling class 1 delivers its events unsolicited" "g11v2u:0=true g2v2u:1=true" \
                 "$(objects "$(run_client "${client}" enable-unsolicited --classes 1 --collect-ms 2000 --host "${name}")")"
@@ -320,7 +352,7 @@ suite() {
 
         # A class assignment moves the events of the binary outputs.
         if supported "${client}" "${server}" "server:assignClassServer,client:assignClassClient"; then
-            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
             run_client "${client}" assign-class --class 2 --group 10 --host "${name}" >/dev/null
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
             check "${pair}" "an assigned class takes the events" "g11v2:0=true" \
@@ -334,7 +366,7 @@ suite() {
 
         # Time synchronization clears NEED_TIME, by either procedure.
         for procedure in lan non-lan; do
-            name=$(start_server "${server}"); wait_ready "${name}" || exit 1
+            name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
             run_client "${client}" time-sync --procedure "${procedure}" --host "${name}" >/dev/null
             got=$(run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --host "${name}" | jq -c '.iin - ["DEVICE_RESTART"]')
             check "${pair}" "time-sync ${procedure} clears NEED_TIME" "[]" "${got}"
@@ -348,8 +380,9 @@ log "adapters: ${ADAPTERS[*]} (${VERSION})"
 [[ -n "${REPORT_DIR:-}" ]] && mkdir -p "${REPORT_DIR}"
 servers=()
 for adapter in "${ADAPTERS[@]}"; do
-    has_role "${adapter}" server && servers+=("${adapter}")
+    serves "${adapter}" && servers+=("${adapter}")
 done
+log "fixture ${FIXTURE_NAME}: servers ${servers[*]}"
 for server in "${servers[@]}"; do
     suite "${server}" &
 done
@@ -365,7 +398,7 @@ for server in "${servers[@]}"; do
     PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
 
-[[ -n "${REPORT_DIR:-}" ]] && { RESULTS_FILE="${REPORT_DIR}/results-interop-agreement.tsv"; : > "${RESULTS_FILE}"; }
+[[ -n "${REPORT_DIR:-}" ]] && { RESULTS_FILE="${REPORT_DIR}/results-interop${SUFFIX}-agreement.tsv"; : > "${RESULTS_FILE}"; }
 
 # ---- every pairing that met a case's expectation returned the same document ----
 n=0
