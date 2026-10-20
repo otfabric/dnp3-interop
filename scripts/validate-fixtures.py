@@ -143,6 +143,12 @@ def semantic_errors(fx):
         for p in fx.get(kind, []):
             if "commandEventVariation" in p and "commandEventClass" not in p:
                 errors.append(f"{kind}[{p.get('index')}]: commandEventVariation needs commandEventClass")
+    seen = set()
+    for a in fx.get("deviceAttributes", []):
+        key = (a.get("set"), a.get("variation"))
+        if key in seen:
+            errors.append(f"deviceAttributes: set {key[0]} variation {key[1]} is listed twice")
+        seen.add(key)
     out = fx.get("outstation", {})
     if out.get("address") is not None and out.get("address") == out.get("masterAddress"):
         errors.append("outstation: address and masterAddress are equal")
