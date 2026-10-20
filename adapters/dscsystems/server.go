@@ -308,9 +308,19 @@ func (c *eventConn) Close() error {
 }
 
 func runServer(argv []string) int {
-	a, err := parseArgs(argv, []string{"fixture", "bind-address", "port", "ready-file", "select-timeout-ms",
-		"confirm-timeout-ms", "local-addr", "remote-addr"}, nil)
+	flags := []string{"fixture", "bind-address", "port", "ready-file", "select-timeout-ms",
+		"confirm-timeout-ms", "local-addr", "remote-addr"}
+	flags = append(append(flags, serverTransportFlags...), saFlags...)
+	a, err := parseArgs(argv, flags, nil)
 	var port, selectTimeout, confirmTimeout, local, remote int64
+	var tr transport
+	var sec security
+	if err == nil {
+		tr, err = parseTransport(a, true)
+	}
+	if err == nil {
+		sec, err = parseSecurity(a)
+	}
 	if err == nil {
 		port, err = a.integer("port", 20000, 1, 65535)
 	}
@@ -363,6 +373,19 @@ func runServer(argv []string) int {
 		AnalogOutputStatus: len(fx.Points["analogOutputs"]),
 		OctetString:        len(fx.Points["octetStrings"]),
 	}
+	var files outstation.FileConfig
+	if fx.Files != nil || fx.Directories != nil {
+		root, err := fileTree(fx)
+		var h *outstation.DirFileHandler
+		if err == nil {
+			h, err = outstation.OpenDir(root)
+		}
+		if err != nil {
+			logf("server: cannot set up the files of the fixture: %v", err)
+			return exitFailed
+		}
+		files.Handler = fileEvents{h}
+	}
 	ctrl := &controls{fx: fx}
 	session := outstation.New(outstation.Config{
 		LocalAddr:      uint16(local),
@@ -372,7 +395,10 @@ func runServer(argv []string) int {
 		ConfirmTimeout: time.Duration(confirmTimeout) * time.Millisecond,
 		SelectTimeout:  time.Duration(selectTimeout) * time.Millisecond,
 		Unsolicited:    outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
+		Files:          files,
 		Log:            libraryLog(),
+
+		SecureAuthentication: sec.outstation(),
 	}, &application{fx: fx}, ctrl)
 	ctrl.session = session
 	if err := configure(session.Database(), fx); err != nil {
@@ -380,23 +406,35 @@ func runServer(argv []string) int {
 		return exitFixtureInvalid
 	}
 
-	address := net.JoinHostPort(bind, strconv.Itoa(int(port)))
-	ln, err := newListener(address)
+	ch, address, listening, err := serverChannel(tr, bind, port)
 	if err != nil {
-		logf("server: cannot listen on %s: %v", address, err)
+		logf("server: cannot open the %s channel on %s: %v", tr.name(), net.JoinHostPort(bind, strconv.Itoa(int(port))), err)
 		return exitFailed
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	done := make(chan error, 1)
+	go func() { done <- session.Run(ctx, sniffChannel{ch}) }()
+	for deadline := time.Now().Add(5 * time.Second); !listening(); time.Sleep(10 * time.Millisecond) {
+		select {
+		case err := <-done:
+			logf("server: cannot listen on %s: %v", address, err)
+			return exitFailed
+		default:
+		}
+		if time.Now().After(deadline) {
+			logf("server: not listening on %s after 5 s", address)
+			return exitFailed
+		}
 	}
 	if err := os.WriteFile(readyFile, nil, 0o644); err != nil {
 		logf("server: cannot write the readiness file %s: %v", readyFile, err)
 		return exitFailed
 	}
 	emit(object{{"event", "ready"}, {"adapter", adapter}, {"address", address}, {"fixture", fx.Name},
-		{"linkAddress", local}, {"masterAddress", remote}})
+		{"linkAddress", local}, {"masterAddress", remote}, {"transport", tr.name()}})
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-	done := make(chan error, 1)
-	go func() { done <- session.Run(ctx, ln) }()
 	select {
 	case <-ctx.Done():
 		logf("server: signal, stopping")
@@ -404,7 +442,7 @@ func runServer(argv []string) int {
 		logf("server: the session ended: %v", err)
 	}
 	_ = os.Remove(readyFile)
-	_ = ln.Close()
+	_ = ch.Close()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):

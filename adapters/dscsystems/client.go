@@ -9,14 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/dscsystems/go-dnp3"
-	"github.com/dscsystems/go-dnp3/channel"
 	"github.com/dscsystems/go-dnp3/master"
 )
 
@@ -327,13 +324,18 @@ func runClient(argv []string) int {
 		return exitUsage
 	}
 	op := argv[0]
-	if !slices.Contains(operations, op) {
+	if !slices.Contains(operations, op) && !slices.Contains(fileOperations, op) {
 		logf("client: unknown operation '%s'", op)
 		return exitUsage
 	}
 	flags := []string{"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms"}
-	var switches []string
+	flags = append(append(flags, clientTransportFlags...), saFlags...)
+	switches := append([]string(nil), clientTransportSwitches...)
 	switch op {
+	case "file-get", "file-ls", "file-info", "file-delete":
+		flags = append(flags, "name")
+	case "file-put":
+		flags = append(flags, "name", "content")
 	case "event-poll", "enable-unsolicited", "disable-unsolicited":
 		flags = append(flags, "classes")
 	case "read":
@@ -357,9 +359,18 @@ func runClient(argv []string) int {
 		host                                                            string
 		port, local, remote, connectTimeout, timeout, collect, duration int64
 		req                                                             request
+		freq                                                            fileRequest
+		tr                                                              transport
+		sec                                                             security
 	)
 	a, err := parseArgs(argv[1:], flags, switches)
 	if err == nil {
+		tr, err = parseTransport(a, false)
+	}
+	if err == nil {
+		sec, err = parseSecurity(a)
+	}
+	if err == nil && tr.kind != "serial" {
 		host, err = a.required("host")
 	}
 	for _, f := range []struct {
@@ -375,7 +386,12 @@ func runClient(argv []string) int {
 			*f.dst, err = a.integer(f.name, f.def, f.min, f.max)
 		}
 	}
-	if err == nil && op != "monitor" {
+	fileOp := slices.Contains(fileOperations, op)
+	switch {
+	case err != nil, op == "monitor":
+	case fileOp:
+		freq, err = parseFileOperation(op, a)
+	default:
 		req, err = parseOperation(op, a)
 	}
 	if err != nil {
@@ -390,10 +406,18 @@ func runClient(argv []string) int {
 		RemoteAddr:      uint16(remote),
 		ResponseTimeout: time.Duration(timeout) * time.Millisecond,
 		Log:             libraryLog(),
+
+		SecureAuthentication: sec.master(),
 	}, h)
+	ch, addr, err := clientChannel(tr, host, port)
+	if err != nil {
+		// Certificate files that cannot be used.
+		emit(object{{"schemaVersion", schemaVersion}, {"adapter", adapter}, {"operation", op}, {"ok", false},
+			{"error", object{{"code", "failed"}, {"message", err.Error()}}}, {"connected", false}, {"iin", nil},
+			{"objects", []object{}}, {"elapsedMs", time.Since(started).Milliseconds()}})
+		return exitFailed
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	addr := net.JoinHostPort(host, strconv.Itoa(int(port)))
-	ch := channel.TCPClient(addr, channel.Retry{Min: 100 * time.Millisecond, Max: time.Second})
 	runDone := make(chan struct{})
 	go func() {
 		_ = session.Run(ctx, ch)
@@ -411,6 +435,7 @@ func runClient(argv []string) int {
 
 	var fail *failure
 	var res result
+	var fres fileResult
 	switch {
 	case !connected:
 		fail = &failure{"connect-failed", "no connection to " + addr}
@@ -421,6 +446,20 @@ func runClient(argv []string) int {
 		}
 		if !session.Connected() {
 			fail = &failure{"connection-lost", "the connection closed during the monitoring"}
+		}
+	case fileOp:
+		// A transfer is many requests, each bounded by the response timeout.
+		opCtx, opCancel := context.WithTimeout(ctx, 20*time.Duration(timeout)*time.Millisecond+2*time.Second)
+		err := freq(opCtx, session, &fres)
+		opCancel()
+		fail = classify(err, session.Connected())
+		if status, ok := fileStatusOf(err); ok {
+			name := fileStatusName(status)
+			fres.status = &name
+			fail = &failure{"file-error", err.Error()}
+		} else if err == nil {
+			name := "SUCCESS"
+			fres.status = &name
 		}
 	default:
 		// The library bounds every request by the response timeout; this only
@@ -500,6 +539,19 @@ func runClient(argv []string) int {
 		// The library does not hand the announced delay to the caller.
 		doc = append(doc, field{"restartDelayMs", nil})
 	}
+	if fileOp {
+		switch {
+		case fres.files != nil:
+			doc = append(doc, field{"files", fres.files})
+		case fres.file != nil:
+			doc = append(doc, field{"file", fres.file})
+		}
+		if fres.status != nil {
+			doc = append(doc, field{"fileStatus", *fres.status})
+		} else {
+			doc = append(doc, field{"fileStatus", nil})
+		}
+	}
 	doc = append(doc, field{"elapsedMs", time.Since(started).Milliseconds()})
 	emit(doc)
 
@@ -517,6 +569,8 @@ func classify(err error, connected bool) *failure {
 	switch {
 	case err == nil:
 		return nil
+	case authenticationFailed(err):
+		return &failure{"auth-failed", err.Error()}
 	case errors.Is(err, dnp3.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
 		return &failure{"timeout", err.Error()}
 	case errors.Is(err, dnp3.ErrRejected), errors.Is(err, dnp3.ErrNotSupported):

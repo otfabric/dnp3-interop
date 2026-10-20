@@ -39,6 +39,10 @@ type fixture struct {
 	Unsolicited, NeedTime    bool
 	ColdDelayMs, WarmDelayMs *uint16
 	Points                   map[string][]point
+	// Files are served by file transfer: name to content. Directories holds
+	// every directory, those of the files and the listed empty ones.
+	Files       map[string][]byte
+	Directories []string
 }
 
 func (f *fixture) find(kind string, index uint16) *point {
@@ -302,7 +306,7 @@ func loadFixture(text []byte) (*fixture, error) {
 	fx := &fixture{Points: map[string][]point{}}
 
 	for k := range top {
-		if !slices.Contains([]string{"schemaVersion", "name", "description", "outstation"}, k) && !slices.Contains(pointTypes, k) {
+		if !slices.Contains([]string{"schemaVersion", "name", "description", "outstation", "files", "directories"}, k) && !slices.Contains(pointTypes, k) {
 			add("unknown field '%s'", k)
 		}
 	}
@@ -399,8 +403,84 @@ func loadFixture(text []byte) (*fixture, error) {
 			add("frozenCounters[%d]: there is no counter with this index to freeze", p.Index)
 		}
 	}
+	checkFiles(fx, top, add)
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return fx, nil
+}
+
+var fileName = regexp.MustCompile(`^(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+$`)
+
+// checkFiles reads the files and directories of a fixture.
+func checkFiles(fx *fixture, top map[string]any, add func(string, ...any)) {
+	dirs := map[string]bool{}
+	if raw, present := top["files"]; present {
+		fx.Files = map[string][]byte{}
+		list, ok := raw.([]any)
+		if !ok {
+			add("files must be an array")
+		}
+		for i, item := range list {
+			f, ok := item.(map[string]any)
+			if !ok {
+				add("files[%d] must be an object", i)
+				continue
+			}
+			for k := range f {
+				if k != "name" && k != "content" {
+					add("files[%d]: unknown field '%s'", i, k)
+				}
+			}
+			name, _ := f["name"].(string)
+			text, _ := f["content"].(string)
+			content, err := hex.DecodeString(text)
+			switch {
+			case !fileName.MatchString(name) || len(name) > 200:
+				add("files[%d]: name is missing or invalid", i)
+			case err != nil || strings.ToLower(text) != text || len(content) > 65536:
+				add("files[%d]: content must be up to 65536 octets of lower-case hex", i)
+			case fx.Files[name] != nil:
+				add("files: %s is listed twice", name)
+			default:
+				fx.Files[name] = content
+			}
+		}
+	}
+	if raw, present := top["directories"]; present {
+		list, ok := raw.([]any)
+		if !ok {
+			add("directories must be an array")
+		}
+		for i, item := range list {
+			name, _ := item.(string)
+			switch {
+			case !fileName.MatchString(name) || len(name) > 200:
+				add("directories[%d]: name is missing or invalid", i)
+			case dirs[name]:
+				add("directories: %s is listed twice", name)
+			default:
+				dirs[name] = true
+			}
+		}
+	}
+	for name := range fx.Files {
+		for d := name[:strings.LastIndex(name, "/")]; d != ""; d = d[:strings.LastIndex(d, "/")] {
+			dirs[d] = true
+		}
+	}
+	for d := range dirs {
+		for p := d[:strings.LastIndex(d, "/")]; p != ""; p = p[:strings.LastIndex(p, "/")] {
+			dirs[p] = true
+		}
+	}
+	for name := range fx.Files {
+		if dirs[name] {
+			add("files: %s is also a directory", name)
+		}
+	}
+	for d := range dirs {
+		fx.Directories = append(fx.Directories, d)
+	}
+	slices.Sort(fx.Directories)
 }

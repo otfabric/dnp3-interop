@@ -58,7 +58,10 @@ FROM ${BASE_REGISTRY}/debian:trixie-slim@${DEBIAN_DIGEST} AS runtime
 
 ARG ADAPTER_VERSION=dev
 
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop \
+# socat bridges a pseudo-terminal to TCP for DNP3 over serial (contract 1.1).
+RUN apt-get update && apt-get install -y --no-install-recommends socat \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop \
     && mkdir -p /run/dnp3-interop \
     && chown interop /run/dnp3-interop
 
