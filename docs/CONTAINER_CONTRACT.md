@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; [link layer](#link-layer): `--link-confirms`, `--keep-alive-ms`, the `link-status` event; [broadcast](#broadcast): `operate --broadcast`, the `broadcast` event; [management functions](#management-functions): `manage`, the `manage` event; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; [link layer](#link-layer): `--link-confirms`, `--keep-alive-ms`, the `link-status` event; [broadcast](#broadcast): `operate --broadcast`, the `broadcast` event; [management functions](#management-functions): `manage`, the `manage` event; [several outstations](#several-outstations): `server --outstations`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -614,6 +614,16 @@ REQUEST_LINK_STATUS. Feature `linkStatusEventServer`.
 
 An exchange that the peer does not acknowledge fails as the operation would
 without an answer (`timeout` or `connection-lost`).
+
+## Several outstations
+
+*Contract 1.3.* `server --outstations N` (1..16, default 1) serves N
+outstations on the one channel, at the link addresses `--local-addr` (or the
+fixture's) to that plus N-1, each with its own copy of the fixture. A master
+picks one with `--remote-addr`; a request to another address goes unanswered.
+Addresses past 65519, or that take in the master's, are a usage error (exit
+2). The `ready` event gives the first address. Feature
+`multipleOutstationsServer`.
 
 ## Management functions
 
