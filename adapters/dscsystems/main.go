@@ -167,12 +167,18 @@ func printCapabilities() int {
 			{"freezeAtTimeClient", true},
 			{"analogFreezeServer", true},
 			{"analogFreezeClient", false},
+			// Analog deadbands (g34v3): written both ways; the outstation
+			// does not serve a read of g34 and the master drops it.
+			{"deadbandWriteServer", true},
+			{"deadbandWriteClient", true},
+			{"deadbandReadServer", false},
+			{"deadbandReadClient", false},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
 			"enable-unsolicited", "disable-unsolicited", "freeze", "monitor",
-			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write", "operate-multi"}},
+			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write", "operate-multi", "deadband-write"}},
 		{"secureAuthentication", object{
 			{"macAlgorithms", supportedMACs},
 			{"keyWrapAlgorithms", keyWrap},

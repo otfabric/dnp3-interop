@@ -168,12 +168,17 @@ fn print_capabilities() -> i32 {
             "freezeAtTimeClient": true,
             "analogFreezeServer": false,
             "analogFreezeClient": true,
+            // Analog deadbands (g34): written and read both ways.
+            "deadbandWriteServer": true,
+            "deadbandWriteClient": true,
+            "deadbandReadServer": true,
+            "deadbandReadClient": true,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
             "enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor",
-            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write", "operate-multi"],
+            "file-get", "file-put", "file-ls", "file-info", "attribute-read", "attribute-write", "operate-multi", "deadband-write"],
     }));
     EXIT_OK
 }
