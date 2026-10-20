@@ -438,7 +438,28 @@ def parse_operation(op, a):
             (True, False): FunctionCode.FREEZE_CLEAR,
             (True, True): FunctionCode.FREEZE_CLEAR_NO_ACK,
         }[(clear, no_ack)]
-        headers = [all_objects(20, 0)]
+        group = a.integer("group", 20, 20, 30)
+        if group not in (20, 30):
+            raise UsageError("--group must be 20 or 30")
+        headers = [all_objects(group, 0)]
+        if a.has("at"):
+            # FREEZE AT TIME (contract 1.3): g50v2 (time, interval), then the objects.
+            if clear:
+                raise UsageError("--clear does not go with --at")
+            at = a.str("at", "")
+            if at == "immediately":
+                ms = 0
+            elif at.startswith("+") and at[1:].isdigit():
+                ms = int(time.time() * 1000) + int(at[1:])
+            elif at.isdigit() and int(at) < 2**48:
+                ms = int(at)
+            else:
+                raise UsageError("--at must be immediately, +MS or milliseconds since the epoch")
+            interval = a.integer("interval-ms", 0, 0, 2**32 - 1)
+            fc = FunctionCode.FREEZE_AT_TIME_NO_ACK if no_ack else FunctionCode.FREEZE_AT_TIME
+            headers = [count_one(50, 2, time48(ms) + struct.pack("<I", interval))] + headers
+        elif a.has("interval-ms"):
+            raise UsageError("--interval-ms needs --at")
         if no_ack:
             return lambda c: c.send(fc, headers)
         return lambda c: c.request(fc, headers)
@@ -667,7 +688,7 @@ def client_main(argv):
         "operate": {"type", "index", "code", "count", "on-ms", "off-ms", "value", "mode"},
         "operate-multi": {"controls", "mode"},
         "time-sync": {"procedure"}, "restart": {"type"}, "assign-class": {"class", "group", "start", "stop"},
-        "monitor": {"duration-ms"},
+        "monitor": {"duration-ms"}, "freeze": {"group", "at", "interval-ms"},
     }.get(op, set())
     if op == "freeze":
         switches = {"clear", "no-ack"}
@@ -1212,6 +1233,12 @@ def print_capabilities():
             # dnp3py's outstation carries out every control of a request,
             # whatever max_controls_per_request says.
             "maxControlsServer": False,
+            # The master sends FREEZE AT TIME and freezes of any group; the
+            # outstation has neither (NO_FUNC_CODE_SUPPORT, counters only).
+            "freezeAtTimeServer": False,
+            "freezeAtTimeClient": True,
+            "analogFreezeServer": False,
+            "analogFreezeClient": True,
         },
         "pointTypes": list(SERVED),
         # Contract 1.2: what the outstation does differently from the master.

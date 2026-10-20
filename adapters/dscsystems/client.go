@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -245,7 +247,30 @@ func parseOperation(op string, a args) (request, error) {
 		if a.has("no-ack") {
 			return nil, usagef("--no-ack: the library's master cannot send a freeze without response")
 		}
+		if group, err := a.integer("group", 20, 20, 30); err != nil || group != 20 {
+			return nil, usagef("--group: the library's master freezes counters (group 20) only")
+		}
 		clear := a.has("clear")
+		if a.has("at") {
+			// FREEZE AT TIME (contract 1.3).
+			if clear {
+				return nil, usagef("--clear does not go with --at")
+			}
+			at, err := freezeTime(a.str("at", ""))
+			if err != nil {
+				return nil, err
+			}
+			interval, err := a.integer("interval-ms", 0, 0, 4294967295)
+			if err != nil {
+				return nil, err
+			}
+			return func(ctx context.Context, s *master.Session, _ *result) error {
+				return s.FreezeAtTime(ctx, at, time.Duration(interval)*time.Millisecond)
+			}, nil
+		}
+		if a.has("interval-ms") {
+			return nil, usagef("--interval-ms needs --at")
+		}
 		return func(ctx context.Context, s *master.Session, _ *result) error { return s.FreezeCounters(ctx, clear) }, nil
 	}
 	return nil, usagef("unknown operation '%s'", op)
@@ -388,6 +413,7 @@ func runClient(argv []string) int {
 		flags = append(flags, "class", "group", "start", "stop")
 	case "freeze":
 		switches = append(switches, "clear", "no-ack")
+		flags = append(flags, "group", "at", "interval-ms")
 	case "monitor":
 		flags = append(flags, "duration-ms")
 	}
@@ -657,4 +683,21 @@ func classify(err error, connected bool) *failure {
 	// CommandResult.Err: a status other than SUCCESS; the caller decides
 	// between rejected and command-failed from the IIN.
 	return &failure{"command-failed", err.Error()}
+}
+
+// freezeTime reads --at of freeze: "immediately" (time 0), "+MS" (from now)
+// or milliseconds since the epoch.
+func freezeTime(text string) (time.Time, error) {
+	if text == "immediately" {
+		return time.UnixMilli(0), nil
+	}
+	if ms, ok := strings.CutPrefix(text, "+"); ok {
+		n, err := strconv.ParseInt(ms, 10, 64)
+		if err == nil && n >= 0 {
+			return time.Now().Add(time.Duration(n) * time.Millisecond), nil
+		}
+	} else if n, err := strconv.ParseInt(text, 10, 64); err == nil && n >= 0 && n < 1<<48 {
+		return time.UnixMilli(n), nil
+	}
+	return time.Time{}, usagef("--at must be immediately, +MS or milliseconds since the epoch")
 }

@@ -162,6 +162,12 @@ fn print_capabilities() -> i32 {
             // is reported, so commandStatuses is null.
             "multipleControlsClient": true,
             "maxControlsServer": true,
+            // FREEZE AT TIME both ways (the outstation schedules it); the
+            // outstation freezes counters only, the master sends any group.
+            "freezeAtTimeServer": true,
+            "freezeAtTimeClient": true,
+            "analogFreezeServer": false,
+            "analogFreezeClient": true,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
