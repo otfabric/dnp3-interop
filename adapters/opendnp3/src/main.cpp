@@ -127,7 +127,13 @@ int print_capabilities()
           {"deviceAttributesClient", false},
           // Several controls in one request, a status for each.
           {"multipleControlsClient", true},
-          {"maxControlsServer", true}}},
+          {"maxControlsServer", true},
+          // The outstation refuses FREEZE AT TIME and freezes counters only;
+          // the master cannot carry g50v2 but freezes any group.
+          {"freezeAtTimeServer", false},
+          {"freezeAtTimeClient", false},
+          {"analogFreezeServer", false},
+          {"analogFreezeClient", true}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},

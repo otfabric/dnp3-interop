@@ -102,6 +102,8 @@ expect_exit 2 "serial without a device" "${IMAGE}" client integrity-poll --trans
 expect_exit 2 "a file operation without --name" "${IMAGE}" client file-get --host nowhere
 expect_exit 2 "--connect with --port" "${IMAGE}" server --connect master:20000 --port 20001
 expect_exit 2 "--listen with --host" "${IMAGE}" client integrity-poll --listen --host nowhere
+expect_exit 2 "freeze --interval-ms without --at" "${IMAGE}" client freeze --host nowhere --interval-ms 1000
+expect_exit 2 "freeze --at with --clear" "${IMAGE}" client freeze --host nowhere --at immediately --clear
 expect_exit 2 "operate-multi with a malformed control" "${IMAGE}" client operate-multi --host nowhere --controls g12v1:0
 expect_exit 2 "an update key of the wrong length" "${IMAGE}" client integrity-poll --host nowhere --sa-update-key 0011
 if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then

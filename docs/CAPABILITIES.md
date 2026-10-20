@@ -110,6 +110,10 @@ serves it and the master sends it.
 | `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | yes ²² | no ²¹ | yes | no |
 | `multipleControlsClient` | `operate-multi` (1.3) | yes ²³ | yes | yes | yes |
 | `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | yes | no ²⁴ |
+| `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | yes ²⁵ | no ²⁶ | yes ²⁷ | no ²⁶ |
+| `freezeAtTimeClient` | `freeze --at` (1.3) | yes | no ²⁸ | yes | yes |
+| `analogFreezeServer` | The outstation freezes analog inputs into frozen analog inputs (1.3) | no ²⁹ | no ²⁹ | yes | no ²⁹ |
+| `analogFreezeClient` | `freeze --group 30` (1.3) | yes | yes | no ³⁰ | yes |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -194,6 +198,22 @@ without its sign (tests/known-bugs.tsv).
 
 ²⁴ dnp3py's outstation carries out every control of a request whatever its
 `max_controls_per_request`.
+
+²⁵ stepfunc hands FREEZE AT TIME to the application with the time and
+interval; the adapter schedules the freezes.
+
+²⁶ opendnp3 and dnp3py answer FREEZE AT TIME with NO_FUNC_CODE_SUPPORT.
+
+²⁷ go-dnp3 refuses time 0 with interval 0 (PARAMETER_ERROR) instead of freezing
+at once, and runs scheduled freezes only while a master is connected
+(tests/known-bugs.tsv, COMPATIBILITY.md).
+
+²⁸ opendnp3's master cannot carry the g50v2 of FREEZE AT TIME
+(`PerformFunction` headers have no object data).
+
+²⁹ The stepfunc, opendnp3 and dnp3py outstations freeze counters only.
+
+³⁰ go-dnp3's master freezes counters only.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
