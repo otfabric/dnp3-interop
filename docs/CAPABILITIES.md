@@ -106,6 +106,8 @@ serves it and the master sends it.
 | `dualEndpointClientTls` | `client --listen --tls` (1.2) | no ¹⁹ | yes | yes | no ¹⁴ |
 | `securityStatisticsServer` | With secure authentication on, the outstation serves g121 and raises g122 events (1.2) | no ⁷ | no ⁷ | yes | no |
 | `securityStatisticsClient` | The master reports g121 and g122 objects (1.2) | no ⁷ | no ⁷ | yes ²⁰ | no ¹⁴ |
+| `deviceAttributesServer` | The outstation serves the `deviceAttributes` of its fixture (1.3) | yes | no ²¹ | yes | no |
+| `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | yes ²² | no ²¹ | yes | no |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -178,6 +180,12 @@ no TLS listener for a master.
 
 ²⁰ go-dnp3's master drops groups 121 and 122; the adapter reads them off the
 wire, from responses that hold only them (CONTAINER_CONTRACT.md).
+
+²¹ opendnp3 3.x knows no group 0: its outstation answers OBJECT_UNKNOWN and its
+master cannot parse it.
+
+²² stepfunc 1.7.0's master decodes a signed integer attribute of one octet
+without its sign (tests/known-bugs.tsv).
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks

@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: device attributes
+
+- The `attributes` fixture (attribute set 1), `attribute-read` and `attribute-write`, the `attribute-write` event, features `deviceAttributesServer` and `deviceAttributesClient`.
+- stepfunc and go-dnp3 in both roles; opendnp3 and dnp3py have no group 0.
+
+**Gate:** `make features` reads, writes and refuses attributes for every pairing that declares them.
+
 ### Contract 1.2: security statistics
 
 - g121/g122 object documents, `--sa-statistics-class` and `--sa-statistics-threshold`, features `securityStatisticsServer` and `securityStatisticsClient`.
