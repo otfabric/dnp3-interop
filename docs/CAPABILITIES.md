@@ -156,19 +156,19 @@ has no DELETE_FILE and no outstation side of file transfer.
 ⁷ Not in the library: opendnp3 3.x removed secure authentication and has no
 file transfer; stepfunc's open edition has no secure authentication.
 
-⁸ go-dnp3's master has no call for ASSIGN CLASS.
+⁸ DSC go-dnp3's master has no call for ASSIGN CLASS.
 
-⁹ go-dnp3's FREEZE AND CLEAR leaves counters without a frozen counter
+⁹ DSC go-dnp3's FREEZE AND CLEAR leaves counters without a frozen counter
 uncleared (listed in tests/known-bugs.tsv; see COMPATIBILITY.md).
 
-¹⁰ go-dnp3's UDP outstation answers the first endpoint it hears from for its
+¹⁰ DSC go-dnp3's UDP outstation answers the first endpoint it hears from for its
 whole life. Its v0.8.1 also drops requests when it has no peer to send an
 unsolicited response to; the adapter works around that (COMPATIBILITY.md).
 
-¹¹ go-dnp3's master reads start-stop ranges and classes, not all objects of a
+¹¹ DSC go-dnp3's master reads start-stop ranges and classes, not all objects of a
 group; `read --group 60 --variation 1..4` works, as a class read.
 
-¹² go-dnp3's master returns no delay from `Restart`; `restartDelayMs` is
+¹² DSC go-dnp3's master returns no delay from `Restart`; `restartDelayMs` is
 null.
 
 ¹³ dnp3py's outstation cannot serve the baseline fixture (no double-bit
@@ -182,7 +182,7 @@ with its decoders.
 ¹⁴ dnp3py 0.6.0 has TCP only, no file transfer and no secure
 authentication.
 
-¹⁵ go-dnp3's SAv5 is a subset: challenge-reply with MAC algorithm 4
+¹⁵ DSC go-dnp3's SAv5 is a subset: challenge-reply with MAC algorithm 4
 (HMAC-SHA-256, 16 octets), AES-128 or AES-256 key wrap, no aggressive mode,
 no remote key management, unsolicited responses not authenticated. The
 capability document says so in `secureAuthentication`. It is tested against
@@ -196,14 +196,14 @@ analogs, stepfunc cannot.
 
 ¹⁷ dnp3py's decoders know none of groups 13, 31, 33, 43 and 50.
 
-¹⁸ stepfunc's master and go-dnp3's master drop g50v4 objects (stepfunc warns
-"ignored header variation"; go-dnp3 has no handler for the type). go-dnp3's
+¹⁸ stepfunc's master and DSC go-dnp3's master drop g50v4 objects (stepfunc warns
+"ignored header variation"; DSC go-dnp3 has no handler for the type). DSC go-dnp3's
 outstation serves them.
 
 ¹⁹ stepfunc's master listens with `spawn_master_tcp_server`; the crate has
 no TLS listener for a master.
 
-²⁰ go-dnp3's master drops groups 121 and 122; the adapter reads them off the
+²⁰ DSC go-dnp3's master drops groups 121 and 122; the adapter reads them off the
 wire, from responses that hold only them (CONTAINER_CONTRACT.md).
 
 ²¹ opendnp3 3.x knows no group 0: its outstation answers OBJECT_UNKNOWN and its
@@ -223,7 +223,7 @@ interval; the adapter schedules the freezes.
 
 ²⁶ opendnp3 and dnp3py answer FREEZE AT TIME with NO_FUNC_CODE_SUPPORT.
 
-²⁷ go-dnp3 refuses time 0 with interval 0 (PARAMETER_ERROR) instead of freezing
+²⁷ DSC go-dnp3 refuses time 0 with interval 0 (PARAMETER_ERROR) instead of freezing
 at once, and runs scheduled freezes only while a master is connected
 (tests/known-bugs.tsv, COMPATIBILITY.md).
 
@@ -232,7 +232,7 @@ at once, and runs scheduled freezes only while a master is connected
 
 ²⁹ The stepfunc, opendnp3 and dnp3py outstations freeze counters only.
 
-³⁰ go-dnp3's master freezes counters only.
+³⁰ DSC go-dnp3's master freezes counters only.
 
 ³¹ stepfunc compares a change with the last value it reported, which until
 the first event is the RESTART value the library starts a point with: the
@@ -243,12 +243,12 @@ deadband to write or read.
 
 ³³ The library's master cannot write group 34 or decode it.
 
-³⁴ go-dnp3's outstation answers a read of g34 with OBJECT_UNKNOWN, and its
+³⁴ DSC go-dnp3's outstation answers a read of g34 with OBJECT_UNKNOWN, and its
 master drops g34.
 
-³⁵ go-dnp3's master opens files for writing only.
+³⁵ DSC go-dnp3's master opens files for writing only.
 
-³⁶ go-dnp3 counts the size over all types; dnp3py per type and class, so a
+³⁶ DSC go-dnp3 counts the size over all types; dnp3py per type and class, so a
 class holds three times it (FIXTURES.md).
 
 ³⁷ stepfunc acknowledges confirmed user data but never sends it.
@@ -258,7 +258,7 @@ class holds three times it (FIXTURES.md).
 ³⁹ dnp3py's link layer has no settings.
 
 ⁴⁰ The library answers REQUEST_LINK_STATUS without telling the application;
-the go-dnp3 adapter reads it off the wire.
+the DSC go-dnp3 adapter reads it off the wire.
 
 ⁴¹ dnp3py's outstation ignores broadcast addresses and its master refuses
 them.
@@ -269,7 +269,7 @@ them.
 
 ⁴⁴ stepfunc's master has no group 90 for the application functions.
 
-⁴⁵ go-dnp3's master has no request for them.
+⁴⁵ DSC go-dnp3's master has no request for them.
 
 ⁴⁶ stepfunc's server gives each connection one outstation, chosen by the
 master's IP address, not by link address.
@@ -291,7 +291,7 @@ handle and send all five control objects (`g12v1`, `g41v1`..`g41v4`).
 
 The dscsystems server has two limits of its library: the indexes of each
 point type must run from 0 without gaps, and `outstation.needTime` must be
-true (go-dnp3 asserts NEED_TIME until a master writes the time). It refuses
+true (DSC go-dnp3 asserts NEED_TIME until a master writes the time). It refuses
 other fixtures with exit 4.
 
 ## Rules for consumers

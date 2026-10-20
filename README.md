@@ -17,7 +17,7 @@ integrating third-party protocol stacks into production applications.
 
 The stacks do not all do the same: the stepfunc outstation refuses ASSIGN
 CLASS, opendnp3's master synchronizes time only when the outstation asks for
-it, go-dnp3's master reads only ranges and classes, and dnp3py's outstation (¹)
+it, DSC go-dnp3's master reads only ranges and classes, and dnp3py's outstation (¹)
 serves only the `dnp3py` fixture, the baseline within its limits. Each image says what it supports (`print-capabilities`); see
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
@@ -193,7 +193,7 @@ VERSION=v0.1.0 make qualify                        # Trivy scan and SBOMs of a p
 ```
 
 The **Upstream candidates** workflow resolves the latest release of every
-stack weekly (the dnp3 crate on crates.io, opendnp3's tags, go-dnp3 on the
+stack weekly (the dnp3 crate on crates.io, opendnp3's tags, DSC go-dnp3 on the
 Go module proxy, dnp3py on PyPI), builds and self-tests the adapters whose
 pin is behind, reports pin versus latest in one table in its job summary and
 keeps a tracking issue open while a pin is behind.
@@ -216,7 +216,7 @@ only, and they must never be attached to a plant network. See
 The repository's own code and documentation, and the adapter sources, are
 MIT-licensed, except `adapters/dscsystems/`, which links a GPL-3.0 library and
 is GPL-3.0-or-later. The images contain the upstream libraries under their
-own licences: opendnp3 is Apache-2.0, go-dnp3 is GPL-3.0, dnp3py is MIT, and the Step
+own licences: opendnp3 is Apache-2.0, DSC go-dnp3 is GPL-3.0, dnp3py is MIT, and the Step
 Function I/O dnp3 crate is under a non-commercial, non-production licence
 agreement. See [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

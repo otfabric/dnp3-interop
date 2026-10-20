@@ -33,7 +33,7 @@ way; this document says what "the same way" is.
 | `needTime` | Whether IIN1.4 NEED_TIME is set at start (default false). It is cleared when a master writes the time |
 | `coldRestartDelayMs`, `warmRestartDelayMs` | The delay the outstation announces for a cold or warm restart, 0..65535 ms. Absent: that restart is refused |
 | `maxControlsPerRequest` | Contract 1.3: the most controls of one request the outstation carries out, 1..255; the rest are answered TOO_MANY_OPS. Absent: the library's default (at least 16) |
-| `eventBufferSize` | Contract 1.3: the most events the outstation buffers, 1..65535: of each type (stepfunc, opendnp3), in all (go-dnp3, one buffer), or of each type in each class (dnp3py, whose class buffer holds three times it). An event that does not fit is lost and the outstation sets IIN2.3 EVENT_BUFFER_OVERFLOW. Absent: the adapter's default (1000; dnp3py 100) |
+| `eventBufferSize` | Contract 1.3: the most events the outstation buffers, 1..65535: of each type (stepfunc, opendnp3), in all (DSC go-dnp3, one buffer), or of each type in each class (dnp3py, whose class buffer holds three times it). An event that does not fit is lost and the outstation sets IIN2.3 EVENT_BUFFER_OVERFLOW. Absent: the adapter's default (1000; dnp3py 100) |
 
 ### Points
 
@@ -244,7 +244,7 @@ in the `time-sync` event; event time stamps are taken from the host clock.
 The outstation **does not restart**: the connection stays up and the point
 values are unchanged. Restart the container for a real restart.
 
-go-dnp3 models the restart itself, and the dscsystems server cannot prevent
+DSC go-dnp3 models the restart itself, and the dscsystems server cannot prevent
 it: a cold restart discards the unconfirmed events and asserts DEVICE_RESTART
 and NEED_TIME again, and a restart requested within the delay of the
 previous one is answered with the time left of that delay and

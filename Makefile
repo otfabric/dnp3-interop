@@ -168,7 +168,7 @@ run-stepfunc: ## Run the stepfunc outstation on 127.0.0.1:$(STEPFUNC_PORT)
 run-opendnp3: ## Run the opendnp3 outstation on 127.0.0.1:$(OPENDNP3_PORT)
 	docker run --rm -p 127.0.0.1:$(OPENDNP3_PORT):20000 $(call image,opendnp3):$(VERSION) server
 
-run-dscsystems: ## Run the go-dnp3 outstation on 127.0.0.1:$(DSCSYSTEMS_PORT)
+run-dscsystems: ## Run the DSC go-dnp3 outstation on 127.0.0.1:$(DSCSYSTEMS_PORT)
 	docker run --rm -p 127.0.0.1:$(DSCSYSTEMS_PORT):20000 $(call image,dscsystems):$(VERSION) server
 
 # ── Multi-arch build and publish ──────────────────────────────────────────────

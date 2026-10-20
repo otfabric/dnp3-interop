@@ -41,12 +41,12 @@ need "dnp3 revision"     "$(arg adapters/stepfunc/Dockerfile UPSTREAM_SHA)"
 need "rust digest"       "$(arg adapters/stepfunc/Dockerfile RUST_DIGEST)"
 need "stepfunc debian"   "$(arg adapters/stepfunc/Dockerfile DEBIAN_DIGEST)"
 
-# dscsystems: the Dockerfile and go.mod name the same go-dnp3 version
+# dscsystems: the Dockerfile and go.mod name the same DSC go-dnp3 version
 dockerfile_godnp3="$(arg adapters/dscsystems/Dockerfile UPSTREAM_VERSION)"
 gomod_godnp3="$(sed -nE 's|^require github.com/dscsystems/go-dnp3 (v[^ ]+).*$|\1|p' adapters/dscsystems/go.mod)"
-need "go-dnp3 version"   "version: \"${dockerfile_godnp3}\""
-same "go-dnp3 in Dockerfile and go.mod" "${dockerfile_godnp3}" "${gomod_godnp3}"
-need "go-dnp3 revision"  "$(arg adapters/dscsystems/Dockerfile UPSTREAM_SHA)"
+need "DSC go-dnp3 version"   "version: \"${dockerfile_godnp3}\""
+same "DSC go-dnp3 in Dockerfile and go.mod" "${dockerfile_godnp3}" "${gomod_godnp3}"
+need "DSC go-dnp3 revision"  "$(arg adapters/dscsystems/Dockerfile UPSTREAM_SHA)"
 need "golang digest"     "$(arg adapters/dscsystems/Dockerfile GOLANG_DIGEST)"
 need "dscsystems debian" "$(arg adapters/dscsystems/Dockerfile DEBIAN_DIGEST)"
 
