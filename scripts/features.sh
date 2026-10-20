@@ -23,6 +23,9 @@
 #           that listens, over TCP and, where declared, TLS
 #   stats   (contract 1.2) security statistics: g121 by read and g122 events
 #           from an outstation with secure authentication on
+#   attributes (contract 1.3) device attributes of the attributes fixture:
+#           read all of a set and one, write the writable ones and read them
+#           back, refusal of a read-only one, the server's events
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -66,8 +69,20 @@ CLIENT_TLS=(--tls --tls-ca /pki/ca.pem --tls-cert /pki/client.pem --tls-key /pki
 SA_KEY=000102030405060708090a0b0c0d0e0f
 SA=(--sa-update-key "${SA_KEY}" --sa-user 3)
 
+# Known upstream bugs of the versions under test: the entries of
+# tests/known-bugs.tsv whose fifth column is "features".
+: > "${WORK}/active"
+: > "${WORK}/reproduced"
 for adapter in "${ADAPTERS[@]}"; do
     docker run --rm "$(image_of "${adapter}")" print-capabilities > "${WORK}/caps-${adapter}.json" 2>/dev/null
+    version=$(jq -r '.upstream.version' "${WORK}/caps-${adapter}.json")
+    while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text bug_fixture; do
+        [[ -z "${bug_adapter}" || "${bug_adapter}" == \#* || "${bug_fixture:-}" != features ]] && continue
+        if [[ "${bug_adapter%%:*}" == "${adapter}" && "${bug_version}" == "${version}" ]]; then
+            printf '%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" >> "${WORK}/active"
+            log "known bug in ${adapter} ${version}: ${bug_text}"
+        fi
+    done < "${ROOT}/tests/known-bugs.tsv"
 done
 has() { jq -e --arg f "$2" '.features[$f] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
 has_role() { jq -e --arg r "$2" '.roles[$r] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
@@ -86,8 +101,28 @@ SKIPPED=0
 skip() { SKIPPED=$((SKIPPED + 1)); record skip "$*"; [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; return 0; }
 
 # check <label> <want> <got>
+# known_bug <pair> <label>: the description of a known bug of the pairing
+# whose regular expression matches the label, if there is one.
+known_bug() {
+    local client="${1%%->*}" server="${1#*->}" bug_adapter bug_regex bug_text
+    while IFS=$'\t' read -r bug_adapter bug_regex bug_text; do
+        if [[ "${bug_adapter}" == "${client}" || "${bug_adapter}" == "${server}" || "${bug_adapter}" == "${client}:client" \
+              || "${bug_adapter}" == "${server}:server" ]] && [[ "$2" =~ ${bug_regex} ]]; then
+            echo "${bug_text}"
+            return 0
+        fi
+    done < "${WORK}/active"
+    return 1
+}
+
+# check <label> <want> <got>: the label starts with the pairing.
 check() {
+    local bug
     if [[ "$3" == "$2" ]]; then ok "$1"; return 0; fi
+    if bug=$(known_bug "${1%%: *}" "${1#*: }"); then
+        KNOWN=$((KNOWN + 1)); record known "$1 -- ${bug}"; echo "${bug}" >> "${WORK}/reproduced"
+        return 1
+    fi
     fail "$1"; log "    want ${2:-<nothing>}"; log "    got  ${3:-<nothing>}"
     if [[ -n "${name:-}" ]] && docker inspect "${name}" >/dev/null 2>&1; then
         log "    log of ${name}:"
@@ -207,7 +242,7 @@ reverse() {
 
 suite() {
     local server="$1" k="$2" client pair name doc host run ip_server ip_client
-    PASS=0 FAIL=0 SKIPPED=0
+    PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
     if [[ -n "${REPORT_DIR:-}" ]]; then RESULTS_FILE="${REPORT_DIR}/results-features-${server}.tsv"; : > "${RESULTS_FILE}"; fi
     ip_server="${SUBNET_PREFIX}.$((10 + k))"
     ip_client="${SUBNET_PREFIX}.$((100 + k))"
@@ -376,6 +411,39 @@ suite() {
             skip "${pair}: security statistics (needs server:securityStatisticsServer,client:securityStatisticsClient)"
         fi
 
+        # ---- device attributes (contract 1.3) ----
+        if has "${server}" deviceAttributesServer && has "${client}" deviceAttributesClient; then
+            name="fd-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/attributes/fixture.json
+            if wait_ready "${name}"; then
+                local attrs='[.attributes[]? | select(.variation != 3) | "\(.variation):\(.type):\(.value)"] | join(" ")'
+                doc=$(client "${client}" -- attribute-read --set 1 --host "${name}")
+                check "${pair}: [attributes] read a set" \
+                    "1:visibleString:dnp3-interop reference outstation 2:unsignedInt:4000000000 10:visibleString:writable text 11:unsignedInt:7" \
+                    "$(jq -r "${attrs}" <<<"${doc}" 2>/dev/null)"
+                check "${pair}: [attributes] signed integer" "signedInt:-42" \
+                    "$(jq -r '.attributes[]? | select(.variation == 3) | "\(.type):\(.value)"' <<<"${doc}" 2>/dev/null)"
+                check "${pair}: [attributes] read one" "2:unsignedInt:4000000000" \
+                    "$(client "${client}" -- attribute-read --set 1 --variation 2 --host "${name}" | jq -r "${attrs}")"
+                doc=$(client "${client}" -- attribute-write --set 1 --variation 10 --text changed --host "${name}")
+                check "${pair}: [attributes] write a string" "ok=true error=-" "$(outcome "${doc}")"
+                doc=$(client "${client}" -- attribute-write --set 1 --variation 11 --uint 99 --host "${name}")
+                check "${pair}: [attributes] write an unsigned integer" "ok=true error=-" "$(outcome "${doc}")"
+                check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99" \
+                    "$(client "${client}" -- attribute-read --set 1 --host "${name}" | jq -r '[.attributes[]? | select(.variation >= 10) | "\(.variation):\(.type):\(.value)"] | join(" ")')"
+                doc=$(client "${client}" -- attribute-write --set 1 --variation 1 --text no --host "${name}")
+                check "${pair}: [attributes] a read-only attribute refuses a write" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
+                sleep 0.3
+                check "${pair}: [attributes] server events" "10:changed 11:99" \
+                    "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "attribute-write") | "\(.variation):\(.value)"' | paste -sd' ' -)"
+            else
+                fail "${pair}: [attributes] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: device attributes (needs server:deviceAttributesServer,client:deviceAttributesClient)"
+        fi
+
         # ---- point types of the extended fixture (contract 1.2) ----
         if serves_extended "${server}"; then
             name="fp-${server}-${RUN_ID}"
@@ -467,7 +535,7 @@ suite() {
             fi
         done
     done
-    echo "${PASS} ${FAIL} ${SKIPPED}" > "${WORK}/tally-${server}"
+    echo "${PASS} ${FAIL} ${SKIPPED} ${KNOWN}" > "${WORK}/tally-${server}"
 }
 
 log "adapters: ${ADAPTERS[*]} (${VERSION})"
@@ -483,13 +551,17 @@ for server in "${servers[@]}"; do
 done
 wait
 
-PASS=0 FAIL=0 SKIPPED=0
+PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
 for server in "${servers[@]}"; do
     if [[ ! -s "${WORK}/tally-${server}" ]]; then
         fail "the suite of ${server} did not finish"
         continue
     fi
-    read -r p f s < "${WORK}/tally-${server}"
-    PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s))
+    read -r p f s k < "${WORK}/tally-${server}"
+    PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
+# A known bug that no longer shows is a stale entry.
+while IFS=$'\t' read -r bug_adapter _ bug_text; do
+    grep -qxF "${bug_text}" "${WORK}/reproduced" || fail "known bug of ${bug_adapter} did not reproduce: ${bug_text}"
+done < "${WORK}/active"
 finish
