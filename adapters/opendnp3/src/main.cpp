@@ -118,7 +118,10 @@ int print_capabilities()
           // Dual end point: channels carry either role, TLS included.
           {"dualEndpointServer", true},
           {"dualEndpointClient", true},
-          {"dualEndpointClientTls", true}}},
+          {"dualEndpointClientTls", true},
+          // opendnp3 3.x has no secure authentication and no g121/g122.
+          {"securityStatisticsServer", false},
+          {"securityStatisticsClient", false}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},

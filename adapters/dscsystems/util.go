@@ -112,7 +112,7 @@ const (
 
 func familyOfGroup(group uint8) family {
 	switch group {
-	case 20, 21, 22, 23:
+	case 20, 21, 22, 23, 121, 122:
 		return familyCounter
 	case 30, 31, 32, 33, 40, 42:
 		return familyAnalog
