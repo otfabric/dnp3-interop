@@ -38,10 +38,11 @@ const usage = `usage: dnp3-interop <command>
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT] [SA]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
+         [--connect HOST:PORT [--tls-server-name NAME]]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [LINK] [TRANSPORT] [SA] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
-         [--udp-local-port N]
+         [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V --start N --stop N   (or --group 60 --variation 1..4)
@@ -140,6 +141,11 @@ func printCapabilities() int {
 			{"commandEventsClient", true},
 			{"frozenAnalogInputsClient", true},
 			{"timeAndIntervalClient", false},
+			// Dual end point: the outstation dials, the master listens, both
+			// also over TLS.
+			{"dualEndpointServer", true},
+			{"dualEndpointClient", true},
+			{"dualEndpointClientTls", true},
 		}},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},

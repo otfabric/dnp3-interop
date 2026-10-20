@@ -28,6 +28,10 @@ struct Transport
     std::string udpPeer; // server: HOST:PORT of the master
     uint16_t udpLocalPort = 20000;
     opendnp3::SerialSettings serial;
+    // Dual end point (contract 1.2): the outstation dials HOST:PORT; the
+    // master listens.
+    std::string connect;
+    bool listen = false;
 
     // What the ready event reports.
     std::string name() const { return tls ? "tls" : kind; }

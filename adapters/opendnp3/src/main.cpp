@@ -26,11 +26,11 @@ const char* kUsage = R"(usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
-         [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
+         [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT] [--connect HOST:PORT]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [LINK] [TRANSPORT] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
-         [--udp-local-port N]
+         [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
@@ -114,7 +114,11 @@ int print_capabilities()
           {"commandEventsServer", false},
           {"commandEventsClient", true},
           {"frozenAnalogInputsClient", false},
-          {"timeAndIntervalClient", true}}},
+          {"timeAndIntervalClient", true},
+          // Dual end point: channels carry either role, TLS included.
+          {"dualEndpointServer", true},
+          {"dualEndpointClient", true},
+          {"dualEndpointClientTls", true}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},

@@ -8,7 +8,9 @@ use crate::util::*;
 use dnp3::serial::{DataBits, FlowControl, Parity, SerialSettings, StopBits};
 use std::net::{SocketAddr, ToSocketAddrs};
 
-pub const SERVER_FLAGS: [&str; 10] = [
+pub const SERVER_FLAGS: [&str; 12] = [
+    "connect",
+    "tls-server-name",
     "transport",
     "tls-cert",
     "tls-key",
@@ -20,7 +22,8 @@ pub const SERVER_FLAGS: [&str; 10] = [
     "parity",
     "stop-bits",
 ];
-pub const CLIENT_FLAGS: [&str; 11] = [
+pub const CLIENT_FLAGS: [&str; 12] = [
+    "bind-address",
     "transport",
     "tls-ca",
     "tls-cert",
@@ -33,7 +36,7 @@ pub const CLIENT_FLAGS: [&str; 11] = [
     "parity",
     "stop-bits",
 ];
-pub const CLIENT_SWITCHES: [&str; 1] = ["tls"];
+pub const CLIENT_SWITCHES: [&str; 2] = ["tls", "listen"];
 const SERIAL_FLAGS: [&str; 5] = ["serial-device", "baud", "data-bits", "parity", "stop-bits"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -58,6 +61,10 @@ pub struct Transport {
     pub udp_local_port: u16,
     pub device: String,
     pub serial: SerialSettings,
+    /// Dual end point (contract 1.2): the outstation dials the master here.
+    pub connect: Option<String>,
+    /// Dual end point: the master listens for the outstation.
+    pub listen: bool,
 }
 
 impl Transport {
@@ -97,6 +104,8 @@ pub fn parse(args: &Args, server: bool) -> Result<Transport, UsageError> {
         udp_local_port: 20000,
         device: String::new(),
         serial: SerialSettings::default(),
+        connect: None,
+        listen: false,
     };
     let files = || Tls {
         cert: args.str("tls-cert", ""),
@@ -107,6 +116,25 @@ pub fn parse(args: &Args, server: bool) -> Result<Transport, UsageError> {
             .then(|| args.str("tls-server-name", "")),
     };
     if server {
+        if args.has("connect") {
+            let addr = args.str("connect", "");
+            if addr.rsplit_once(':').is_none() {
+                return usage("--connect must be HOST:PORT");
+            }
+            for n in ["bind-address", "port"] {
+                if args.has(n) {
+                    return usage(format!(
+                        "--{n} does not go with --connect: the outstation dials"
+                    ));
+                }
+            }
+            if kind != Kind::Tcp {
+                return usage("--connect needs --transport tcp");
+            }
+            t.connect = Some(addr);
+        } else if args.has("tls-server-name") {
+            return usage("--tls-server-name needs --connect");
+        }
         if args.has("tls-cert") {
             if !args.has("tls-key") || !args.has("tls-ca") {
                 return usage("--tls-cert needs --tls-key and --tls-ca: TLS is mutual");
@@ -123,6 +151,22 @@ pub fn parse(args: &Args, server: bool) -> Result<Transport, UsageError> {
             t.udp_peer = Some(peer);
         }
     } else {
+        t.listen = args.has("listen");
+        if t.listen {
+            if kind != Kind::Tcp {
+                return usage("--listen needs --transport tcp");
+            }
+            if args.has("host") {
+                return usage(
+                    "--host does not go with --listen: the master waits for the outstation",
+                );
+            }
+            if args.has("tls") {
+                return usage("--listen with --tls: the library's master listens over TCP only");
+            }
+        } else if args.has("bind-address") {
+            return usage("--bind-address needs --listen");
+        }
         if args.has("tls") {
             if !args.has("tls-ca") || !args.has("tls-cert") || !args.has("tls-key") {
                 return usage("--tls needs --tls-ca, --tls-cert and --tls-key: TLS is mutual");

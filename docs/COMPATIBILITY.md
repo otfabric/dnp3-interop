@@ -149,6 +149,18 @@ go-dnp3 records a command event for every control that reaches its control
 handler, with the status it answered: a value out of range produces a g43
 with OUT_OF_RANGE. It records none for SELECT.
 
+### Dual end point: three stacks, both ways
+
+The outstations of stepfunc (`spawn_outstation_tcp_client`,
+`spawn_outstation_tls_client`), opendnp3 (a client channel; channels carry
+either role) and go-dnp3 (a client channel; sessions take any channel) dial
+a listening master, and the masters of all three listen: stepfunc with
+`spawn_master_tcp_server` (no TLS listener), opendnp3 with a server channel,
+go-dnp3 with `channel.TCPServer`/`TLSServer`. Every pairing works both ways
+(`make features`, `[reverse]`). A dialling go-dnp3 outstation may connect
+twice to a go-dnp3 master that listens: the first connection closes and it
+redials; the operation succeeds.
+
 ### opendnp3: one UDP peer, no TLS name check
 
 Its UDP channel binds and then connects to the remote endpoint, so an

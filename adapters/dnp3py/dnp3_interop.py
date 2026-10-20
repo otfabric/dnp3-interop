@@ -692,6 +692,10 @@ def print_capabilities():
             "commandEventsClient": False,
             "frozenAnalogInputsClient": False,
             "timeAndIntervalClient": False,
+            # Dual end point: TCP client only.
+            "dualEndpointServer": False,
+            "dualEndpointClient": False,
+            "dualEndpointClientTls": False,
         },
         "pointTypes": [],
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],

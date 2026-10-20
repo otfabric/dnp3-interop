@@ -337,7 +337,9 @@ int run_client(const std::vector<std::string>& argv)
     {
         Args args(std::vector<std::string>(argv.begin() + 1, argv.end()), flags, switches);
         transport = parse_transport(args, false);
-        if (transport.kind != "serial")
+        if (transport.listen)
+            host = args.str("bind-address", "0.0.0.0");
+        else if (transport.kind != "serial")
             host = args.required("host");
         port = args.integer("port", 20000, 1, 65535);
         local = args.integer("local-addr", 1, 0, 65519);

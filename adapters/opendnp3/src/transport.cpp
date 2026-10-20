@@ -11,12 +11,13 @@ using namespace opendnp3;
 namespace adapter
 {
 
-const std::set<std::string> kServerTransportFlags = {"transport",     "tls-cert", "tls-key",   "tls-ca",   "udp-peer",
-                                                     "serial-device", "baud",     "data-bits", "parity",   "stop-bits"};
+const std::set<std::string> kServerTransportFlags
+    = {"transport", "tls-cert",  "tls-key", "tls-ca",    "udp-peer", "serial-device",
+       "baud",      "data-bits", "parity",  "stop-bits", "connect",  "tls-server-name"};
 const std::set<std::string> kClientTransportFlags
     = {"transport",      "tls-ca",        "tls-cert", "tls-key",   "tls-server-name", "udp-local-port",
-       "serial-device", "baud",          "data-bits", "parity",   "stop-bits"};
-const std::set<std::string> kClientTransportSwitches = {"tls"};
+       "serial-device", "baud",          "data-bits", "parity",   "stop-bits",       "bind-address"};
+const std::set<std::string> kClientTransportSwitches = {"tls", "listen"};
 
 namespace
 {
@@ -66,6 +67,18 @@ Transport parse_transport(const Args& args, bool server)
     t.ca = args.str("tls-ca", "");
     if (server)
     {
+        if (args.has("connect"))
+        {
+            t.connect = args.str("connect", "");
+            endpoint(t.connect, "connect");
+            for (const char* n : {"bind-address", "port"})
+                if (args.has(n))
+                    throw UsageError{std::string("--") + n + " does not go with --connect: the outstation dials"};
+            if (t.kind != "tcp")
+                throw UsageError{"--connect needs --transport tcp"};
+        }
+        else if (args.has("tls-server-name"))
+            throw UsageError{"--tls-server-name needs --connect"};
         t.tls = args.has("tls-cert");
         if (!t.tls && (args.has("tls-key") || args.has("tls-ca")))
             throw UsageError{"--tls-key and --tls-ca need --tls-cert"};
@@ -83,6 +96,13 @@ Transport parse_transport(const Args& args, bool server)
     else
     {
         t.tls = args.has("tls");
+        t.listen = args.has("listen");
+        if (t.listen && t.kind != "tcp")
+            throw UsageError{"--listen needs --transport tcp"};
+        if (t.listen && args.has("host"))
+            throw UsageError{"--host does not go with --listen: the master waits for the outstation"};
+        if (!t.listen && args.has("bind-address"))
+            throw UsageError{"--bind-address needs --listen"};
         if (!t.tls
             && (args.has("tls-ca") || args.has("tls-cert") || args.has("tls-key") || args.has("tls-server-name")))
             throw UsageError{"the --tls-* flags need --tls"};
@@ -131,6 +151,18 @@ std::shared_ptr<IChannel> server_channel(DNP3Manager& manager,
                                          std::string& address)
 {
     address = bind + ":" + std::to_string(port);
+    if (!t.connect.empty())
+    {
+        // The channel does not care which end dialled: the outstation's
+        // stack sits on a client channel. The library checks the master's
+        // certificate against the CA but not its name.
+        address = t.connect;
+        if (t.tls)
+            return manager.AddTLSClient("server", log_levels(), kRetry, {endpoint(t.connect, "connect")}, "0.0.0.0",
+                                        tls_config(t), listener);
+        return manager.AddTCPClient("server", log_levels(), kRetry, {endpoint(t.connect, "connect")}, "0.0.0.0",
+                                    listener);
+    }
     if (t.kind == "serial")
     {
         address = t.serial.deviceName;
@@ -154,6 +186,15 @@ std::shared_ptr<IChannel> client_channel(DNP3Manager& manager,
                                          std::string& address)
 {
     address = host + ":" + std::to_string(port);
+    if (t.listen)
+    {
+        // The master's stack on a server channel: it waits for the outstation.
+        if (t.tls)
+            return manager.AddTLSServer("client", log_levels(), ServerAcceptMode::CloseExisting, IPEndpoint(host, port),
+                                        tls_config(t), listener);
+        return manager.AddTCPServer("client", log_levels(), ServerAcceptMode::CloseExisting, IPEndpoint(host, port),
+                                    listener);
+    }
     if (t.kind == "serial")
     {
         address = t.serial.deviceName;
