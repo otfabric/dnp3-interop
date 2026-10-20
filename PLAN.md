@@ -167,6 +167,12 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: event buffer overflow
+
+- The fixture's `outstation.eventBufferSize` and the `events` fixture; feature `eventBufferServer`. All four outstations.
+
+**Gate:** `make features` overflows the buffer of every outstation and sees IIN2.3 and the events lost.
+
 ### Contract 1.3: file append and authentication
 
 - `file-put --append`, `file-authenticate`, `--file-user`/`--file-password` on the file operations and on the server; file events `append` and `authenticate`; features `fileAppendServer/Client`, `fileAuthServer/Client`.
