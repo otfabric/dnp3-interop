@@ -351,6 +351,17 @@ bool request_error(const IINField& iin)
     return iin.IsSet(IINBit::FUNC_NOT_SUPPORTED) || iin.IsSet(IINBit::OBJECT_UNKNOWN) || iin.IsSet(IINBit::PARAM_ERROR);
 }
 
+// The status the outstation echoed for a control. opendnp3 records the status
+// of a failed select and of an operate, but a control whose select succeeded
+// keeps the library's initial UNDEFINED: SELECT_SUCCESS means the echo was
+// SUCCESS.
+uint8_t echoed_status(const CommandPointResult& p)
+{
+    if (p.state == CommandPointState::SELECT_SUCCESS)
+        return CommandStatusSpec::to_type(CommandStatus::SUCCESS);
+    return CommandStatusSpec::to_type(p.status);
+}
+
 PointClass point_class(int c)
 {
     static const PointClass classes[] = {PointClass::Class0, PointClass::Class1, PointClass::Class2, PointClass::Class3};
@@ -493,7 +504,7 @@ int run_client(const std::vector<std::string>& argv)
                                 || p.state == CommandPointState::OPERATE_FAIL
                                 || p.state == CommandPointState::SELECT_SUCCESS;
                             if (echoed)
-                                s.commandStatus = CommandStatusSpec::to_type(p.status);
+                                s.commandStatus = echoed_status(p);
                             else if (p.state == CommandPointState::SELECT_MISMATCH)
                                 s.commandMismatch = true;
                         });
@@ -605,7 +616,7 @@ int run_client(const std::vector<std::string>& argv)
                                 s.commandMismatch = true;
                                 return;
                             }
-                            const auto st = CommandStatusSpec::to_type(p.status);
+                            const auto st = echoed_status(p);
                             s.commandStatuses.push_back(st);
                             if (!s.commandStatus || (*s.commandStatus == 0 && st != 0))
                                 s.commandStatus = st;

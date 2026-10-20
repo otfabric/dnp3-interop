@@ -706,6 +706,8 @@ func classify(err error, connected bool) *failure {
 		return &failure{"rejected", err.Error()}
 	case errors.Is(err, dnp3.ErrNoConnection), errors.Is(err, dnp3.ErrClosed), !connected:
 		return &failure{"connection-lost", err.Error()}
+	case errors.Is(err, errPartialEcho):
+		return &failure{"failed", err.Error()}
 	}
 	// CommandResult.Err: a status other than SUCCESS; the caller decides
 	// between rejected and command-failed from the IIN.

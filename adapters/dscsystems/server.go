@@ -464,7 +464,11 @@ func runServer(argv []string) int {
 
 	ch, address, listening, err := serverChannel(tr, bind, port)
 	if err != nil {
-		logf("server: cannot open the %s channel on %s: %v", tr.name(), net.JoinHostPort(bind, strconv.Itoa(int(port))), err)
+		where := "on " + net.JoinHostPort(bind, strconv.Itoa(int(port)))
+		if tr.connect != "" {
+			where = "to " + tr.connect
+		}
+		logf("server: cannot open the %s channel %s: %v", tr.name(), where, err)
 		return exitFailed
 	}
 

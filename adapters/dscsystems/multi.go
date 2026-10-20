@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -13,6 +15,11 @@ import (
 	"github.com/dscsystems/go-dnp3"
 	"github.com/dscsystems/go-dnp3/master"
 )
+
+// errPartialEcho: the outstation echoed some of the controls, all of them
+// SUCCESS. DSC go-dnp3's CommandResult.OK checks only the statuses echoed, so
+// it reports such an echo as a success; the contract makes it `failed`.
+var errPartialEcho = errors.New("partial echo")
 
 var controlCodes = map[string]dnp3.ControlCode{"LATCH_ON": 0x03, "LATCH_OFF": 0x04, "PULSE_ON": 0x01,
 	"PULSE_OFF": 0x02, "CLOSE": 0x41, "TRIP": 0x81}
@@ -88,6 +95,15 @@ func parseOperateMulti(a args) (request, error) {
 			v := st
 			if r.commandStatus == nil || (*r.commandStatus == 0 && v != 0) {
 				r.commandStatus = &v
+			}
+		}
+		// One status per control or none: a partial echo has no entry for
+		// the controls without one. With a refusal among the echoed controls
+		// the library's error stands (command-failed, the first refusal).
+		if echoed := len(r.commandStatuses); echoed > 0 && echoed < len(cmds) {
+			r.commandStatuses = nil
+			if err == nil {
+				return fmt.Errorf("the outstation echoed %d of %d controls: %w", echoed, len(cmds), errPartialEcho)
 			}
 		}
 		return err

@@ -611,7 +611,11 @@ on and off time 100 ms) and `g41v1..v4:INDEX:VALUE`. Feature
 When the outstation echoed only some of the controls, `commandStatuses` is
 null (it has one entry per control or none) and the operation fails:
 `command-failed` when an echoed control was refused (`commandStatus` the
-first refusal), `failed` otherwise.
+first refusal), `failed` otherwise. DSC go-dnp3's master checks only the
+controls a SELECT echoed: after a select echo that carried some of the
+controls, all SUCCESS, it sends the OPERATE, and the result is that of the
+operate's echo (a library difference the adapter cannot change; the other
+masters send no OPERATE).
 
 It succeeds when every control is echoed SUCCESS; a refused one is
 `command-failed`, as for `operate`. The outstation carries out the controls

@@ -29,8 +29,10 @@ from importlib.metadata import version as package_version
 
 from dnp3.application.fragment import ObjectBlock, RequestFragment
 from dnp3.application.header import RequestHeader
+from dnp3.application.parser import ParseError as FragmentParseError
 from dnp3.application.qualifiers import ObjectHeader, PrefixCode, RangeCode
 from dnp3.core.enums import CommandStatus, FunctionCode
+from dnp3.core.exceptions import DNP3Error
 from dnp3.core.flags import AnalogQuality, BinaryQuality, CounterQuality
 from dnp3.database import (
     AnalogInputConfig,
@@ -72,6 +74,8 @@ from dnp3.outstation import (
     OutstationTcpRunner,
     UnsolicitedConfig,
 )
+from dnp3.transport.reassembler import ReassemblyError
+from dnp3.transport_io.channel import ChannelError
 
 ADAPTER = "dnp3py"
 SCHEMA_VERSION = "1.0"
@@ -650,7 +654,10 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
     try:
         await asyncio.wait_for(runner.open(), connect_timeout)
         connected = True
-    except Exception as exc:  # noqa: BLE001 - dnp3py's ChannelConnectionError, OSError, a timeout: no connection
+    # What opening can raise: the channel's ChannelConnectionError and
+    # ChannelTimeoutError (both ChannelError), the runner's MasterRunnerError,
+    # an OSError the channel does not wrap, and wait_for's TimeoutError.
+    except (ChannelError, MasterRunnerError, OSError, TimeoutError) as exc:
         failure = Failure("connect-failed", f"no connection to {host}:{port}: {exc}")
 
     if connected:
@@ -667,7 +674,23 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             failure = Failure("connection-lost", str(exc))
         except MasterRunnerError as exc:
             failure = Failure("failed", str(exc))
-        except Exception as exc:  # noqa: BLE001 - the contract wants a result document in every case
+        # The contract wants a result document in every case: the rest of
+        # what dnp3py raises (its DNP3Error hierarchy, the fragment parser's
+        # ParseError, the channel's and the reassembler's errors when the
+        # runner does not wrap them), an OSError, and what decoding a
+        # malformed response raises in the decoders (ValueError, struct.error,
+        # an index or key out of range, an out-of-range timestamp).
+        except (
+            DNP3Error,
+            FragmentParseError,
+            ChannelError,
+            ReassemblyError,
+            OSError,
+            ValueError,
+            struct.error,
+            LookupError,
+            ArithmeticError,
+        ) as exc:
             failure = Failure("failed", f"{type(exc).__name__}: {exc}")
 
     command_status = recorder.statuses[-1] if recorder.statuses else None

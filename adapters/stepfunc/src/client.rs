@@ -930,14 +930,16 @@ pub fn run(argv: &[String]) -> i32 {
         Ok(runtime) => runtime.block_on(execute(
             transport,
             &mut file_result,
-            host,
-            port,
-            local,
-            remote,
-            Duration::from_millis(connect_timeout),
-            Duration::from_millis(timeout),
-            Duration::from_millis(collect),
-            (keep_alive > 0).then(|| Duration::from_millis(keep_alive)),
+            Settings {
+                host,
+                port,
+                local,
+                remote,
+                connect_timeout: Duration::from_millis(connect_timeout),
+                timeout: Duration::from_millis(timeout),
+                collect: Duration::from_millis(collect),
+                keep_alive: (keep_alive > 0).then(|| Duration::from_millis(keep_alive)),
+            },
             operation,
             received.clone(),
         )),
@@ -1001,21 +1003,42 @@ fn new_runtime() -> std::io::Result<tokio::runtime::Runtime> {
         .build()
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The master's settings from the command line.
+struct Settings {
+    /// The outstation's host, or the address to listen on with --listen.
+    host: String,
+    port: u16,
+    /// The master's link address.
+    local: u16,
+    /// The outstation's link address.
+    remote: u16,
+    /// --connect-timeout-ms.
+    connect_timeout: Duration,
+    /// --timeout-ms.
+    timeout: Duration,
+    /// --collect-ms.
+    collect: Duration,
+    /// --keep-alive-ms, None for 0.
+    keep_alive: Option<Duration>,
+}
+
 async fn execute(
     transport: Transport,
     file_result: &mut FileResult,
-    host: String,
-    port: u16,
-    local: u16,
-    remote: u16,
-    connect_timeout: Duration,
-    timeout: Duration,
-    collect: Duration,
-    keep_alive: Option<Duration>,
+    settings: Settings,
     operation: Op,
     received: Arc<Mutex<Received>>,
 ) -> (bool, Option<Failure>, Option<u8>, Option<u64>) {
+    let Settings {
+        host,
+        port,
+        local,
+        remote,
+        connect_timeout,
+        timeout,
+        collect,
+        keep_alive,
+    } = settings;
     let (Ok(master_address), Ok(outstation_address)) = (
         EndpointAddress::try_new(local),
         EndpointAddress::try_new(remote),

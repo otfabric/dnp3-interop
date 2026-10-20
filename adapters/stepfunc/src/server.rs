@@ -728,6 +728,36 @@ pub fn run(argv: &[String]) -> i32 {
     runtime.block_on(serve(
         transport,
         fx,
+        Settings {
+            bind,
+            port,
+            ready_file,
+            select_timeout,
+            confirm_timeout,
+            local,
+            remote,
+        },
+    ))
+}
+
+/// The outstation's settings from the command line, the fixture's link
+/// addresses resolved.
+struct Settings {
+    bind: IpAddr,
+    port: u16,
+    ready_file: String,
+    /// --select-timeout-ms.
+    select_timeout: u64,
+    /// --confirm-timeout-ms.
+    confirm_timeout: u64,
+    /// The outstation's link address.
+    local: u16,
+    /// The master's link address.
+    remote: u16,
+}
+
+async fn serve(transport: Transport, fx: Arc<Fixture>, settings: Settings) -> i32 {
+    let Settings {
         bind,
         port,
         ready_file,
@@ -735,21 +765,7 @@ pub fn run(argv: &[String]) -> i32 {
         confirm_timeout,
         local,
         remote,
-    ))
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn serve(
-    transport: Transport,
-    fx: Arc<Fixture>,
-    bind: IpAddr,
-    port: u16,
-    ready_file: String,
-    select_timeout: u64,
-    confirm_timeout: u64,
-    local: u16,
-    remote: u16,
-) -> i32 {
+    } = settings;
     let (Ok(outstation_address), Ok(master_address)) = (
         EndpointAddress::try_new(local),
         EndpointAddress::try_new(remote),

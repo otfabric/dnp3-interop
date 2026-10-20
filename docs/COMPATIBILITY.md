@@ -221,7 +221,9 @@ All four outstations carry out each control of a request on its own: in a
 request with one refused control the others take effect. The stepfunc,
 opendnp3 and DSC go-dnp3 outstations apply a limit the same way: the controls
 within it are carried out, the rest answered TOO_MANY_OPS. dnp3py's ignores
-the limit. stepfunc's master reports only the first refused control.
+the limit. stepfunc's master reports only the first refused control. DSC
+go-dnp3's master sends the OPERATE after a SELECT echo that carried only some
+of the controls, all SUCCESS; the other masters stop after the select.
 
 ### Event buffer overflow
 
