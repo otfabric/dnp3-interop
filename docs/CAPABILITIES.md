@@ -96,6 +96,10 @@ serves it and the master sends it.
 | `fileServer` | The outstation serves the files of its fixture (1.1) | no ⁶ | no ⁷ | yes | no |
 | `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | yes | no ⁷ | yes | no ¹⁴ |
 | `fileDeleteClient` | `file-delete` (1.1) | no ⁶ | no ⁷ | yes | no ¹⁴ |
+| `fileAppendServer` | The outstation opens a file for appending (1.3) | no ⁶ | no ⁷ | yes | no ¹⁴ |
+| `fileAppendClient` | `file-put --append` (1.3) | yes | no ⁷ | no ³⁵ | no ¹⁴ |
+| `fileAuthServer` | The outstation requires AUTHENTICATE_FILE with `--file-user` (1.3) | no ⁶ | no ⁷ | yes | no ¹⁴ |
+| `fileAuthClient` | `file-authenticate`, `--file-user`, `--file-password` (1.3) | yes | no ⁷ | yes | no ¹⁴ |
 | `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ⁷ | no ⁷ | yes ¹⁵ | no ¹⁴ |
 | `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁶ | no ¹⁶ | yes | no |
 | `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes | no ¹⁷ |
@@ -230,6 +234,8 @@ deadband to write or read.
 
 ³⁴ go-dnp3's outstation answers a read of g34 with OBJECT_UNKNOWN, and its
 master drops g34.
+
+³⁵ go-dnp3's master opens files for writing only.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks

@@ -15,7 +15,9 @@
 #   files   reading, listing, describing, writing and deleting files of the
 #           files fixture; the refusal of a file that does not exist; the
 #           server's file events; the same listing and descriptors for
-#           every master
+#           every master; (contract 1.3) appending to a file, and an
+#           outstation that requires AUTHENTICATE_FILE: refusal without
+#           credentials and with a wrong password, reads and writes with them
 #   sa      secure authentication: reads and controls with the shared update
 #           key, the server's auth events, refusal of a wrong key, of a wrong
 #           user and of a master without authentication
@@ -415,6 +417,52 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: files (needs server:fileServer,client:fileClient)"
+        fi
+
+        # ---- file append and AUTHENTICATE_FILE (contract 1.3) ----
+        if has "${server}" fileAppendServer && has "${client}" fileAppendClient; then
+            name="fa-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/files/fixture.json
+            if wait_ready "${name}"; then
+                client "${client}" -- file-put --name /logs/a.txt --content 6162 --host "${name}" >/dev/null
+                doc=$(client "${client}" -- file-put --name /logs/a.txt --content 6364 --append --host "${name}")
+                check "${pair}: [files] file-put --append" "ok=true error=-" "$(outcome "${doc}")"
+                check "${pair}: [files] adds to the end of the file" "61626364" \
+                    "$(client "${client}" -- file-get --name /logs/a.txt --host "${name}" | jq -r '.file.content')"
+            else
+                fail "${pair}: [files] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: file append (needs server:fileAppendServer,client:fileAppendClient)"
+        fi
+        if has "${server}" fileAuthServer && has "${client}" fileAuthClient; then
+            name="fu-${server}-${RUN_ID}"
+            local creds=(--file-user operator --file-password s3cret)
+            start "${server}" "${name}" -- --fixture /fixtures/files/fixture.json "${creds[@]}"
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" -- file-authenticate "${creds[@]}" --host "${name}")
+                check "${pair}: [files] file-authenticate" "ok=true error=- SUCCESS" "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- file-authenticate --file-user operator --file-password wrong --host "${name}")
+                check "${pair}: [files] a wrong password is refused" "ok=false error=file-error PERMISSION_DENIED" \
+                    "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- file-get --name /readme.txt --host "${name}")
+                check "${pair}: [files] an open without authentication is refused" "ok=false error=file-error PERMISSION_DENIED" \
+                    "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- file-get --name /readme.txt "${creds[@]}" --host "${name}")
+                check "${pair}: [files] file-get with credentials" "${README_HEX}" "$(jq -r '.file.content' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- file-put --name /logs/auth.txt --content 00 "${creds[@]}" --host "${name}")
+                check "${pair}: [files] file-put with credentials" "ok=true error=-" "$(outcome "${doc}")"
+                sleep 0.3
+                check "${pair}: [files] server authenticate events" \
+                    "authenticate:operator:SUCCESS authenticate:operator:PERMISSION_DENIED" \
+                    "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file" and .action == "authenticate") | "\(.action):\(.name):\(.status)"' | head -2 | paste -sd' ' -)"
+            else
+                fail "${pair}: [files] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: file authentication (needs server:fileAuthServer,client:fileAuthClient)"
         fi
 
         # ---- dual end point: the outstation dials, the master listens (1.2) ----

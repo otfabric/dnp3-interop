@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -447,7 +447,8 @@ GET_FILE_INFO, READ and WRITE. Features:
 them, list their directories, ask for their descriptors, replace or create a
 file in an existing directory, and delete files. Like the points, the files
 belong to the process: restart the container to return to the fixture. File
-authentication (AUTHENTICATE_FILE) is not used. An outstation without
+authentication (AUTHENTICATE_FILE) is not used unless the server is given
+`--file-user` (contract 1.3, [below](#file-append-and-authentication)). An outstation without
 `fileServer` refuses a fixture with `files` (exit 4); one with it but given a
 fixture without `files` refuses the file function codes (IIN2
 NO_FUNC_CODE_SUPPORT).
@@ -456,8 +457,8 @@ Server event `file`, for every file request the outstation answered:
 
 | Field | Meaning |
 |-------|---------|
-| `action` | `read` (opened for reading), `write` (written and closed), `delete`, `info` (GET_FILE_INFO), `list` (a directory opened for reading) |
-| `name` | The file name the master sent |
+| `action` | `read` (opened for reading), `write` (written and closed), `delete`, `info` (GET_FILE_INFO), `list` (a directory opened for reading); 1.3: `append` (appended and closed), `authenticate` (AUTHENTICATE_FILE) |
+| `name` | The file name the master sent; for `authenticate`, the user name (never the password) |
 | `status` | The file status the outstation answered, by name (below) |
 
 **Master operations.** Every one takes `--name NAME`, an absolute file name
@@ -486,6 +487,21 @@ the error `file-error`. Names (IEEE 1815 table 4-8): `SUCCESS` (0),
 `TOO_MANY_OPEN`, `INVALID_HANDLE`, `WRITE_BLOCK_SIZE`, `COMM_LOST`,
 `CANNOT_ABORT` (9), `NOT_OPENED` (16), `HANDLE_EXPIRED`, `BUFFER_OVERRUN`,
 `FATAL`, `BLOCK_SEQ` (20), `UNDEFINED` for any other value.
+
+### File append and authentication
+
+*Contract 1.3.*
+
+| Where | Flag or operation | Meaning |
+|-------|-------------------|---------|
+| client | `file-put --append` | OPEN_FILE in append mode: the content goes after what the file holds. Feature `fileAppendClient` (master), `fileAppendServer` (outstation) |
+| client | `--file-user U --file-password P` on `file-get`, `file-put`, `file-ls`, `file-info`, `file-delete` | AUTHENTICATE_FILE (g70v2) with the credentials first, and the key the outstation answers in the open or delete. Both or neither (exit 2). Feature `fileAuthClient` |
+| client | `file-authenticate --file-user U --file-password P` | AUTHENTICATE_FILE alone. Succeeds when the outstation answers a key other than 0; key 0 is the error `file-error` with `fileStatus` `PERMISSION_DENIED`. The key is not reported |
+| server | `--file-user U --file-password P` | The outstation requires AUTHENTICATE_FILE with these credentials before an open or delete, and answers PERMISSION_DENIED to one without a valid key. Needs a fixture with files (exit 2 otherwise). Feature `fileAuthServer` |
+
+A master that sends AUTHENTICATE_FILE to an outstation that does not require
+it gets whatever that outstation answers, usually NO_FUNC_CODE_SUPPORT (the
+error `rejected`). AUTHENTICATE_FILE carries the password in clear.
 
 ## Secure authentication
 

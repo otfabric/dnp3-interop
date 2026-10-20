@@ -38,7 +38,7 @@ const usage = `usage: dnp3-interop <command>
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT] [SA]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
-         [--connect HOST:PORT [--tls-server-name NAME]]
+         [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [LINK] [TRANSPORT] [SA] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
@@ -61,6 +61,8 @@ const usage = `usage: dnp3-interop <command>
       file-ls              --name DIRECTORY
       file-info            --name NAME
       file-delete          --name NAME
+                           file operations: [--file-user U --file-password P]
+      file-authenticate    --file-user U --file-password P
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
@@ -138,6 +140,12 @@ func printCapabilities() int {
 			{"fileServer", true},
 			{"fileClient", true},
 			{"fileDeleteClient", true},
+			// Contract 1.3. AUTHENTICATE_FILE both ways; the outstation
+			// appends, the master has no way to open a file for appending.
+			{"fileAuthServer", true},
+			{"fileAuthClient", true},
+			{"fileAppendServer", true},
+			{"fileAppendClient", false},
 			{"secureAuthentication", true},
 			// Contract 1.2. The outstation records command events (g13, g43)
 			// when a control reaches the control handler; the master
@@ -179,7 +187,7 @@ func printCapabilities() int {
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
 			"enable-unsolicited", "disable-unsolicited", "freeze", "monitor",
-			"file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write", "operate-multi", "deadband-write"}},
+			"file-get", "file-put", "file-ls", "file-info", "file-delete", "file-authenticate", "attribute-read", "attribute-write", "operate-multi", "deadband-write"}},
 		{"secureAuthentication", object{
 			{"macAlgorithms", supportedMACs},
 			{"keyWrapAlgorithms", keyWrap},
