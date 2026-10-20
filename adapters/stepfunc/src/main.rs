@@ -179,6 +179,11 @@ fn print_capabilities() -> i32 {
             "linkConfirmsClient": false,
             "keepAliveClient": true,
             "linkStatusEventServer": false,
+            // Contract 1.3: broadcast requests are carried out and reported;
+            // the master cannot address a broadcast.
+            "broadcastServer": true,
+            "broadcastEventServer": true,
+            "broadcastClient": false,
             // FREEZE AT TIME both ways (the outstation schedules it); the
             // outstation freezes counters only, the master sends any group.
             "freezeAtTimeServer": true,

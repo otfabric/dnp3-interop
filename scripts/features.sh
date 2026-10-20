@@ -36,6 +36,8 @@
 #   deadbands (contract 1.3) an analog deadband written (g34v3) holds back
 #           an event of a smaller change and lets a larger one through, and
 #           reads back (g34) where declared
+#   broadcast (contract 1.3) a DIRECT OPERATE NO ACK to 0xFFFF: carried out,
+#           IIN1.0 in the next response, the server's broadcast event
 #   link    (contract 1.3) link-layer confirms from the master and from the
 #           outstation, and keep-alives (REQUEST_LINK_STATUS) on an idle link
 #           with the server's link-status events where it reports them
@@ -562,6 +564,32 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
+        fi
+
+        # ---- broadcast (contract 1.3) ----
+        if has "${server}" broadcastServer && has "${client}" broadcastClient; then
+            name="fc-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 77 --mode direct-no-ack --broadcast --host "${name}")
+                check "${pair}: [broadcast] a control to 0xFFFF" "ok=true error=-" "$(outcome "${doc}")"
+                sleep 0.3
+                # Read by stepfunc's master, which sends nothing first: go-dnp3's
+                # writes IIN at start, and that response carries IIN1.0.
+                doc=$(client stepfunc -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")
+                check "${pair}: [broadcast] is carried out" "77" "$(jq -r '[.objects[]?.value] | join(" ")' <<<"${doc}" 2>/dev/null)"
+                check "${pair}: [broadcast] IIN1.0 in the next response" "true" \
+                    "$(jq -r '.iin | index("BROADCAST") != null' <<<"${doc}" 2>/dev/null)"
+                if has "${server}" broadcastEventServer; then
+                    check "${pair}: [broadcast] the server's event" "true" \
+                        "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "broadcast" and .function == 6)')"
+                fi
+            else
+                fail "${pair}: [broadcast] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: broadcast (needs server:broadcastServer,client:broadcastClient)"
         fi
 
         # ---- link layer (contract 1.3) ----

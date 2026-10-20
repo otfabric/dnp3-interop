@@ -110,6 +110,9 @@ if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "secure authentication without the feature" "${IMAGE}" client integrity-poll --host nowhere \
         --sa-update-key 000102030405060708090a0b0c0d0e0f
 fi
+if jq -e '.features.broadcastClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "--broadcast without --mode direct-no-ack" "${IMAGE}" client operate --host nowhere --type g41v1 --index 0 --value 1 --broadcast
+fi
 if jq -e '.features.deadbandWriteClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "deadband-write with a negative deadband" "${IMAGE}" client deadband-write --host nowhere --deadbands 4:-1
 fi

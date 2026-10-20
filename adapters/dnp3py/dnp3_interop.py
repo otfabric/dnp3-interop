@@ -1249,6 +1249,11 @@ def print_capabilities():
             "linkConfirmsClient": False,
             "keepAliveClient": False,
             "linkStatusEventServer": False,
+            # Contract 1.3: the outstation ignores broadcast addresses and the
+            # master refuses them.
+            "broadcastServer": False,
+            "broadcastEventServer": False,
+            "broadcastClient": False,
             # The master sends FREEZE AT TIME and freezes of any group; the
             # outstation has neither (NO_FUNC_CODE_SUPPORT, counters only).
             "freezeAtTimeServer": False,

@@ -137,6 +137,11 @@ int print_capabilities()
           {"linkConfirmsClient", false},
           {"keepAliveClient", true},
           {"linkStatusEventServer", false},
+          // Contract 1.3: broadcast requests are carried out, unreported;
+          // the master has no request that expects no answer.
+          {"broadcastServer", true},
+          {"broadcastEventServer", false},
+          {"broadcastClient", false},
           // The outstation refuses FREEZE AT TIME and freezes counters only;
           // the master cannot carry g50v2 but freezes any group.
           {"freezeAtTimeServer", false},
