@@ -89,8 +89,9 @@ USAGE = """usage: dnp3-interop <command>
       enable-unsolicited   [--classes 1,2,3]
       disable-unsolicited  [--classes 1,2,3]
       assign-class         --class C --group G [--start N --stop N]
-      freeze               [--clear] [--no-ack]
+      freeze               [--clear] [--no-ack] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
       monitor              [--duration-ms N]
+      operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
   print-capabilities
   print-fixture [NAME]
   version

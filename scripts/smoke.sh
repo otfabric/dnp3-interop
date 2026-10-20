@@ -110,6 +110,9 @@ if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "secure authentication without the feature" "${IMAGE}" client integrity-poll --host nowhere \
         --sa-update-key 000102030405060708090a0b0c0d0e0f
 fi
+if jq -e '.features.deadbandWriteClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "deadband-write with a negative deadband" "${IMAGE}" client deadband-write --host nowhere --deadbands 4:-1
+fi
 if ! jq -e '.features.fileClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "a file operation without the feature" "${IMAGE}" client file-get --host nowhere --name /a
 fi
