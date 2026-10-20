@@ -18,6 +18,34 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.4.0
+
+**Date:** 2026-10-20
+
+## Summary
+
+Container contract 1.3: device attributes, several controls per request,
+freeze at time and analog freeze, analog deadbands, file append and
+authentication, event buffer overflow, the link layer, broadcast, management
+functions and several outstations on one port. Additions only; documents
+still carry `schemaVersion` `"1.0"`.
+
+## Changes
+
+- Device attributes (g0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; features `deviceAttributesServer`, `deviceAttributesClient`.
+- Several controls in one request: `operate-multi` with `commandStatuses`, the fixture's `maxControlsPerRequest`, the `controls` fixture; features `multipleControlsClient`, `maxControlsServer`.
+- Freeze at time and analog freeze: `freeze --at immediately|+MS|EPOCH_MS [--interval-ms N]`, `freeze --group 30`; features `freezeAtTimeServer/Client`, `analogFreezeServer/Client`.
+- Analog deadbands: `deadband-write --deadbands I:V,...` (g34v3) and group 34 in object documents; features `deadbandWriteServer/Client`, `deadbandReadServer/Client`.
+- File append and AUTHENTICATE_FILE: `file-put --append`, `file-authenticate`, `--file-user`/`--file-password` on the file operations and the server; file events `append`, `authenticate`; features `fileAppendServer/Client`, `fileAuthServer/Client`.
+- Event buffer overflow: the fixture's `outstation.eventBufferSize` and the `events` fixture; IIN2.3 in `iin`; feature `eventBufferServer`.
+- Link layer: `--link-confirms` (client and server), `client --keep-alive-ms`, the server event `link-status`; features `linkConfirmsServer/Client`, `keepAliveClient`, `linkStatusEventServer`.
+- Broadcast: `operate --mode direct-no-ack --broadcast`, IIN1.0 in `iin`, the server event `broadcast`; features `broadcastServer`, `broadcastEventServer`, `broadcastClient`.
+- Management functions: `manage --function initialize-data|initialize-application|start-application|stop-application|save-configuration`, the server event `manage`; features `manageServer`, `manageClient`.
+- Several outstations: `server --outstations N`; feature `multipleOutstationsServer`.
+- Known bugs whose text ends in "(intermittent)" are exempt from the stale-entry check.
+
+---
+
 ## v0.3.0
 
 **Date:** 2026-10-20
