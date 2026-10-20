@@ -162,6 +162,15 @@ is connected runs when the next one is. Only go-dnp3's outstation freezes
 analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
 masters send it, go-dnp3's master cannot.
 
+### Several outstations
+
+opendnp3 (several stacks on one channel) and go-dnp3 (its multidrop bus)
+serve several outstations on one port, told apart by link address; every
+master reaches each by its address. stepfunc's server picks an outstation per
+connection by the master's IP address, so it cannot. A master that listens and
+picks among outstations dialling in by link address is not in the contract:
+of the references only stepfunc's master can do it.
+
 ### Management functions
 
 Only go-dnp3's outstation accepts the management functions (INITIALIZE DATA,

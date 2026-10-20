@@ -167,6 +167,12 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: several outstations
+
+- `server --outstations N`; feature `multipleOutstationsServer`. opendnp3 and go-dnp3. The master listener that picks outstations by link address is dropped: only stepfunc's master can.
+
+**Gate:** `make features` polls each of two outstations on one port by its address, sees their databases apart, and no answer from a third address.
+
 ### Contract 1.3: management functions
 
 - `manage --function initialize-data|initialize-application|start-application|stop-application|save-configuration`, the server event `manage`; features `manageServer`, `manageClient`.
