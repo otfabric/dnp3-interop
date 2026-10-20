@@ -113,6 +113,9 @@ fi
 if jq -e '.features.deadbandWriteClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "deadband-write with a negative deadband" "${IMAGE}" client deadband-write --host nowhere --deadbands 4:-1
 fi
+if jq -e '.features.fileAuthClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "--file-user without --file-password" "${IMAGE}" client file-get --host nowhere --name /a --file-user u
+fi
 if ! jq -e '.features.fileClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "a file operation without the feature" "${IMAGE}" client file-get --host nowhere --name /a
 fi

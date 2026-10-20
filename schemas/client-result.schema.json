@@ -12,7 +12,7 @@
       "enum": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
                "disable-unsolicited", "assign-class", "freeze", "monitor",
                "file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write",
-               "operate-multi", "deadband-write"]
+               "operate-multi", "deadband-write", "file-authenticate"]
     },
     "ok": { "type": "boolean" },
     "error": {
@@ -94,7 +94,7 @@
     { "if": { "properties": { "operation": { "const": "operate" } } }, "then": { "required": ["commandStatus"] } },
     { "if": { "properties": { "operation": { "const": "operate-multi" } } }, "then": { "required": ["commandStatus", "commandStatuses"] } },
     { "if": { "properties": { "operation": { "const": "restart" } } }, "then": { "required": ["restartDelayMs"] } },
-    { "if": { "properties": { "operation": { "enum": ["file-get", "file-put", "file-ls", "file-info", "file-delete"] } } },
+    { "if": { "properties": { "operation": { "enum": ["file-get", "file-put", "file-ls", "file-info", "file-delete", "file-authenticate"] } } },
       "then": { "required": ["fileStatus"] } },
     { "if": { "properties": { "operation": { "enum": ["integrity-poll", "event-poll", "read"] } } },
       "else": { "properties": { "iin": { "type": "null" } } } },
