@@ -112,6 +112,93 @@ and dnp3py masters, all outstations); freezes without acknowledgement
 (dnp3py master, all outstations); all-objects reads and restart delays
 (stepfunc, opendnp3 and dnp3py masters).
 
+## Contract 1.1 features
+
+`scripts/features.sh` (`make features`) checks every pairing that declares a
+feature: over TLS, UDP and serial an integrity poll against the fixture, a
+control, its events and that confirmed events are gone; TLS refusals in both
+directions; file reading (one block and several), listing, descriptors,
+writing, reading back, deletion and a missing file, with the server's file
+events and the same documents for every master; secure authentication with
+the server's `auth` events, and refusal of a wrong update key, an unknown
+user and a master without authentication, without the refused control
+taking effect.
+
+| Feature | Pairings (client → server) |
+|---------|---------------------------|
+| TLS | stepfunc, opendnp3, dscsystems → stepfunc, opendnp3, dscsystems (9) |
+| UDP | the same 9 |
+| Serial (socat pseudo-terminal line) | the same 9 |
+| File transfer | stepfunc, dscsystems → dscsystems (2); stepfunc refuses DELETE_FILE; stepfunc and opendnp3 outstations refuse file transfer |
+| Secure authentication v5 | dscsystems → dscsystems (1); no other stack has it |
+
+dnp3py has TCP only and none of the 1.1 features.
+
+### opendnp3: one UDP peer, no TLS name check
+
+Its UDP channel binds and then connects to the remote endpoint, so an
+outstation answers one master endpoint only and needs it up front
+(`--udp-peer`); a master always sends from its `--udp-local-port`. Its TLS
+master checks the outstation's certificate against the CA but not the name
+in it (`--tls-server-name` has nothing to act on). Built against OpenSSL 3,
+asio 1.16 warns about deprecated calls; TLS 1.2 and 1.3 both work.
+
+### TLS is mutual everywhere, and a refused master learns it late
+
+All three libraries require a client certificate on the outstation and
+verify the outstation's on the master; none can switch verification off.
+With TLS 1.3 the master finishes its side of the handshake before the
+outstation checks the master's certificate, so a master the outstation does
+not trust sees the connection close afterwards, and its error code differs
+by library; the self-test checks only that the operation fails. A master that does not trust the outstation
+fails to connect (`connect-failed`) with all three.
+
+### go-dnp3 (v0.8.1): its UDP outstation loses requests without a peer
+
+Without a configured peer, the outstation's first unsolicited response fails
+with "no UDP peer known yet". The session takes that for a lost connection
+and reconnects in a loop, while the readers of the abandoned sessions keep
+taking datagrams from the shared socket: requests go missing. The dscsystems
+adapter drops such a datagram instead of returning the error (as UDP would
+lose it), so the outstation works with or without `--udp-peer`. It also
+answers the first endpoint it hears from for its whole life.
+
+### go-dnp3 and stepfunc: file transfer
+
+The go-dnp3 outstation serves a directory: entries report the file system's
+sizes (a directory its block size, 4096) and modification times as creation
+times. It handles one transfer at a time. The stepfunc master has
+`read_file`, `read_directory`, `get_file_info` and open/write/close, but no
+DELETE_FILE: `file-delete` is not among its operations. Both masters
+produce the same listing and descriptors of the same outstation.
+
+### go-dnp3: secure authentication, against itself only
+
+go-dnp3 is the only stack in the images with SAv5, so it is checked against
+itself, which proves the exchange is self-consistent, not that it
+interoperates. Its MAC inputs agree with opendnp3's own SAv5 implementation
+(removed in 2016; commit `22047af20^`, `cpp/libs/src/secauth/`): the
+challenge-reply MAC is computed over the whole challenge fragment followed by
+the whole critical request; the key-status MAC over the whole key change
+request with the monitor-direction key. They differ in the key-wrap
+plaintext: the opendnp3 master wraps the key-status object as received,
+including its MAC value after a first key change, and its outstation compares
+only the part before the MAC; the go-dnp3 master leaves the MAC out, and its
+outstation refuses more than seven octets after the object, so an
+opendnp3-style master fails every key change after the first. go-dnp3 fixes
+the challenge at 32 octets and the session keys at 32 octets, has MAC
+algorithm 4 only, no aggressive mode, does not authenticate unsolicited
+responses, does not parse g120v7 in its master, and challenges every request
+but READ, CONFIRM and DELAY MEASURE.
+
+### Serial over a pseudo-terminal
+
+The images carry socat. The outstation holds one end of a pseudo-terminal
+pair for its life and each master's TCP connection is attached to the other
+end (`docs/CONTAINER_CONTRACT.md`). A single pseudo-terminal per TCP
+connection (socat's `fork` on the pty side) loses responses to the
+lingering process of the previous connection.
+
 ## Findings
 
 ### opendnp3's master cannot synchronize time on request

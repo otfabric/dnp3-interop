@@ -18,6 +18,28 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.2.0
+
+**Date:** 2026-10-20 (not yet tagged)
+
+## Summary
+
+Container contract 1.1: DNP3 over TLS, UDP and serial; file transfer
+(group 70); secure authentication v5 (group 120). Every addition is
+optional per image and declared in its capability document; contract 1.0
+consumers are unaffected (documents still carry `schemaVersion` `"1.0"`).
+
+## Changes
+
+- Transports: `--transport tcp|udp|serial`; TLS with server `--tls-cert`, `--tls-key`, `--tls-ca` and client `--tls`, `--tls-ca`, `--tls-cert`, `--tls-key`, `--tls-server-name` (mutual, TLS 1.2 and 1.3); UDP with server `--udp-peer` and client `--udp-local-port`; serial with `--serial-device`, `--baud`, `--data-bits`, `--parity`, `--stop-bits`. The ready event has `transport`. stepfunc, opendnp3 (now built with OpenSSL) and dscsystems have all three; the images with serial carry socat to bridge a pseudo-terminal to TCP.
+- File transfer: the `files` fixture (fixture format: `files`, `directories`); operations `file-get`, `file-put`, `file-ls`, `file-info`, `file-delete`; result fields `file`, `files`, `fileStatus`; error `file-error`; server event `file`; features `fileServer`, `fileClient`, `fileDeleteClient`. dscsystems in both roles, stepfunc as master without delete.
+- Secure authentication v5: `--sa-update-key`, `--sa-user`, `--sa-mac`; error `auth-failed`; server events `auth` and `auth-error`; `secureAuthentication` in the capability document (MAC and key-wrap algorithms, critical function codes). dscsystems in both roles, tested against itself only.
+- `scripts/features.sh` (`make features`, part of `make documents`): the cross-stack self-test of all of it; `scripts/test-pki.sh` makes the test certificates of a run. The compatibility report includes it.
+- Adapters close only after their last confirm (all masters); the opendnp3 master judges a time synchronization by its library's result; dnp3py image without pip and setuptools.
+- The release qualification (Trivy scan, SBOMs, compatibility report) attaches non-empty SBOM and scan archives.
+
+---
+
 ## v0.1.0
 
 **Date:** 2026-10-20

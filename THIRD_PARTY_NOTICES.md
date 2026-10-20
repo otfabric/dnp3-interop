@@ -36,6 +36,8 @@ and carries `SPDX-License-Identifier: GPL-3.0-or-later`; the others are MIT.
 | ser4cpp (Automatak), compiled into opendnp3 | commit `3c449734dc530a8f465eb0982de29165cc4e23d5` | Apache-2.0 | https://github.com/automatak/ser4cpp |
 | JSON for Modern C++ (Niels Lohmann), header-only (Debian `nlohmann-json3-dev`) | Debian trixie | MIT | https://github.com/nlohmann/json |
 | GNU C++ library, linked statically (Debian `libstdc++`) | Debian trixie | GPL-3.0 with the GCC Runtime Library Exception | https://gcc.gnu.org |
+| OpenSSL, linked dynamically for TLS (Debian `libssl3t64`) | Debian trixie | Apache-2.0 | https://www.openssl.org |
+| socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Adapter | this repository, `adapters/opendnp3/` | MIT | https://github.com/otfabric/dnp3-interop |
 | Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
 
@@ -48,7 +50,9 @@ last release.
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
 | dnp3 (Step Function I/O LLC) | 1.7.0 (crates.io), tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
-| Rust crates the adapter and dnp3 depend on (tokio, serde_json, tracing, chrono, ...) | the versions in `adapters/stepfunc/Cargo.lock` | MIT and/or Apache-2.0 | https://crates.io |
+| Rust crates the adapter and dnp3 depend on (tokio, serde_json, tracing, chrono, rustls, tokio-serial, ...) | the versions in `adapters/stepfunc/Cargo.lock` | MIT and/or Apache-2.0 | https://crates.io |
+| ring (cryptography of rustls) | the version in `adapters/stepfunc/Cargo.lock` | Apache-2.0 AND ISC | https://github.com/briansmith/ring |
+| socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Rust standard library | 1.99.1 | MIT or Apache-2.0 | https://www.rust-lang.org |
 | Adapter | this repository, `adapters/stepfunc/` | MIT | https://github.com/otfabric/dnp3-interop |
 | Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
@@ -70,6 +74,7 @@ For any other use, obtain a commercial licence from Step Function I/O
 | go-dnp3 (DSC Systems) | v0.8.1, commit `70ff72bb09755db183d1bd69859adc72cd663aec` | GPL-3.0 | https://github.com/dscsystems/go-dnp3 |
 | go.bug.st/serial, golang.org/x/sys (linked by go-dnp3's channel package) | the versions in `adapters/dscsystems/go.sum` | BSD-3-Clause | https://github.com/bugst/go-serial, https://go.googlesource.com/sys |
 | Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Adapter | this repository, `adapters/dscsystems/` | GPL-3.0-or-later | https://github.com/otfabric/dnp3-interop |
 | Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
 

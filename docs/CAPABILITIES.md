@@ -33,6 +33,20 @@ One JSON object on one line ([schema](../schemas/capabilities.schema.json)):
 }
 ```
 
+An image with the feature `secureAuthentication` adds (contract 1.1):
+
+```json
+"secureAuthentication": { "macAlgorithms": ["hmac-sha256-16"], "keyWrapAlgorithms": ["aes-128", "aes-256"],
+                          "criticalFunctions": [2, 3, 4, 5, "..."], "aggressiveMode": false }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `macAlgorithms` | Values of `--sa-mac` the image accepts |
+| `keyWrapAlgorithms` | Key wrap algorithms, by the length of the update key |
+| `criticalFunctions` | Function codes the outstation challenges |
+| `aggressiveMode` | Whether aggressive mode is used (never, in contract 1.1) |
+
 | Field | Meaning |
 |-------|---------|
 | `adapter` | Adapter name; the image is `dnp3-interop-<adapter>` |
@@ -74,11 +88,14 @@ serves it and the master sends it.
 | `freezeNoAckClient` | `freeze --no-ack` | no ² | no ² | no ² | yes |
 | `octetStrings` | g110 in class 0 and reads | yes | yes | yes | yes |
 | `tcp` | DNP3 over TCP | yes | yes | yes | yes |
-| `udp` | DNP3 over UDP | no ⁵ | no ⁵ | no ⁵ | no |
-| `tls` | DNP3 over TLS (IEC 62351-3) | no ⁵ | no ⁵ | no ⁵ | no |
-| `serial` | DNP3 over a serial line | no ⁵ | no ⁵ | no ⁵ | no |
-| `fileTransfer` | File transfer, group 70 | no ⁶ | no ⁷ | no ¹⁰ | no |
-| `secureAuthentication` | Secure authentication v5, group 120 | no ⁷ | no ⁷ | no ¹⁰ | no |
+| `udp` | DNP3 over UDP (1.1) | yes | yes ⁵ | yes ¹⁰ | no ¹⁴ |
+| `tls` | DNP3 over TLS (IEC 62351-3), mutual authentication (1.1) | yes | yes ⁵ | yes | no ¹⁴ |
+| `serial` | DNP3 over a serial line (1.1) | yes | yes | yes | no ¹⁴ |
+| `fileTransfer` | File transfer, group 70, in at least one role (`fileServer` or `fileClient`) | yes ⁶ | no ⁷ | yes | no ¹⁴ |
+| `fileServer` | The outstation serves the files of its fixture (1.1) | no ⁶ | no ⁷ | yes | — |
+| `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | yes | no ⁷ | yes | no ¹⁴ |
+| `fileDeleteClient` | `file-delete` (1.1) | no ⁶ | no ⁷ | yes | no ¹⁴ |
+| `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ⁷ | no ⁷ | yes ¹⁵ | no ¹⁴ |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -92,11 +109,12 @@ written, so the operation works against it.
 
 ⁴ stepfunc's outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT.
 
-⁵ Both libraries have these transports; contract 1.0 covers TCP only. See
-[PLAN.md](../PLAN.md).
+⁵ opendnp3's UDP socket is connected to one peer: its outstation needs
+`--udp-peer` (exit 2 without it). Its TLS master does not check the name in
+the outstation's certificate, only that the CA signed it.
 
-⁶ stepfunc's master reads files; its outstation has no file transfer, and
-no other published adapter serves files yet.
+⁶ stepfunc's master reads, lists, describes and writes files; the library
+has no DELETE_FILE and no outstation side of file transfer.
 
 ⁷ Not in the library: opendnp3 3.x removed secure authentication and has no
 file transfer; stepfunc's open edition has no secure authentication.
@@ -106,8 +124,9 @@ file transfer; stepfunc's open edition has no secure authentication.
 ⁹ go-dnp3's FREEZE AND CLEAR leaves counters without a frozen counter
 uncleared (listed in tests/known-bugs.tsv; see COMPATIBILITY.md).
 
-¹⁰ go-dnp3 has file transfer and a subset of secure authentication v5 in both
-roles; contract 1.0 does not cover them yet (see PLAN.md).
+¹⁰ go-dnp3's UDP outstation answers the first endpoint it hears from for its
+whole life. Its v0.8.1 also drops requests when it has no peer to send an
+unsolicited response to; the adapter works around that (COMPATIBILITY.md).
 
 ¹¹ go-dnp3's master reads start-stop ranges and classes, not all objects of a
 group; `read --group 60 --variation 1..4` works, as a class read.
@@ -120,6 +139,15 @@ fixture (no double-bit inputs, octet strings or per-point variations). "—"
 marks a feature of the server role. The adapter builds the requests its
 master has no call for (everything but the polls) with dnp3py's
 application-layer types, and decodes responses with its decoders.
+
+¹⁴ dnp3py 0.6.0 has TCP only, no file transfer and no secure
+authentication.
+
+¹⁵ go-dnp3's SAv5 is a subset: challenge-reply with MAC algorithm 4
+(HMAC-SHA-256, 16 octets), AES-128 or AES-256 key wrap, no aggressive mode,
+no remote key management, unsolicited responses not authenticated. The
+capability document says so in `secureAuthentication`. It is tested against
+itself only: no other image has secure authentication.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks

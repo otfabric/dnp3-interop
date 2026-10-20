@@ -9,7 +9,7 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 3 | stepfunc adapter; cross-stack self-test | done |
 | 4 | First published images; consumption from a library's tests | images published: v0.1.0 (2026-10-20); consumption by a library pending |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
-| 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | in progress, as container contract 1.1 |
+| 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | done as container contract 1.1 (v0.2.0); further point types open |
 | 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 qualified, results attached to its release |
 
 ## Phase 1 - Foundation (done)
@@ -121,16 +121,21 @@ be settled first is how the archive reaches local builds and CI (a private
 repository, a build secret, a self-hosted runner) without putting it in this
 public repository or in a public image.
 
-## Phase 6 - Expanded coverage
+## Phase 6 - Expanded coverage (container contract 1.1)
 
-Each enters the contract when at least two adapters can exercise it against
-each other (REQUIREMENTS.md R8.3):
+Each part enters the contract when at least two adapters can exercise it against
+each other, or one adapter in both roles (REQUIREMENTS.md R8.3). Contract 1.1
+adds, all as additions to 1.0:
 
-- UDP and TLS: both P0 libraries have them; needs transport flags in the contract and, for TLS, test certificates baked into the images.
-- Serial: both P0 libraries have it; needs a virtual serial link between two containers (socat pty pair).
-- File transfer (g70): stepfunc master against the go-dnp3 outstation, and go-dnp3 in both roles.
-- Secure authentication v5 (g120): go-dnp3 in both roles; a second stack only with Triangle MicroWorks, which is on hold.
-- Further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
+- **TLS**: server `--tls-cert/--tls-key/--tls-ca`, client `--tls` with `--tls-ca/--tls-cert/--tls-key` and `--tls-server-name`; mutual, as every library requires. Test certificates are made per run (`scripts/test-pki.sh`), never baked in. stepfunc, opendnp3 (built with OpenSSL), dscsystems.
+- **UDP**: `--transport udp`, server `--udp-peer`, client `--udp-local-port`. stepfunc, opendnp3, dscsystems.
+- **Serial**: `--transport serial --serial-device` with line settings; tested over a socat pseudo-terminal line bridged to TCP (socat is in the images). stepfunc, opendnp3, dscsystems.
+- **File transfer (g70)**: the `files` fixture; operations `file-get`, `file-put`, `file-ls`, `file-info`, `file-delete`; server event `file`; error `file-error` and `fileStatus`; features `fileServer`, `fileClient`, `fileDeleteClient`. dscsystems both roles, stepfunc master (no delete).
+- **Secure authentication v5 (g120)**: `--sa-update-key`, `--sa-user`, `--sa-mac`; server events `auth` and `auth-error`; error `auth-failed`; `secureAuthentication` in the capability document. dscsystems in both roles; a second stack only with Triangle MicroWorks, which is on hold.
+
+**Gate:** `make features` passes for every pairing that declares a feature, and smoke and cross-stack stay green.
+
+**Status:** done locally: `make features` 191 passed, 0 failed (27 skipped for features a pairing lacks); smoke and cross-stack pass. Open: further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
 
 ## Phase 7 - Release qualification
 

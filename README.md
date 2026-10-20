@@ -21,6 +21,14 @@ it, go-dnp3's master reads only ranges and classes, and dnp3py serves as a
 master only. Each image says what it supports (`print-capabilities`); see
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
+Beyond DNP3 over TCP (container contract 1.0), contract 1.1 covers:
+
+| | stepfunc | opendnp3 | dscsystems | dnp3py |
+|---|:-:|:-:|:-:|:-:|
+| TLS (mutual), UDP, serial | yes | yes | yes | no |
+| File transfer (g70) | master (no delete) | no | both roles | no |
+| Secure authentication v5 (g120) | no | no | both roles | no |
+
 The Step Function I/O dnp3 crate is distributed under a non-commercial,
 non-production licence. Its image exists for interoperability testing only;
 see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -172,7 +180,8 @@ dnp3-interop/
 
 ```sh
 make help        # all targets
-make ci          # validate, lint, build, smoke, cross-stack self-test, document schemas
+make ci          # validate, lint, build, smoke, cross-stack and contract 1.1 self-tests, document schemas
+make features    # cross-stack self-test of TLS, UDP, serial, file transfer and secure authentication
 make validate    # fixtures against the schema and the cross-field rules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
