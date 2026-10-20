@@ -45,18 +45,24 @@ COPY adapters/dnp3py/dnp3_interop.py /opt/adapter/dnp3_interop.py
 RUN python -I -c "import sys; sys.path.insert(0, '/opt/adapter'); import dnp3_interop" \
     && printf '#!/bin/sh\nexec python3 -I /opt/adapter/dnp3_interop.py "$@"\n' > /usr/local/bin/dnp3-interop \
     && chmod 755 /usr/local/bin/dnp3-interop \
-    && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop
+    && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop \
+    && mkdir -p /run/dnp3-interop \
+    && chown interop /run/dnp3-interop
 
 COPY THIRD_PARTY_NOTICES.md /licenses/THIRD_PARTY_NOTICES.md
 COPY fixtures /fixtures
 
 LABEL org.opencontainers.image.title="dnp3-interop-dnp3py" \
-      org.opencontainers.image.description="DNP3 reference master built on dnp3py" \
+      org.opencontainers.image.description="DNP3 reference master and outstation built on dnp3py" \
       org.opencontainers.image.source="https://github.com/otfabric/dnp3-interop" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${ADAPTER_VERSION}"
 
 USER interop
+EXPOSE 20000
+
+HEALTHCHECK --interval=2s --timeout=2s --start-period=10s --retries=15 \
+  CMD test -f /run/dnp3-interop/ready
 
 ENTRYPOINT ["/usr/local/bin/dnp3-interop"]
-CMD ["help"]
+CMD ["server"]
