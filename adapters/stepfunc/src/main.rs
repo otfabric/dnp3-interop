@@ -134,6 +134,12 @@ fn print_capabilities() -> i32 {
             "fileDeleteClient": false,
             // Not in the library.
             "secureAuthentication": false,
+            // Contract 1.2. The master decodes frozen analogs and command
+            // events; it drops g50v4, and the outstation serves none of them.
+            "commandEventsServer": false,
+            "commandEventsClient": true,
+            "frozenAnalogInputsClient": true,
+            "timeAndIntervalClient": false,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
