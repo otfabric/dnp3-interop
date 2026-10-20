@@ -1,0 +1,51 @@
+# Self-test cases for scripts/interop.sh with FIXTURE=dnp3py: the same
+# columns as tests/cases.tsv, against fixtures/dnp3py/fixture.json, which
+# every outstation whose point types cover it serves (dnp3py's among them).
+# The fixture has no unsolicited responses: ENABLE and DISABLE UNSOLICITED are
+# refused.
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g10v2x2,g1v2x4,g20v1x3,g21v1x2,g30v1x4,g40v1x2	-	integrity-poll
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=	-	event-poll
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=	-	event-poll --classes 2
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g10v2x2,g1v2x4,g20v1x3,g21v1x2,g30v1x4,g40v1x2	-	read --group 60 --variation 1
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g1v2x4	client:readAllObjectsClient	read --group 1 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g1v2x3	-	read --group 1 --variation 2 --start 0 --stop 2
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g10v2x2	client:readAllObjectsClient	read --group 10 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g20v1x3	client:readAllObjectsClient	read --group 20 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g21v1x2	client:readAllObjectsClient	read --group 21 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g30v1x2	-	read --group 30 --variation 0 --start 0 --stop 1
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g30v1x4	client:readAllObjectsClient	read --group 30 --variation 0
+ro	0	ok=true error=- status=- delay=- iin=NEED_TIME objects=g40v1x2	client:readAllObjectsClient	read --group 40 --variation 0
+ro	1	ok=false error=timeout status=- delay=- iin= objects=	-	integrity-poll --remote-addr 99 --timeout-ms 1000
+ro	1	ok=false error=timeout status=- delay=- iin= objects=	-	integrity-poll --local-addr 7 --timeout-ms 1000
+ro	1	ok=false error=rejected status=- delay=- iin= objects=	-	operate --type g12v1 --index 9 --code LATCH_ON
+ro	1	ok=false error=rejected status=- delay=- iin= objects=	server:parameterErrorWithNotSupported	operate --type g12v1 --index 0 --code PULSE_ON
+ro	1	ok=false error=command-failed status=NOT_SUPPORTED delay=- iin= objects=	server:!parameterErrorWithNotSupported	operate --type g12v1 --index 0 --code PULSE_ON
+ro	1	ok=false error=rejected status=- delay=- iin= objects=	server:parameterErrorWithNotSupported	operate --type g12v1 --index 1 --code LATCH_ON
+ro	1	ok=false error=command-failed status=NOT_SUPPORTED delay=- iin= objects=	server:!parameterErrorWithNotSupported	operate --type g12v1 --index 1 --code LATCH_ON
+ro	1	ok=false error=command-failed status=OUT_OF_RANGE delay=- iin= objects=	-	operate --type g41v1 --index 0 --value 2000000
+ro	1	ok=false error=command-failed status=OUT_OF_RANGE delay=- iin= objects=	-	operate --type g41v3 --index 1 --value 500 --mode sbo
+ro	1	ok=false error=rejected status=- delay=- iin= objects=	-	operate --type g41v2 --index 5 --value 1
+rw	0	ok=true error=- status=- delay=5000 iin= objects=	client:restartDelayClient	restart --type cold
+rw	0	ok=true error=- status=- delay=1000 iin= objects=	client:restartDelayClient	restart --type warm
+ro	0	ok=true error=- status=- delay=- iin= objects=	-	monitor --duration-ms 300
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code LATCH_ON
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code LATCH_OFF
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code CLOSE
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 0 --code TRIP --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g12v1 --index 1 --code LATCH_ON --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v1 --index 0 --value -12345
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v2 --index 0 --value 42 --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v3 --index 1 --value 42 --mode sbo
+rw	0	ok=true error=- status=SUCCESS delay=- iin= objects=	-	operate --type g41v4 --index 0 --value 1000
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:directOperateNoAckServer,client:directOperateNoAckClient	operate --type g12v1 --index 0 --code LATCH_ON --mode direct-no-ack
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:directOperateNoAckServer,client:directOperateNoAckClient	operate --type g41v2 --index 0 --value 7 --mode direct-no-ack
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	time-sync
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	time-sync --procedure non-lan
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	freeze
+rw	0	ok=true error=- status=- delay=- iin= objects=	-	freeze --clear
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:freezeNoAckServer,client:freezeNoAckClient	freeze --no-ack
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:freezeNoAckServer,client:freezeNoAckClient	freeze --clear --no-ack
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:assignClassServer,client:assignClassClient	assign-class --class 2 --group 1
+rw	0	ok=true error=- status=- delay=- iin= objects=	server:assignClassServer,client:assignClassClient	assign-class --class 0 --group 30 --start 0 --stop 1
+ro	1	ok=false error=rejected status=- delay=- iin= objects=	-	disable-unsolicited
+rw	1	ok=false error=rejected status=- delay=- iin= objects=	-	enable-unsolicited
