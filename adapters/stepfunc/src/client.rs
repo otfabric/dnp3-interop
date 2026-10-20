@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
-use crate::files::{self, FileOp, FileResult};
+use crate::files::{self, FileRequest, FileResult};
 use crate::transport::{self, Kind, Transport};
 use dnp3::app::attr::{AnyAttribute, AttrSet, AttrValue, OwnedAttrValue, OwnedAttribute};
 use dnp3::serial::*;
@@ -550,7 +550,7 @@ enum Op {
     Restart(bool),
     Empty(FunctionCode, Headers),
     Monitor(Duration),
-    File(FileOp),
+    File(FileRequest),
     AttributeRead(u8, u8),
     Deadbands(Vec<(u16, f32)>),
     AttributeWrite(OwnedAttribute),
@@ -840,8 +840,14 @@ pub fn run(argv: &[String]) -> i32 {
     flags.extend(transport::CLIENT_FLAGS);
     let mut switches: Vec<&str> = transport::CLIENT_SWITCHES.to_vec();
     match op {
-        "file-get" | "file-ls" | "file-info" => flags.push("name"),
-        "file-put" => flags.extend(["name", "content"]),
+        "file-get" | "file-ls" | "file-info" => {
+            flags.extend(["name", "file-user", "file-password"])
+        }
+        "file-put" => {
+            flags.extend(["name", "content", "file-user", "file-password"]);
+            switches.push("append");
+        }
+        "file-authenticate" => flags.extend(["file-user", "file-password"]),
         "attribute-read" => flags.extend(["set", "variation"]),
         "operate-multi" => flags.extend(["controls", "mode"]),
         "deadband-write" => flags.push("deadbands"),

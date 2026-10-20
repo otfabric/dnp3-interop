@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-//! File transfer, group 70, for the master (contract 1.1). The library has
-//! no outstation side and no DELETE_FILE.
+//! File transfer, group 70, for the master (contract 1.1; AUTHENTICATE_FILE
+//! and append, 1.3). The library has no outstation side and no DELETE_FILE.
 
 use crate::util::*;
 
@@ -11,16 +11,45 @@ use dnp3::master::*;
 use serde_json::{json, Value};
 use tokio::sync::oneshot;
 
-pub const OPERATIONS: [&str; 4] = ["file-get", "file-put", "file-ls", "file-info"];
+pub const OPERATIONS: [&str; 5] = [
+    "file-get",
+    "file-put",
+    "file-ls",
+    "file-info",
+    "file-authenticate",
+];
 
 pub enum FileOp {
     Get(String),
-    Put(String, Vec<u8>),
+    Put(String, Vec<u8>, bool),
     List(String),
     Info(String),
+    Authenticate,
 }
 
-pub fn parse(op: &str, args: &Args) -> Result<FileOp, UsageError> {
+/// A file operation and the credentials of --file-user and --file-password,
+/// for AUTHENTICATE_FILE before the open (contract 1.3).
+pub struct FileRequest {
+    op: FileOp,
+    credentials: Option<FileCredentials>,
+}
+
+pub fn parse(op: &str, args: &Args) -> Result<FileRequest, UsageError> {
+    let credentials = match (args.has("file-user"), args.has("file-password")) {
+        (true, true) => Some(FileCredentials {
+            user_name: args.required("file-user")?,
+            password: args.required("file-password")?,
+        }),
+        (false, false) if op != "file-authenticate" => None,
+        (false, false) => return usage("file-authenticate needs --file-user and --file-password"),
+        _ => return usage("--file-user and --file-password go together"),
+    };
+    if op == "file-authenticate" {
+        return Ok(FileRequest {
+            op: FileOp::Authenticate,
+            credentials,
+        });
+    }
     let name = args.required("name")?;
     let valid = name == "/"
         || (name.starts_with('/')
@@ -35,18 +64,19 @@ pub fn parse(op: &str, args: &Args) -> Result<FileOp, UsageError> {
     if !valid {
         return usage("--name must be an absolute file name");
     }
-    Ok(match op {
+    let op = match op {
         "file-get" => FileOp::Get(name),
         "file-put" => {
             let text = args.required("content")?;
             match from_hex(&text) {
-                Some(data) => FileOp::Put(name, data),
+                Some(data) => FileOp::Put(name, data, args.has("append")),
                 None => return usage("--content must be hex"),
             }
         }
         "file-ls" => FileOp::List(name),
         _ => FileOp::Info(name),
-    })
+    };
+    Ok(FileRequest { op, credentials })
 }
 
 fn from_hex(text: &str) -> Option<Vec<u8>> {
@@ -118,6 +148,10 @@ pub struct FileFailure {
 
 fn failure(e: FileError, result: &mut FileResult) -> FileFailure {
     match e {
+        // AUTHENTICATE_FILE answered with key 0.
+        FileError::NoPermission => {
+            failure(FileError::BadStatus(FileStatus::PermissionDenied), result)
+        }
         FileError::BadStatus(s) => {
             result.status = Some(status_name(s));
             FileFailure {
@@ -180,11 +214,17 @@ impl FileReader for Collector {
 
 pub async fn run(
     association: &mut AssociationHandle,
-    op: FileOp,
+    request: FileRequest,
     result: &mut FileResult,
 ) -> Option<FileFailure> {
+    let FileRequest { op, credentials } = request;
     let outcome: Result<(), FileError> = async {
         match op {
+            FileOp::Authenticate => {
+                if let Some(c) = credentials {
+                    association.get_file_auth_key(c).await?;
+                }
+            }
             FileOp::Get(name) => {
                 let (tx, rx) = oneshot::channel();
                 let reader = Box::new(Collector {
@@ -192,7 +232,7 @@ pub async fn run(
                     done: Some(tx),
                 });
                 association
-                    .read_file(name.clone(), FileReadConfig::default(), reader, None)
+                    .read_file(name.clone(), FileReadConfig::default(), reader, credentials)
                     .await
                     .map_err(|_| FileError::TaskError(TaskError::Shutdown))?;
                 let data = rx
@@ -201,14 +241,22 @@ pub async fn run(
                 result.file =
                     Some(json!({"name": name, "size": data.len(), "content": to_hex(&data)}));
             }
-            FileOp::Put(name, data) => {
+            FileOp::Put(name, data, append) => {
+                let key = match credentials {
+                    Some(c) => association.get_file_auth_key(c).await?,
+                    None => AuthKey::none(),
+                };
                 let open = association
                     .open_file(
                         name,
-                        AuthKey::none(),
+                        key,
                         Permissions::default(),
                         data.len() as u32,
-                        FileMode::Write,
+                        if append {
+                            FileMode::Append
+                        } else {
+                            FileMode::Write
+                        },
                         u16::MAX,
                     )
                     .await?;
@@ -232,7 +280,7 @@ pub async fn run(
             }
             FileOp::List(name) => {
                 let entries = association
-                    .read_directory(name, DirReadConfig::default(), None)
+                    .read_directory(name, DirReadConfig::default(), credentials)
                     .await?;
                 result.files = Some(Value::Array(entries.iter().map(entry).collect()));
             }
