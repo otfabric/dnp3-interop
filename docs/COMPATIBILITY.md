@@ -162,6 +162,13 @@ is connected runs when the next one is. Only go-dnp3's outstation freezes
 analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
 masters send it, go-dnp3's master cannot.
 
+### Link layer
+
+Only go-dnp3 sends confirmed user data, in both roles; the stepfunc, opendnp3
+and dnp3py peers acknowledge it. The stepfunc, opendnp3 and go-dnp3 masters
+send keep-alives (REQUEST_LINK_STATUS) on an idle link; every outstation
+answers them, and go-dnp3's adapter reports each one it receives.
+
 ### File append and authentication
 
 Only go-dnp3's outstation serves files, so it is the only one to test
