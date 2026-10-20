@@ -51,7 +51,9 @@ type fixture struct {
 	Address, MasterAddress   uint16
 	Unsolicited, NeedTime    bool
 	ColdDelayMs, WarmDelayMs *uint16
-	Points                   map[string][]point
+	// MaxControls is maxControlsPerRequest; 0 when absent.
+	MaxControls int
+	Points      map[string][]point
 	// Files are served by file transfer: name to content. Directories holds
 	// every directory, those of the files and the listed empty ones.
 	Files       map[string][]byte
@@ -385,7 +387,7 @@ func loadFixture(text []byte) (*fixture, error) {
 		add("outstation is required")
 	} else {
 		for k := range o {
-			if !slices.Contains([]string{"address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs"}, k) {
+			if !slices.Contains([]string{"address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs", "maxControlsPerRequest"}, k) {
 				add("outstation: unknown field '%s'", k)
 			}
 		}
@@ -405,6 +407,14 @@ func loadFixture(text []byte) (*fixture, error) {
 					add("outstation: %s must be a boolean", key)
 				}
 				*target = b
+			}
+		}
+		if v, present := o["maxControlsPerRequest"]; present {
+			n, ok := integer(v)
+			if !ok || n < 1 || n > 255 {
+				add("outstation: maxControlsPerRequest must be 1..255")
+			} else {
+				fx.MaxControls = int(n)
 			}
 		}
 		for key, target := range map[string]**uint16{"coldRestartDelayMs": &fx.ColdDelayMs, "warmRestartDelayMs": &fx.WarmDelayMs} {

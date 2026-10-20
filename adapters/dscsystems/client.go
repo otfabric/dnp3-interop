@@ -18,7 +18,7 @@ import (
 )
 
 var operations = []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
-	"enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor"}
+	"enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi"}
 
 // timed lists the variations with a time stamp; objects of other variations
 // carry no "time".
@@ -153,6 +153,8 @@ type request func(ctx context.Context, s *master.Session, r *result) error
 
 type result struct {
 	commandStatus *uint8
+	// operate-multi: one status per control, in the order sent.
+	commandStatuses []uint8
 }
 
 func parseOperation(op string, a args) (request, error) {
@@ -204,6 +206,8 @@ func parseOperation(op string, a args) (request, error) {
 		}, nil
 	case "operate":
 		return parseOperate(a)
+	case "operate-multi":
+		return parseOperateMulti(a)
 	case "time-sync":
 		switch a.str("procedure", "lan") {
 		case "lan":
@@ -374,6 +378,8 @@ func runClient(argv []string) int {
 		flags = append(flags, "group", "variation", "start", "stop")
 	case "operate":
 		flags = append(flags, "type", "index", "code", "count", "on-ms", "off-ms", "value", "mode")
+	case "operate-multi":
+		flags = append(flags, "controls", "mode")
 	case "time-sync":
 		flags = append(flags, "procedure")
 	case "restart":
@@ -532,12 +538,13 @@ func runClient(argv []string) int {
 		if check&0x0700 != 0 {
 			fail = &failure{"rejected", "the outstation refused the request (IIN2)"}
 			res.commandStatus = nil
+			res.commandStatuses = nil
 		}
 	}
 	if fail != nil && fail.code == "command-failed" && res.commandStatus == nil {
 		fail.code = "failed"
 	}
-	if fail == nil && op == "operate" && res.commandStatus != nil && *res.commandStatus != 0 {
+	if fail == nil && (op == "operate" || op == "operate-multi") && res.commandStatus != nil && *res.commandStatus != 0 {
 		fail = &failure{"command-failed", "the outstation answered " + commandStatusName(*res.commandStatus)}
 	}
 
@@ -580,6 +587,22 @@ func runClient(argv []string) int {
 			doc = append(doc, field{"commandStatus", commandStatusName(*res.commandStatus)})
 		} else {
 			doc = append(doc, field{"commandStatus", nil})
+		}
+	}
+	if op == "operate-multi" {
+		if res.commandStatus != nil {
+			doc = append(doc, field{"commandStatus", commandStatusName(*res.commandStatus)})
+		} else {
+			doc = append(doc, field{"commandStatus", nil})
+		}
+		if res.commandStatuses != nil {
+			names := []string{}
+			for _, st := range res.commandStatuses {
+				names = append(names, commandStatusName(st))
+			}
+			doc = append(doc, field{"commandStatuses", names})
+		} else {
+			doc = append(doc, field{"commandStatuses", nil})
 		}
 	}
 	if op == "restart" {
