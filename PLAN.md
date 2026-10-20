@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: file append and authentication
+
+- `file-put --append`, `file-authenticate`, `--file-user`/`--file-password` on the file operations and on the server; file events `append` and `authenticate`; features `fileAppendServer/Client`, `fileAuthServer/Client`.
+- Outstation: go-dnp3 only (the only file server). Masters: stepfunc (both), go-dnp3 (authentication).
+
+**Gate:** `make features` appends and reads back, and authenticates, refuses and accepts, for every pairing that declares it.
+
 ### Contract 1.3: analog deadbands
 
 - `deadband-write --deadbands INDEX:VALUE,...` (WRITE of g34v3) and group 34 in object documents; features `deadbandWriteServer/Client`, `deadbandReadServer/Client`.
