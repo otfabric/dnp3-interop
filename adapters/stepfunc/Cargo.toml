@@ -16,8 +16,8 @@ name = "dnp3-interop"
 path = "src/main.rs"
 
 [dependencies]
-# TCP only: no TLS (ring) and no serial port support compiled in.
-dnp3 = { version = "=1.7.0", default-features = false }
+# The crate's default features: TLS (rustls with ring) and serial ports.
+dnp3 = { version = "=1.7.0", default-features = false, features = ["tls", "serial"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

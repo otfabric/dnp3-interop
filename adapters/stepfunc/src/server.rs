@@ -14,10 +14,17 @@ use dnp3::outstation::database::*;
 use dnp3::outstation::*;
 use dnp3::tcp::*;
 
+use crate::transport::{self, Kind, Transport};
+use dnp3::serial::*;
+use dnp3::tcp::tls::*;
+use dnp3::udp::*;
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::watch;
 
 fn now() -> Time {
     Time::Synchronized(Timestamp::new(now_ms()))
@@ -495,6 +502,17 @@ analog_support!(Group41Var2, "g41v2");
 analog_support!(Group41Var3, "g41v3");
 analog_support!(Group41Var4, "g41v4");
 
+struct PortListener {
+    tx: watch::Sender<bool>,
+}
+
+impl Listener<PortState> for PortListener {
+    fn update(&mut self, value: PortState) -> MaybeAsync<()> {
+        let _ = self.tx.send(matches!(value, PortState::Open));
+        MaybeAsync::ready(())
+    }
+}
+
 struct ConnectionListener {
     open: bool,
 }
@@ -514,25 +532,25 @@ impl Listener<ConnectionState> for ConnectionListener {
 
 pub fn run(argv: &[String]) -> i32 {
     let parsed = (|| -> Result<_, UsageError> {
-        let args = Args::parse(
-            argv,
-            &[
-                "fixture",
-                "bind-address",
-                "port",
-                "ready-file",
-                "select-timeout-ms",
-                "confirm-timeout-ms",
-                "local-addr",
-                "remote-addr",
-            ],
-            &[],
-        )?;
+        let mut flags = vec![
+            "fixture",
+            "bind-address",
+            "port",
+            "ready-file",
+            "select-timeout-ms",
+            "confirm-timeout-ms",
+            "local-addr",
+            "remote-addr",
+        ];
+        flags.extend(transport::SERVER_FLAGS);
+        let args = Args::parse(argv, &flags, &[])?;
+        let transport = transport::parse(&args, true)?;
         let bind: IpAddr = match args.str("bind-address", "0.0.0.0").parse() {
             Ok(a) => a,
             Err(_) => return usage("--bind-address must be an IP address"),
         };
         Ok((
+            transport,
             args.str("fixture", DEFAULT_FIXTURE),
             bind,
             args.integer("port", 20000, 1, 65535)? as u16,
@@ -551,14 +569,23 @@ pub fn run(argv: &[String]) -> i32 {
             },
         ))
     })();
-    let (fixture_path, bind, port, ready_file, select_timeout, confirm_timeout, local, remote) =
-        match parsed {
-            Ok(v) => v,
-            Err(UsageError(m)) => {
-                logf!("server: {m}");
-                return EXIT_USAGE;
-            }
-        };
+    let (
+        transport,
+        fixture_path,
+        bind,
+        port,
+        ready_file,
+        select_timeout,
+        confirm_timeout,
+        local,
+        remote,
+    ) = match parsed {
+        Ok(v) => v,
+        Err(UsageError(m)) => {
+            logf!("server: {m}");
+            return EXIT_USAGE;
+        }
+    };
 
     let fx = match std::fs::read_to_string(&fixture_path)
         .map_err(|e| format!("cannot read: {e}"))
@@ -581,6 +608,7 @@ pub fn run(argv: &[String]) -> i32 {
         }
     };
     runtime.block_on(serve(
+        transport,
         fx,
         bind,
         port,
@@ -594,6 +622,7 @@ pub fn run(argv: &[String]) -> i32 {
 
 #[allow(clippy::too_many_arguments)]
 async fn serve(
+    transport: Transport,
     fx: Arc<Fixture>,
     bind: IpAddr,
     port: u16,
@@ -630,41 +659,138 @@ async fn serve(
     config.keep_alive_timeout = None;
     config.decode_level = crate::decode_level();
 
-    let mut server = Server::new_tcp_server(LinkErrorMode::Close, SocketAddr::new(bind, port));
     let need_time = Arc::new(AtomicBool::new(fx.need_time));
-    let outstation = match server.add_outstation(
-        config,
-        Box::new(Application {
-            fx: fx.clone(),
-            need_time,
-        }),
-        Box::new(Information),
-        Box::new(Controls { fx: fx.clone() }),
-        Box::new(ConnectionListener { open: false }),
-        AddressFilter::Any,
-    ) {
-        Ok(o) => o,
-        Err(e) => {
-            logf!("server: {e}");
-            return EXIT_FAILED;
+    let application = Box::new(Application {
+        fx: fx.clone(),
+        need_time,
+    });
+    let controls = Box::new(Controls { fx: fx.clone() });
+    let address = match transport.kind {
+        Kind::Serial => transport.device.clone(),
+        _ => format!("{bind}:{port}"),
+    };
+    // What has to live as long as the outstation runs.
+    let mut server_handle = None;
+    let outstation = match (transport.kind, &transport.tls) {
+        (Kind::Serial, _) => {
+            let (tx, mut rx) = watch::channel(false);
+            let outstation = spawn_outstation_serial_2(
+                &transport.device,
+                transport.serial,
+                config,
+                RetryStrategy::new(Duration::from_millis(100), Duration::from_secs(1)),
+                application,
+                Box::new(Information),
+                controls,
+                Box::new(PortListener { tx }),
+            );
+            let open =
+                tokio::time::timeout(Duration::from_secs(5), rx.wait_for(|open| *open)).await;
+            if !matches!(open, Ok(Ok(_))) {
+                logf!("server: cannot open {}", transport.device);
+                return EXIT_FAILED;
+            }
+            outstation
+        }
+        (Kind::Udp, _) => {
+            // Without a peer, unsolicited responses go to the discard port:
+            // there is no master to send them to.
+            let remote_endpoint = match &transport.udp_peer {
+                Some(peer) => match transport::resolve(peer) {
+                    Some(a) => a,
+                    None => {
+                        logf!("server: cannot resolve --udp-peer {peer}");
+                        return EXIT_FAILED;
+                    }
+                },
+                None => SocketAddr::from(([127, 0, 0, 1], 9)),
+            };
+            if std::net::UdpSocket::bind(SocketAddr::new(bind, port)).is_err() {
+                logf!("server: cannot bind {address}/udp");
+                return EXIT_FAILED;
+            }
+            let outstation = spawn_outstation_udp(
+                OutstationUdpConfig {
+                    local_endpoint: SocketAddr::new(bind, port),
+                    remote_endpoint,
+                    socket_mode: UdpSocketMode::OneToMany,
+                    link_read_mode: LinkReadMode::Datagram,
+                    retry_delay: Timeout::from_secs(1).expect("valid timeout"),
+                },
+                config,
+                application,
+                Box::new(Information),
+                controls,
+            );
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !transport::udp_bound(port) {
+                if std::time::Instant::now() > deadline {
+                    logf!("server: not bound to {address}/udp after 5 s");
+                    return EXIT_FAILED;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            outstation
+        }
+        (Kind::Tcp, tls) => {
+            let mut server = match tls {
+                Some(tls) => {
+                    let tls_config = match TlsServerConfig::full_pki(
+                        None,
+                        Path::new(&tls.ca),
+                        Path::new(&tls.cert),
+                        Path::new(&tls.key),
+                        None,
+                        MinTlsVersion::V12,
+                    ) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            logf!("server: TLS: {e}");
+                            return EXIT_FAILED;
+                        }
+                    };
+                    Server::new_tls_server(
+                        LinkErrorMode::Close,
+                        SocketAddr::new(bind, port),
+                        tls_config,
+                    )
+                }
+                None => Server::new_tcp_server(LinkErrorMode::Close, SocketAddr::new(bind, port)),
+            };
+            let outstation = match server.add_outstation(
+                config,
+                application,
+                Box::new(Information),
+                controls,
+                Box::new(ConnectionListener { open: false }),
+                AddressFilter::Any,
+            ) {
+                Ok(o) => o,
+                Err(e) => {
+                    logf!("server: {e}");
+                    return EXIT_FAILED;
+                }
+            };
+            match server.bind().await {
+                Ok(h) => server_handle = Some(h),
+                Err(e) => {
+                    logf!("server: cannot listen on {bind}:{port}: {e}");
+                    return EXIT_FAILED;
+                }
+            }
+            outstation
         }
     };
     outstation.transaction(|db| populate(db, &fx));
 
-    let handle = match server.bind().await {
-        Ok(h) => h,
-        Err(e) => {
-            logf!("server: cannot listen on {bind}:{port}: {e}");
-            return EXIT_FAILED;
-        }
-    };
     if let Err(e) = std::fs::write(&ready_file, b"") {
         logf!("server: cannot write the readiness file {ready_file}: {e}");
         return EXIT_FAILED;
     }
     emit(&json!({
-        "event": "ready", "adapter": ADAPTER, "address": format!("{bind}:{port}"),
+        "event": "ready", "adapter": ADAPTER, "address": address,
         "fixture": fx.name, "linkAddress": local, "masterAddress": remote,
+        "transport": transport.name(),
     }));
 
     let mut term = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
@@ -679,7 +805,7 @@ async fn serve(
         _ = tokio::signal::ctrl_c() => logf!("server: SIGINT, stopping"),
     }
     let _ = std::fs::remove_file(&ready_file);
-    drop(handle); // shuts down the server and the outstation
+    drop(server_handle); // shuts down the server and the outstation
     drop(outstation);
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     emit(&json!({"event": "stopped"}));

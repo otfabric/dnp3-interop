@@ -4,8 +4,10 @@
 //! docs/CONTAINER_CONTRACT.md.
 
 mod client;
+mod files;
 mod fixture;
 mod server;
+mod transport;
 mod util;
 
 use serde_json::json;
@@ -30,9 +32,12 @@ const UPSTREAM_REVISION: &str = match option_env!("UPSTREAM_REVISION") {
 const USAGE: &str = "usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
-         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
+         [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [LINK] [operation flags]
+         [--collect-ms N] [LINK] [TRANSPORT] [operation flags]
+         [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
+         [--udp-local-port N]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
@@ -47,11 +52,17 @@ const USAGE: &str = "usage: dnp3-interop <command>
       assign-class         --class C --group G [--start N --stop N]
       freeze               [--clear]
       monitor              [--duration-ms N]
+      file-get             --name NAME
+      file-put             --name NAME --content HEX
+      file-ls              --name DIRECTORY
+      file-info            --name NAME
   print-capabilities
   print-fixture [NAME]
   version
 
   LINK: [--local-addr N] [--remote-addr N]
+  TRANSPORT: [--transport tcp|udp|serial]
+             serial: --serial-device PATH [--baud N] [--data-bits 7|8] [--parity none|even|odd] [--stop-bits 1|2]
 
 See docs/CONTAINER_CONTRACT.md in https://github.com/otfabric/dnp3-interop
 ";
@@ -112,19 +123,23 @@ fn print_capabilities() -> i32 {
             "freezeNoAckClient": false,
             "octetStrings": true,
             "tcp": true,
-            "udp": false,
-            "tls": false,
-            "serial": false,
-            // The library reads files as a master; the outstation has no file
-            // transfer, so nothing in this repository can exercise it yet.
-            "fileTransfer": false,
+            "udp": true,
+            "tls": true,
+            "serial": true,
+            // The master reads, lists, describes and writes files; the
+            // library has no DELETE_FILE and no outstation side.
+            "fileTransfer": true,
+            "fileServer": false,
+            "fileClient": true,
+            "fileDeleteClient": false,
             // Not in the library.
             "secureAuthentication": false,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
-            "enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor"],
+            "enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor",
+            "file-get", "file-put", "file-ls", "file-info"],
     }));
     EXIT_OK
 }

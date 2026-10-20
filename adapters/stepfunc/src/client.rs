@@ -17,6 +17,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
+use crate::files::{self, FileOp, FileResult};
+use crate::transport::{self, Kind, Transport};
+use dnp3::serial::*;
+use dnp3::tcp::tls::*;
+use dnp3::udp::*;
+use std::net::SocketAddr;
+use std::path::Path;
+
 const OPERATIONS: [&str; 11] = [
     "integrity-poll",
     "event-poll",
@@ -235,13 +243,21 @@ impl AssociationHandler for AssocHandler {}
 struct AssocInformation;
 impl AssociationInformation for AssocInformation {}
 
+/// Whether the channel is connected (TCP, TLS) or open (serial).
 struct StateListener {
-    tx: watch::Sender<ClientState>,
+    tx: watch::Sender<bool>,
 }
 
 impl Listener<ClientState> for StateListener {
     fn update(&mut self, value: ClientState) -> MaybeAsync<()> {
-        let _ = self.tx.send(value);
+        let _ = self.tx.send(matches!(value, ClientState::Connected));
+        MaybeAsync::ready(())
+    }
+}
+
+impl Listener<PortState> for StateListener {
+    fn update(&mut self, value: PortState) -> MaybeAsync<()> {
+        let _ = self.tx.send(matches!(value, PortState::Open));
         MaybeAsync::ready(())
     }
 }
@@ -350,6 +366,7 @@ enum Op {
     Restart(bool),
     Empty(FunctionCode, Headers),
     Monitor(Duration),
+    File(FileOp),
 }
 
 struct Failure {
@@ -576,7 +593,7 @@ pub fn run(argv: &[String]) -> i32 {
         logf!("client: missing operation");
         return EXIT_USAGE;
     };
-    if !OPERATIONS.contains(&op) {
+    if !OPERATIONS.contains(&op) && !files::OPERATIONS.contains(&op) {
         logf!("client: unknown operation '{op}'");
         return EXIT_USAGE;
     }
@@ -589,8 +606,11 @@ pub fn run(argv: &[String]) -> i32 {
         "timeout-ms",
         "collect-ms",
     ];
-    let mut switches: Vec<&str> = vec![];
+    flags.extend(transport::CLIENT_FLAGS);
+    let mut switches: Vec<&str> = transport::CLIENT_SWITCHES.to_vec();
     match op {
+        "file-get" | "file-ls" | "file-info" => flags.push("name"),
+        "file-put" => flags.extend(["name", "content"]),
         "event-poll" | "enable-unsolicited" | "disable-unsolicited" => flags.push("classes"),
         "read" => flags.extend(["group", "variation", "start", "stop"]),
         "operate" => flags.extend([
@@ -607,24 +627,36 @@ pub fn run(argv: &[String]) -> i32 {
     // Everything is parsed before anything is sent.
     let parsed = (|| -> Result<_, UsageError> {
         let args = Args::parse(&argv[1..], &flags, &switches)?;
+        let transport = transport::parse(&args, false)?;
+        let host = if transport.kind == Kind::Serial {
+            String::new()
+        } else {
+            args.required("host")?
+        };
         Ok((
-            args.required("host")?,
+            transport,
+            host,
             args.integer("port", 20000, 1, 65535)? as u16,
             args.integer("local-addr", 1, 0, 65519)? as u16,
             args.integer("remote-addr", 1024, 0, 65519)? as u16,
             args.integer("connect-timeout-ms", 5000, 1, 3_600_000)? as u64,
             args.integer("timeout-ms", 5000, 1, 3_600_000)? as u64,
             args.integer("collect-ms", 0, 0, 3_600_000)? as u64,
-            parse_op(op, &args)?,
+            if files::OPERATIONS.contains(&op) {
+                Op::File(files::parse(op, &args)?)
+            } else {
+                parse_op(op, &args)?
+            },
         ))
     })();
-    let (host, port, local, remote, connect_timeout, timeout, collect, operation) = match parsed {
-        Ok(v) => v,
-        Err(UsageError(m)) => {
-            logf!("client {op}: {m}");
-            return EXIT_USAGE;
-        }
-    };
+    let (transport, host, port, local, remote, connect_timeout, timeout, collect, operation) =
+        match parsed {
+            Ok(v) => v,
+            Err(UsageError(m)) => {
+                logf!("client {op}: {m}");
+                return EXIT_USAGE;
+            }
+        };
 
     let started = Instant::now();
     let runtime = match tokio::runtime::Runtime::new() {
@@ -635,7 +667,10 @@ pub fn run(argv: &[String]) -> i32 {
         }
     };
     let received = Arc::new(Mutex::new(Received::default()));
+    let mut file_result = FileResult::default();
     let (connected, failure, command_status, restart_delay) = runtime.block_on(execute(
+        transport,
+        &mut file_result,
         host,
         port,
         local,
@@ -665,6 +700,14 @@ pub fn run(argv: &[String]) -> i32 {
     if op == "restart" {
         doc["restartDelayMs"] = json!(restart_delay);
     }
+    if files::OPERATIONS.contains(&op) {
+        if let Some(f) = file_result.files.take() {
+            doc["files"] = f;
+        } else if let Some(f) = file_result.file.take() {
+            doc["file"] = f;
+        }
+        doc["fileStatus"] = json!(file_result.status);
+    }
     doc["elapsedMs"] = json!(started.elapsed().as_millis() as u64);
     emit(&doc);
 
@@ -677,6 +720,8 @@ pub fn run(argv: &[String]) -> i32 {
 
 #[allow(clippy::too_many_arguments)]
 async fn execute(
+    transport: Transport,
+    file_result: &mut FileResult,
     host: String,
     port: u16,
     local: u16,
@@ -700,19 +745,78 @@ async fn execute(
     };
     let mut config = MasterChannelConfig::new(master_address);
     config.decode_level = crate::decode_level();
-    let (tx, mut rx) = watch::channel(ClientState::Disabled);
-    let mut channel = spawn_master_tcp_client_2(
-        LinkErrorMode::Close,
-        config,
-        EndpointList::single(format!("{host}:{port}")),
-        ConnectStrategy::new(
-            Duration::from_millis(100),
-            Duration::from_secs(1),
-            Duration::from_millis(100),
-        ),
-        ConnectOptions::default(),
-        Box::new(StateListener { tx }),
+    let (tx, mut rx) = watch::channel(false);
+    let address = match transport.kind {
+        Kind::Serial => transport.device.clone(),
+        _ => format!("{host}:{port}"),
+    };
+    let strategy = ConnectStrategy::new(
+        Duration::from_millis(100),
+        Duration::from_secs(1),
+        Duration::from_millis(100),
     );
+    let mut udp_destination = None;
+    let mut channel = match (transport.kind, &transport.tls) {
+        (Kind::Serial, _) => spawn_master_serial(
+            config,
+            &transport.device,
+            transport.serial,
+            Duration::from_millis(500),
+            Box::new(StateListener { tx }),
+        ),
+        (Kind::Udp, _) => {
+            // No connection to wait for: the channel is "connected" once its
+            // socket exists. An outstation that cannot be resolved is not
+            // there to connect to.
+            let Some(destination) = transport::resolve(&address) else {
+                return (
+                    false,
+                    Some(fail("connect-failed", format!("cannot resolve {address}"))),
+                    None,
+                    None,
+                );
+            };
+            udp_destination = Some(destination);
+            let _ = tx.send(true);
+            spawn_master_udp(
+                SocketAddr::from(([0, 0, 0, 0], transport.udp_local_port)),
+                LinkReadMode::Datagram,
+                Timeout::from_secs(1).expect("valid timeout"),
+                config,
+            )
+        }
+        (Kind::Tcp, Some(tls)) => {
+            let name = tls.server_name.clone().unwrap_or_else(|| host.clone());
+            let tls_config = match TlsClientConfig::full_pki(
+                Some(name),
+                Path::new(&tls.ca),
+                Path::new(&tls.cert),
+                Path::new(&tls.key),
+                None,
+                MinTlsVersion::V12,
+            ) {
+                Ok(c) => c,
+                Err(e) => return (false, Some(fail("failed", format!("TLS: {e}"))), None, None),
+            };
+            spawn_master_tls_client_2(
+                LinkErrorMode::Close,
+                config,
+                EndpointList::single(address.clone()),
+                strategy,
+                ConnectOptions::default(),
+                Box::new(StateListener { tx }),
+                tls_config,
+            )
+        }
+        (Kind::Tcp, None) => spawn_master_tcp_client_2(
+            LinkErrorMode::Close,
+            config,
+            EndpointList::single(address.clone()),
+            strategy,
+            ConnectOptions::default(),
+            Box::new(StateListener { tx }),
+        ),
+    };
 
     let mut assoc_config = AssociationConfig::quiet();
     if let Ok(t) = Timeout::from_duration(timeout) {
@@ -722,16 +826,32 @@ async fn execute(
         received: received.clone(),
         unsolicited: false,
     };
-    let mut association = match channel
-        .add_association(
-            outstation_address,
-            assoc_config,
-            Box::new(handler),
-            Box::new(AssocHandler),
-            Box::new(AssocInformation),
-        )
-        .await
-    {
+    let added = match udp_destination {
+        Some(destination) => {
+            channel
+                .add_udp_association(
+                    outstation_address,
+                    destination,
+                    assoc_config,
+                    Box::new(handler),
+                    Box::new(AssocHandler),
+                    Box::new(AssocInformation),
+                )
+                .await
+        }
+        None => {
+            channel
+                .add_association(
+                    outstation_address,
+                    assoc_config,
+                    Box::new(handler),
+                    Box::new(AssocHandler),
+                    Box::new(AssocInformation),
+                )
+                .await
+        }
+    };
+    let mut association = match added {
         Ok(a) => a,
         Err(e) => return (false, Some(fail("failed", format!("{e}"))), None, None),
     };
@@ -741,7 +861,7 @@ async fn execute(
 
     let connected = tokio::time::timeout(connect_timeout, async {
         loop {
-            if matches!(*rx.borrow_and_update(), ClientState::Connected) {
+            if *rx.borrow_and_update() {
                 return true;
             }
             if rx.changed().await.is_err() {
@@ -756,7 +876,7 @@ async fn execute(
             false,
             Some(fail(
                 "connect-failed",
-                format!("no connection to {host}:{port}"),
+                format!("no connection to {address}"),
             )),
             None,
             None,
@@ -767,8 +887,13 @@ async fn execute(
     let mut restart_delay = None;
     let mut iin_from_error = None;
     // The library bounds every request by the response timeout; this only
-    // guards against a task that never reports.
-    let guard = timeout * 3 + Duration::from_secs(2);
+    // guards against a task that never reports. A file transfer is many
+    // requests.
+    let guard = if matches!(operation, Op::File(_)) {
+        timeout * 20 + Duration::from_secs(2)
+    } else {
+        timeout * 3 + Duration::from_secs(2)
+    };
     let outcome = tokio::time::timeout(guard, async {
         match operation {
             Op::Read(request) => association
@@ -831,12 +956,16 @@ async fn execute(
                     "the outstation refused the request (IIN2)",
                 )),
             },
+            Op::File(op) => files::run(&mut association, op, file_result)
+                .await
+                .map(|f| Failure {
+                    code: f.code,
+                    message: f.message,
+                }),
             Op::Monitor(duration) => {
                 let lost = tokio::time::timeout(duration, async {
                     loop {
-                        if rx.changed().await.is_err()
-                            || !matches!(*rx.borrow(), ClientState::Connected)
-                        {
+                        if rx.changed().await.is_err() || !*rx.borrow() {
                             return;
                         }
                     }
