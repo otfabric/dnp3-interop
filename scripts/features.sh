@@ -36,6 +36,8 @@
 #   deadbands (contract 1.3) an analog deadband written (g34v3) holds back
 #           an event of a smaller change and lets a larger one through, and
 #           reads back (g34) where declared
+#   manage  (contract 1.3) the management functions 15..19: accepted and
+#           reported where declared, refused elsewhere
 #   broadcast (contract 1.3) a DIRECT OPERATE NO ACK to 0xFFFF: carried out,
 #           IIN1.0 in the next response, the server's broadcast event
 #   link    (contract 1.3) link-layer confirms from the master and from the
@@ -564,6 +566,32 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
+        fi
+
+        # ---- management functions (contract 1.3) ----
+        if has "${client}" manageClient && has_role "${server}" server; then
+            name="fm-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
+            if wait_ready "${name}"; then
+                if has "${server}" manageServer; then
+                    local f got=""
+                    for f in initialize-data initialize-application start-application stop-application save-configuration; do
+                        got+="$(outcome "$(client "${client}" -- manage --function "${f}" --host "${name}")") "
+                    done
+                    check "${pair}: [manage] the five functions" "$(printf 'ok=true error=- %.0s' 1 2 3 4 5)" "${got}"
+                    sleep 0.3
+                    check "${pair}: [manage] the server's events" "15 16 17 18 19" \
+                        "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "manage") | .function' | paste -sd' ' -)"
+                else
+                    doc=$(client "${client}" -- manage --function save-configuration --host "${name}")
+                    check "${pair}: [manage] an outstation without them refuses" "ok=false error=rejected" "$(outcome "${doc}")"
+                fi
+            else
+                fail "${pair}: [manage] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: management functions (needs client:manageClient)"
         fi
 
         # ---- broadcast (contract 1.3) ----
