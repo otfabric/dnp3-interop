@@ -129,6 +129,8 @@ int print_capabilities()
           // Several controls in one request, a status for each.
           {"multipleControlsClient", true},
           {"maxControlsServer", true},
+          // Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows.
+          {"eventBufferServer", true},
           // The outstation refuses FREEZE AT TIME and freezes counters only;
           // the master cannot carry g50v2 but freezes any group.
           {"freezeAtTimeServer", false},

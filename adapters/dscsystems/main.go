@@ -170,6 +170,8 @@ func printCapabilities() int {
 			// fixture's maxControlsPerRequest.
 			{"multipleControlsClient", true},
 			{"maxControlsServer", true},
+			// Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows. The library has one buffer for all types.
+			{"eventBufferServer", true},
 			// FREEZE AT TIME both ways; the outstation also freezes analog
 			// inputs (g30 in a freeze), the master counters only.
 			{"freezeAtTimeServer", true},

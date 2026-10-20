@@ -21,7 +21,8 @@
         "needTime": { "type": "boolean" },
         "coldRestartDelayMs": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "warmRestartDelayMs": { "type": "integer", "minimum": 0, "maximum": 65535 },
-        "maxControlsPerRequest": { "description": "Contract 1.3: the most control objects the outstation carries out in one request.", "type": "integer", "minimum": 1, "maximum": 255 }
+        "maxControlsPerRequest": { "description": "Contract 1.3: the most control objects the outstation carries out in one request.", "type": "integer", "minimum": 1, "maximum": 255 },
+        "eventBufferSize": { "description": "Contract 1.3: the most events the outstation buffers, of each type (in all, for an outstation with one buffer). Default: the adapter's.", "type": "integer", "minimum": 1, "maximum": 65535 }
       }
     },
     "binaryInputs": {

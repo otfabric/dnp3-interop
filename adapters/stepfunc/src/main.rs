@@ -171,6 +171,8 @@ fn print_capabilities() -> i32 {
             // is reported, so commandStatuses is null.
             "multipleControlsClient": true,
             "maxControlsServer": true,
+            // Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows.
+            "eventBufferServer": true,
             // FREEZE AT TIME both ways (the outstation schedules it); the
             // outstation freezes counters only, the master sends any group.
             "freezeAtTimeServer": true,

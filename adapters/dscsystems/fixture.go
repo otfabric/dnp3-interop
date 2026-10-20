@@ -53,6 +53,8 @@ type fixture struct {
 	ColdDelayMs, WarmDelayMs *uint16
 	// MaxControls is maxControlsPerRequest; 0 when absent.
 	MaxControls int
+	// EventBuffer is eventBufferSize; 0 when absent (contract 1.3).
+	EventBuffer int
 	Points      map[string][]point
 	// Files are served by file transfer: name to content. Directories holds
 	// every directory, those of the files and the listed empty ones.
@@ -387,7 +389,7 @@ func loadFixture(text []byte) (*fixture, error) {
 		add("outstation is required")
 	} else {
 		for k := range o {
-			if !slices.Contains([]string{"address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs", "maxControlsPerRequest"}, k) {
+			if !slices.Contains([]string{"address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs", "maxControlsPerRequest", "eventBufferSize"}, k) {
 				add("outstation: unknown field '%s'", k)
 			}
 		}
@@ -415,6 +417,14 @@ func loadFixture(text []byte) (*fixture, error) {
 				add("outstation: maxControlsPerRequest must be 1..255")
 			} else {
 				fx.MaxControls = int(n)
+			}
+		}
+		if v, present := o["eventBufferSize"]; present {
+			n, ok := integer(v)
+			if !ok || n < 1 || n > 65535 {
+				add("outstation: eventBufferSize must be 1..65535")
+			} else {
+				fx.EventBuffer = int(n)
 			}
 		}
 		for key, target := range map[string]**uint16{"coldRestartDelayMs": &fx.ColdDelayMs, "warmRestartDelayMs": &fx.WarmDelayMs} {
