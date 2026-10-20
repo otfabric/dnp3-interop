@@ -108,6 +108,8 @@ serves it and the master sends it.
 | `securityStatisticsClient` | The master reports g121 and g122 objects (1.2) | no ⁷ | no ⁷ | yes ²⁰ | no ¹⁴ |
 | `deviceAttributesServer` | The outstation serves the `deviceAttributes` of its fixture (1.3) | yes | no ²¹ | yes | no |
 | `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | yes ²² | no ²¹ | yes | no |
+| `multipleControlsClient` | `operate-multi` (1.3) | yes ²³ | yes | yes | yes |
+| `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | yes | no ²⁴ |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -186,6 +188,12 @@ master cannot parse it.
 
 ²² stepfunc 1.7.0's master decodes a signed integer attribute of one octet
 without its sign (tests/known-bugs.tsv).
+
+²³ stepfunc's master reports only the first refused control of a request:
+`commandStatuses` is null.
+
+²⁴ dnp3py's outstation carries out every control of a request whatever its
+`max_controls_per_request`.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
