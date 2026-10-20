@@ -58,6 +58,17 @@ type fixture struct {
 	Directories []string
 	// TimeIntervals are the g50v4 objects.
 	TimeIntervals []timeInterval
+	// Attributes are the device attributes (group 0).
+	Attributes []attribute
+}
+
+// attribute is a device attribute of the fixture.
+type attribute struct {
+	Set, Variation uint8
+	Type           string // visibleString, unsignedInt or signedInt
+	Text           string
+	Number         int64
+	Writable       bool
 }
 
 func (f *fixture) find(kind string, index uint16) *point {
@@ -353,7 +364,7 @@ func loadFixture(text []byte) (*fixture, error) {
 	fx := &fixture{Points: map[string][]point{}}
 
 	for k := range top {
-		if !slices.Contains([]string{"schemaVersion", "name", "description", "outstation", "files", "directories", "timeAndIntervals"}, k) && !slices.Contains(pointTypes, k) {
+		if !slices.Contains([]string{"schemaVersion", "name", "description", "outstation", "files", "directories", "timeAndIntervals", "deviceAttributes"}, k) && !slices.Contains(pointTypes, k) {
 			add("unknown field '%s'", k)
 		}
 	}
@@ -452,6 +463,7 @@ func loadFixture(text []byte) (*fixture, error) {
 	}
 	checkFiles(fx, top, add)
 	checkTimeIntervals(fx, top, add)
+	checkAttributes(fx, top, add)
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
@@ -577,5 +589,72 @@ func checkTimeIntervals(fx *fixture, top map[string]any, add func(string, ...any
 			fx.TimeIntervals = append(fx.TimeIntervals,
 				timeInterval{Index: uint16(index), Time: at.UTC(), Interval: uint32(interval), Units: uint8(units)})
 		}
+	}
+}
+
+// checkAttributes reads the device attributes of a fixture.
+func checkAttributes(fx *fixture, top map[string]any, add func(string, ...any)) {
+	raw, present := top["deviceAttributes"]
+	if !present {
+		return
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		add("deviceAttributes must be an array")
+		return
+	}
+	seen := map[[2]uint8]bool{}
+	for i, item := range list {
+		o, ok := item.(map[string]any)
+		if !ok {
+			add("deviceAttributes[%d] must be an object", i)
+			continue
+		}
+		for k := range o {
+			if !slices.Contains([]string{"set", "variation", "type", "value", "writable"}, k) {
+				add("deviceAttributes[%d]: unknown field '%s'", i, k)
+			}
+		}
+		set, okS := integer(o["set"])
+		variation, okV := integer(o["variation"])
+		kind, _ := o["type"].(string)
+		a := attribute{Set: uint8(set), Variation: uint8(variation), Type: kind}
+		if w, present := o["writable"]; present {
+			b, ok := w.(bool)
+			if !ok {
+				add("deviceAttributes[%d]: writable must be a boolean", i)
+			}
+			a.Writable = b
+		}
+		if !okS || set < 1 || set > 255 || !okV || variation < 1 || variation > 253 {
+			add("deviceAttributes[%d]: set must be 1..255 and variation 1..253", i)
+			continue
+		}
+		switch kind {
+		case "visibleString":
+			text, ok := o["value"].(string)
+			if !ok || len(text) > 255 {
+				add("deviceAttributes[%d]: value must be a string of up to 255 characters", i)
+			}
+			a.Text = text
+		case "unsignedInt", "signedInt":
+			n, ok := integer(o["value"])
+			lo, hi := int64(0), int64(4294967295)
+			if kind == "signedInt" {
+				lo, hi = -2147483648, 2147483647
+			}
+			if !ok || n < lo || n > hi {
+				add("deviceAttributes[%d]: value must be an integer in %d..%d", i, lo, hi)
+			}
+			a.Number = n
+		default:
+			add("deviceAttributes[%d]: type must be visibleString, unsignedInt or signedInt", i)
+		}
+		key := [2]uint8{a.Set, a.Variation}
+		if seen[key] {
+			add("deviceAttributes: set %d variation %d is listed twice", a.Set, a.Variation)
+		}
+		seen[key] = true
+		fx.Attributes = append(fx.Attributes, a)
 	}
 }

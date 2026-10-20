@@ -121,7 +121,10 @@ int print_capabilities()
           {"dualEndpointClientTls", true},
           // opendnp3 3.x has no secure authentication and no g121/g122.
           {"securityStatisticsServer", false},
-          {"securityStatisticsClient", false}}},
+          {"securityStatisticsClient", false},
+          // opendnp3 3.x knows no group 0.
+          {"deviceAttributesServer", false},
+          {"deviceAttributesClient", false}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},

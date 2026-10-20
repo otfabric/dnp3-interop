@@ -19,6 +19,7 @@ use tokio::sync::watch;
 
 use crate::files::{self, FileOp, FileResult};
 use crate::transport::{self, Kind, Transport};
+use dnp3::app::attr::{AnyAttribute, AttrSet, AttrValue, OwnedAttrValue, OwnedAttribute};
 use dnp3::serial::*;
 use dnp3::tcp::tls::*;
 use dnp3::udp::*;
@@ -75,6 +76,8 @@ const TIMED: [(u8, u8); 28] = [
 #[derive(Default)]
 struct Received {
     objects: Vec<Value>,
+    /// Device attributes (contract 1.3), in the order they arrived.
+    attributes: Vec<Value>,
     /// IIN of the last solicited response: (IIN1, IIN2)
     iin: Option<(u8, u8)>,
 }
@@ -302,6 +305,18 @@ impl ReadHandler for Handler {
         );
     }
 
+    fn handle_device_attribute(&mut self, _info: HeaderInfo, attr: AnyAttribute) {
+        // Attributes of the default set the library knows by name come as
+        // Known; the private sets the contract uses come as Other.
+        if let AnyAttribute::Other(a) = attr {
+            let (kind, value) = attribute_value(&a.value);
+            let mut r = self.received.lock().unwrap_or_else(|e| e.into_inner());
+            r.attributes.push(json!({
+                "set": a.set.value(), "variation": a.variation, "type": kind, "value": value,
+            }));
+        }
+    }
+
     fn handle_octet_string<'a>(
         &mut self,
         info: HeaderInfo,
@@ -509,6 +524,8 @@ enum Op {
     Empty(FunctionCode, Headers),
     Monitor(Duration),
     File(FileOp),
+    AttributeRead(u8, u8),
+    AttributeWrite(OwnedAttribute),
 }
 
 struct Failure {
@@ -735,7 +752,10 @@ pub fn run(argv: &[String]) -> i32 {
         logf!("client: missing operation");
         return EXIT_USAGE;
     };
-    if !OPERATIONS.contains(&op) && !files::OPERATIONS.contains(&op) {
+    if !OPERATIONS.contains(&op)
+        && !files::OPERATIONS.contains(&op)
+        && !ATTRIBUTE_OPERATIONS.contains(&op)
+    {
         logf!("client: unknown operation '{op}'");
         return EXIT_USAGE;
     }
@@ -753,6 +773,8 @@ pub fn run(argv: &[String]) -> i32 {
     match op {
         "file-get" | "file-ls" | "file-info" => flags.push("name"),
         "file-put" => flags.extend(["name", "content"]),
+        "attribute-read" => flags.extend(["set", "variation"]),
+        "attribute-write" => flags.extend(["set", "variation", "text", "uint", "int"]),
         "event-poll" | "enable-unsolicited" | "disable-unsolicited" => flags.push("classes"),
         "read" => flags.extend(["group", "variation", "start", "stop"]),
         "operate" => flags.extend([
@@ -788,6 +810,8 @@ pub fn run(argv: &[String]) -> i32 {
             args.integer("collect-ms", 0, 0, 3_600_000)? as u64,
             if files::OPERATIONS.contains(&op) {
                 Op::File(files::parse(op, &args)?)
+            } else if ATTRIBUTE_OPERATIONS.contains(&op) {
+                parse_attribute(op, &args)?
             } else {
                 parse_op(op, &args)?
             },
@@ -843,6 +867,9 @@ pub fn run(argv: &[String]) -> i32 {
     }
     if op == "restart" {
         doc["restartDelayMs"] = json!(restart_delay);
+    }
+    if op == "attribute-read" {
+        doc["attributes"] = json!(r.attributes);
     }
     if files::OPERATIONS.contains(&op) {
         if let Some(f) = file_result.files.take() {
@@ -1146,6 +1173,25 @@ async fn execute(
                     "the outstation refused the request (IIN2)",
                 )),
             },
+            Op::AttributeRead(set, variation) => association
+                .read(ReadRequest::device_attribute(variation, AttrSet::new(set)))
+                .await
+                .err()
+                .map(|e| task_failure(&e, &mut iin_from_error)),
+            Op::AttributeWrite(attr) => match association
+                .send_and_expect_empty_response(
+                    FunctionCode::Write,
+                    Headers::new().add_attribute(attr),
+                )
+                .await
+            {
+                Ok(()) => None,
+                Err(WriteError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
+                Err(WriteError::IinError(_)) => Some(fail(
+                    "rejected",
+                    "the outstation refused the request (IIN2)",
+                )),
+            },
             Op::File(op) => files::run(&mut association, op, file_result)
                 .await
                 .map(|f| Failure {
@@ -1202,4 +1248,56 @@ async fn execute(
     let _ = channel.disable().await;
     drop(association);
     (true, failure, command_status, restart_delay)
+}
+
+// ---- device attributes (contract 1.3) ----
+
+const ATTRIBUTE_OPERATIONS: [&str; 2] = ["attribute-read", "attribute-write"];
+
+/// The contract's type name and value of an attribute.
+pub fn attribute_value(v: &AttrValue) -> (&'static str, Value) {
+    match v {
+        AttrValue::VisibleString(s) => ("visibleString", json!(s)),
+        AttrValue::UnsignedInt(n) => ("unsignedInt", json!(n)),
+        AttrValue::SignedInt(n) => ("signedInt", json!(n)),
+        AttrValue::FloatingPoint(f) => ("float", number(f.value())),
+        AttrValue::OctetString(o) => ("octetString", json!(to_hex(o))),
+        AttrValue::BitString(o) => ("bitString", json!(to_hex(o))),
+        AttrValue::Dnp3Time(t) => ("time", json!(format_time(t.raw_value()))),
+        AttrValue::AttrList(_) => ("attributeList", json!(null)),
+    }
+}
+
+fn parse_attribute(op: &str, args: &Args) -> Result<Op, UsageError> {
+    let set = args.required_integer("set", 0, 255)? as u8;
+    if op == "attribute-read" {
+        let variation = args.integer("variation", 254, 1, 254)? as u8;
+        return Ok(Op::AttributeRead(set, variation));
+    }
+    let variation = args.required_integer("variation", 1, 253)? as u8;
+    let mut values = vec![];
+    if args.has("text") {
+        values.push(OwnedAttrValue::VisibleString(args.str("text", "")));
+    }
+    if args.has("uint") {
+        values.push(OwnedAttrValue::UnsignedInt(
+            args.integer("uint", 0, 0, 4_294_967_295)? as u32,
+        ));
+    }
+    if args.has("int") {
+        values.push(OwnedAttrValue::SignedInt(args.integer(
+            "int",
+            0,
+            -2_147_483_648,
+            2_147_483_647,
+        )? as i32));
+    }
+    if values.len() != 1 {
+        return usage("attribute-write takes exactly one of --text, --uint, --int");
+    }
+    Ok(Op::AttributeWrite(OwnedAttribute::new(
+        AttrSet::new(set),
+        variation,
+        values.remove(0),
+    )))
 }

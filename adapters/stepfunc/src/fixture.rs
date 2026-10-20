@@ -45,6 +45,24 @@ pub struct Fixture {
     pub cold_restart_delay_ms: Option<u16>,
     pub warm_restart_delay_ms: Option<u16>,
     pub points: BTreeMap<&'static str, Vec<Point>>,
+    /// Device attributes, group 0 (contract 1.3).
+    pub attributes: Vec<Attribute>,
+}
+
+/// A device attribute of the fixture.
+#[derive(Clone, Debug)]
+pub struct Attribute {
+    pub set: u8,
+    pub variation: u8,
+    pub value: AttributeValue,
+    pub writable: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum AttributeValue {
+    Text(String),
+    Unsigned(u32),
+    Signed(i32),
 }
 
 impl Fixture {
@@ -359,7 +377,14 @@ pub fn load(text: &str) -> Result<Fixture, String> {
     let mut errors = Vec::new();
     let mut out = Fixture::default();
     for key in top.keys() {
-        if !["schemaVersion", "name", "description", "outstation"].contains(&key.as_str())
+        if ![
+            "schemaVersion",
+            "name",
+            "description",
+            "outstation",
+            "deviceAttributes",
+        ]
+        .contains(&key.as_str())
             && !TYPES.contains(&key.as_str())
         {
             errors.push(format!("unknown field '{key}'"));
@@ -404,6 +429,10 @@ pub fn load(text: &str) -> Result<Fixture, String> {
             points.push(point);
         }
         out.points.insert(kind, points);
+    }
+
+    if let Some(list) = top.get("deviceAttributes") {
+        check_attributes(list, &mut out, &mut errors);
     }
 
     for (outputs, inputs) in [
@@ -500,5 +529,84 @@ mod tests {
         let fx = super::load(text).expect("baseline");
         assert_eq!(fx.address, 1024);
         assert_eq!(fx.points("binaryInputs").len(), 5);
+    }
+}
+
+fn check_attributes(list: &Value, out: &mut Fixture, errors: &mut Vec<String>) {
+    let Some(list) = list.as_array() else {
+        errors.push("deviceAttributes must be an array".into());
+        return;
+    };
+    let mut seen = BTreeSet::new();
+    for (i, a) in list.iter().enumerate() {
+        let Some(o) = a.as_object() else {
+            errors.push(format!("deviceAttributes[{i}] must be an object"));
+            continue;
+        };
+        for key in o.keys() {
+            if !["set", "variation", "type", "value", "writable"].contains(&key.as_str()) {
+                errors.push(format!("deviceAttributes[{i}]: unknown field '{key}'"));
+            }
+        }
+        let set = o
+            .get("set")
+            .and_then(Value::as_u64)
+            .filter(|s| (1..=255).contains(s));
+        let variation = o
+            .get("variation")
+            .and_then(Value::as_u64)
+            .filter(|v| (1..=253).contains(v));
+        let (Some(set), Some(variation)) = (set, variation) else {
+            errors.push(format!(
+                "deviceAttributes[{i}]: set must be 1..255 and variation 1..253"
+            ));
+            continue;
+        };
+        let writable = match o.get("writable") {
+            None => false,
+            Some(Value::Bool(b)) => *b,
+            Some(_) => {
+                errors.push(format!("deviceAttributes[{i}]: writable must be a boolean"));
+                false
+            }
+        };
+        let v = o.get("value");
+        let value = match o.get("type").and_then(Value::as_str) {
+            Some("visibleString") => v
+                .and_then(Value::as_str)
+                .filter(|s| s.len() <= 255)
+                .map(|s| AttributeValue::Text(s.to_string())),
+            Some("unsignedInt") => v
+                .and_then(Value::as_u64)
+                .and_then(|n| u32::try_from(n).ok())
+                .map(AttributeValue::Unsigned),
+            Some("signedInt") => v
+                .and_then(Value::as_i64)
+                .and_then(|n| i32::try_from(n).ok())
+                .map(AttributeValue::Signed),
+            _ => {
+                errors.push(format!(
+                    "deviceAttributes[{i}]: type must be visibleString, unsignedInt or signedInt"
+                ));
+                continue;
+            }
+        };
+        let Some(value) = value else {
+            errors.push(format!(
+                "deviceAttributes[{i}]: value does not fit its type"
+            ));
+            continue;
+        };
+        if !seen.insert((set, variation)) {
+            errors.push(format!(
+                "deviceAttributes: set {set} variation {variation} is listed twice"
+            ));
+        }
+        out.attributes.push(Attribute {
+            set: set as u8,
+            variation: variation as u8,
+            value,
+            writable,
+        });
     }
 }

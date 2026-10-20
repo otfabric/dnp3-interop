@@ -15,6 +15,7 @@ use dnp3::outstation::*;
 use dnp3::tcp::*;
 
 use crate::transport::{self, Kind, Transport};
+use dnp3::app::attr::{AttrProp, AttrSet, Attribute, OwnedAttrValue, OwnedAttribute};
 use dnp3::serial::*;
 use dnp3::tcp::tls::*;
 use dnp3::udp::*;
@@ -45,6 +46,31 @@ fn flags(p: &Point) -> Flags {
 
 /// The database of the fixture: points with their variations and classes, and
 /// the initial values, which produce no events.
+/// The fixture's device attributes (contract 1.3); the first the library
+/// refuses, if any.
+fn define_attributes(db: &mut Database, fx: &Fixture) -> Option<String> {
+    for a in &fx.attributes {
+        let value = match &a.value {
+            fixture::AttributeValue::Text(t) => OwnedAttrValue::VisibleString(t.clone()),
+            fixture::AttributeValue::Unsigned(n) => OwnedAttrValue::UnsignedInt(*n),
+            fixture::AttributeValue::Signed(n) => OwnedAttrValue::SignedInt(*n),
+        };
+        let prop = if a.writable {
+            AttrProp::writable()
+        } else {
+            AttrProp::default()
+        };
+        let attr = OwnedAttribute::new(AttrSet::new(a.set), a.variation, value);
+        if let Err(e) = db.define_attr(prop, attr) {
+            return Some(format!(
+                "deviceAttributes: set {} variation {}: {e}",
+                a.set, a.variation
+            ));
+        }
+    }
+    None
+}
+
 fn populate(db: &mut Database, fx: &Fixture) {
     let t = now();
     let quiet = UpdateOptions::no_event();
@@ -242,6 +268,15 @@ struct Application {
 }
 
 impl OutstationApplication for Application {
+    fn write_device_attr(&mut self, attr: Attribute) -> MaybeAsync<bool> {
+        let (kind, value) = crate::client::attribute_value(&attr.value);
+        emit(&json!({
+            "event": "attribute-write", "set": attr.set.value(), "variation": attr.variation,
+            "type": kind, "value": value,
+        }));
+        MaybeAsync::ready(true)
+    }
+
     fn write_absolute_time(&mut self, time: Timestamp) -> Result<(), RequestError> {
         self.need_time.store(false, Ordering::SeqCst);
         emit(&json!({"event": "time-sync", "time": format_time(time.raw_value())}));
@@ -862,6 +897,11 @@ async fn serve(
         }
     };
     outstation.transaction(|db| populate(db, &fx));
+    let refused = outstation.transaction(|db| define_attributes(db, &fx));
+    if let Some(e) = refused {
+        logf!("server: fixture: {e}");
+        return EXIT_FIXTURE_INVALID;
+    }
 
     if let Err(e) = std::fs::write(&ready_file, b"") {
         logf!("server: cannot write the readiness file {ready_file}: {e}");

@@ -116,7 +116,7 @@ for feature in udp serial; do
             --transport "${feature}"
     fi
 done
-for fixture in files extended; do
+for fixture in files extended attributes; do
     if diff -q <(docker run --rm "${IMAGE}" print-fixture "${fixture}" 2>/dev/null) "${ROOT}/fixtures/${fixture}/fixture.json" >/dev/null
     then ok "print-fixture ${fixture}"; else fail "print-fixture ${fixture} differs from fixtures/${fixture}/fixture.json"; fi
 done
@@ -147,6 +147,14 @@ if [[ "${serves}" == true ]]; then
         stop_server "${name}"
     else
         expect_exit 4 "server refuses the extended fixture" "${IMAGE}" server --fixture /fixtures/extended/fixture.json
+    fi
+    # The attributes fixture needs device attributes (1.3).
+    if jq -e '.features.deviceAttributesServer' <<<"${caps}" >/dev/null 2>&1; then
+        name=$(start_server "${ADAPTER}" --fixture /fixtures/attributes/fixture.json)
+        if wait_ready "${name}"; then ok "server serves the attributes fixture"; else fail "server does not serve the attributes fixture"; fi
+        stop_server "${name}"
+    else
+        expect_exit 4 "server refuses the attributes fixture" "${IMAGE}" server --fixture /fixtures/attributes/fixture.json
     fi
 else
     expect_exit 2 "server of an adapter without the server role" "${IMAGE}" server
