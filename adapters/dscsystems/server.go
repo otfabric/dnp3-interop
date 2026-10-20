@@ -516,7 +516,10 @@ func runServer(argv []string) int {
 	_ = os.Remove(readyFile)
 	_ = ch.Close()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil && signalled {
+			logf("server: the session ended: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 	}
 	// A clean stop is one asked for by SIGTERM or SIGINT; a session that

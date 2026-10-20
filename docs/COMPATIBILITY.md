@@ -172,8 +172,10 @@ of the references only stepfunc's master can do it.
 
 Only DSC go-dnp3's outstation accepts the management functions (INITIALIZE DATA,
 INITIALIZE/START/STOP APPLICATION, SAVE CONFIGURATION), and only opendnp3's
-master sends them all. ACTIVATE CONFIG is served by DSC go-dnp3's outstation, but
-no reference master sends it, so the contract leaves it out.
+master sends them all. ACTIVATE CONFIG (31) is not in the contract, as no
+reference master sends it; DSC go-dnp3 hands it to the same handler as the
+others, so the dscsystems adapter refuses it there, and the library answers
+that refusal with PARAMETER_ERROR rather than NO_FUNC_CODE_SUPPORT.
 
 ### Broadcast
 

@@ -656,6 +656,10 @@ func checkAttributes(fx *fixture, top map[string]any, add func(string, ...any)) 
 			text, ok := o["value"].(string)
 			if !ok || utf8.RuneCountInString(text) > 255 {
 				add("deviceAttributes[%d]: value must be a string of up to 255 characters", i)
+			} else if len(text) > 255 {
+				// The length octet on the wire limits the UTF-8 encoding to
+				// 255 octets: a valid string the outstation cannot send.
+				add("deviceAttributes[%d]: value takes %d octets; a device attribute carries at most 255", i, len(text))
 			}
 			a.Text = text
 		case "unsignedInt", "signedInt":

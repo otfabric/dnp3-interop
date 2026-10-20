@@ -17,13 +17,14 @@ arrived in, which the SOE handler interface does not carry.
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import signal
 import struct
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC
 from importlib.metadata import version as package_version
 
 from dnp3.application.fragment import ObjectBlock, RequestFragment
@@ -56,9 +57,21 @@ from dnp3.master.master import (
     _decode_object_layout,
     _iter_object_slots,
 )
-from dnp3.master.tcp_runner import LinkError, LinkResetPolicy, MasterRunnerError, MasterTcpRunner, ResponseTimeoutError
+from dnp3.master.tcp_runner import (
+    LinkError,
+    LinkResetPolicy,
+    MasterRunnerError,
+    MasterTcpRunner,
+    ResponseTimeoutError,
+)
 from dnp3.objects.layout import layout_for
-from dnp3.outstation import CommandResult, Outstation, OutstationConfig, OutstationTcpRunner, UnsolicitedConfig
+from dnp3.outstation import (
+    CommandResult,
+    Outstation,
+    OutstationConfig,
+    OutstationTcpRunner,
+    UnsolicitedConfig,
+)
 
 ADAPTER = "dnp3py"
 SCHEMA_VERSION = "1.0"
@@ -234,7 +247,7 @@ class Args:
             v = float(self.required(name))
         except ValueError:
             v = None
-        if v is None or v != v or v in (float("inf"), float("-inf")):
+        if v is None or not math.isfinite(v):
             raise UsageError(f"--{name} must be a number")
         return v
 
@@ -667,7 +680,10 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
         if recorder.echo:
             command_statuses = recorder.echo
             command_status = next((s for s in command_statuses if s != 0), 0)
-    recorder.command_statuses = command_statuses
+    # One status per control or null: a partial echo has no entry for the
+    # controls without one, so its commandStatuses is null as no echo is.
+    partial = op == "operate-multi" and command_statuses is not None and len(command_statuses) < request.count
+    recorder.command_statuses = None if partial else command_statuses
     if failure is None and connected and op != "monitor":
         if (recorder.iin or 0) & REQUEST_ERRORS and not getattr(request, "no_response", False):
             message = "the outstation refused the request (IIN2)"
@@ -678,7 +694,7 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             recorder.command_statuses = None
         elif op in ("operate", "operate-multi") and command_status is not None and command_status != 0:
             failure = Failure("command-failed", f"the outstation answered {status_name(command_status)}")
-        elif op == "operate-multi" and command_statuses is not None and len(command_statuses) < request.count:
+        elif partial:
             failure = Failure("failed", f"the outstation echoed {len(command_statuses)} of {request.count} controls")
         elif op in ("operate", "operate-multi") and command_status is None and not getattr(request, "no_response", False):
             failure = Failure("failed", "the outstation's echo did not carry a status")
@@ -739,7 +755,8 @@ def client_main(argv):
     if request is not None and no_response:
         inner = request
 
-        async def request(c):  # noqa: F811 - marks the request as one without a response
+        # A request without a response: the same request, marked as such.
+        async def request(c):
             await inner(c)
 
         request.no_response = True
@@ -1166,6 +1183,12 @@ def server_main(argv):
     return asyncio.run(serve(outstation, fx, bind, port, ready_file, local, remote))
 
 
+def write_ready_file(path):
+    """Creates the readiness file, empty."""
+    with open(path, "w", encoding="utf-8"):
+        pass
+
+
 async def serve(outstation, fx, bind, port, ready_file, local, remote):
     runner = EventRunner(outstation=outstation, host=bind, port=port)
     task = asyncio.create_task(runner.run())
@@ -1179,8 +1202,7 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
             return EXIT_FAILED
         await asyncio.sleep(0.01)
     try:
-        with open(ready_file, "w", encoding="utf-8"):
-            pass
+        await asyncio.to_thread(write_ready_file, ready_file)
     except OSError as e:
         log(f"server: cannot write the readiness file {ready_file}: {e}")
         return EXIT_FAILED
@@ -1200,10 +1222,11 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
         pass
     await runner.stop()
     task.cancel()
-    try:
-        await asyncio.wait_for(task, 2)
-    except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
-        pass
+    # Wait for the cancelled runner, at most 2 s; how it ended was logged
+    # above when it ended on its own.
+    finished, _ = await asyncio.wait({task}, timeout=2)
+    if signalled and task in finished and not task.cancelled() and task.exception() is not None:
+        log(f"server: the runner ended: {task.exception()}")
     # A clean stop is one asked for by SIGTERM or SIGINT; a runner that ends
     # on its own is a failure, without the stopped event.
     if not signalled:

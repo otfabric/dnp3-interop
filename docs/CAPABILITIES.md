@@ -15,7 +15,7 @@ One JSON object on one line ([schema](../schemas/capabilities.schema.json)):
 {
   "schemaVersion": "1.0",
   "adapter": "opendnp3",
-  "adapterVersion": "v0.4.1",
+  "adapterVersion": "v0.4.2",
   "protocol": "dnp3",
   "upstream": {
     "name": "opendnp3",
@@ -54,7 +54,7 @@ An image with the feature `secureAuthentication` adds (contract 1.1):
 | `upstream` | The implementation inside: name, exact version and revision, licence, language |
 | `upstream.independentEngine` | `false` when the adapter wraps the protocol engine of another adapter. Results from such an adapter do not count as an additional independent implementation |
 | `roles` | Which of `server` (outstation) and `client` (master) the image provides |
-| `features` | See below; every value is a boolean. A feature absent from the document is false; features added after contract 1.1 may be absent |
+| `features` | See below; every value is a boolean. Every image of this release lists every feature of the table below; a consumer treats a feature absent from a document (an image of an older release) as false |
 | `pointTypes` | Point arrays a fixture may use with this adapter as server |
 | `commandTypes` | Control objects the adapter handles as server and sends as client |
 | `clientOperations` | Operations of `client` |

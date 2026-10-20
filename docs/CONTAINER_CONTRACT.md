@@ -122,9 +122,9 @@ Lifecycle:
    on the outstation accepts DNP3 connections. **Readiness is the file (or
    the event), not the open port and not a delay.**
 4. On SIGTERM/SIGINT the readiness file is removed, the connection is
-   closed, the `stopped` event is printed and the process exits 0. The
-   dscsystems and dnp3py outstations do the same, exit 0 included, when
-   their library's session ends with an error without a signal.
+   closed, the `stopped` event is printed and the process exits 0. A server
+   that ends any other way (its library's session ends with an error, for
+   one) exits 1 without `stopped`.
 
 The outstation has **one master connection at a time**, as DNP3 over TCP
 has: a new connection replaces the current one. The outstation's state
@@ -251,12 +251,10 @@ operate is not sent.
 ### Result document
 
 Exactly one JSON object on one line of stdout, for every invocation that got
-past argument parsing, including failures. Exceptions: the opendnp3 master
-with `--listen` exits 1 without a document when it cannot bind or its TLS
-files cannot be loaded; the stepfunc adapter prints none (exit 1) if its
-runtime cannot be created; and the dscsystems document for TLS files that
-cannot be loaded has only the common fields, none of the operation's own
-(`commandStatus`, `file`, ...).
+past argument parsing, including failures: a listening master that cannot
+bind, TLS files that cannot be loaded or a runtime that cannot be created
+fail with `failed` and a complete document, the operation's own fields
+included.
 
 | Field | Type | Meaning |
 |-------|------|---------|
@@ -335,8 +333,8 @@ the flag as a usage error (exit 2).
 |------|---------|---------|
 | `--transport T` | `tcp` | `tcp`, `udp` or `serial`. TLS is `tcp` with the TLS flags |
 
-dnp3py, which has TCP only, accepts no `--transport` flag at all, not even
-`--transport tcp` (exit 2).
+An image with TCP only (dnp3py) accepts `--transport tcp`; `udp` and
+`serial` are usage errors there, as the rule above says.
 
 ### TLS
 
@@ -365,11 +363,9 @@ before the connection is established. With TLS 1.3 a master learns that
 the outstation refused *its* certificate only after its side of the
 handshake is done: its operation fails, with an error code that depends on
 the library (`connection-lost`, `timeout` or `failed`). Certificate files
-that cannot be read or parsed: the server exits 1, the client fails with
-`failed`. opendnp3 loads them only when it connects: its dialling master
-fails with `connect-failed`, its dialling outstation (`server --connect`)
-prints `ready` and never dials, and `client --listen --tls` exits 1 without
-a result document.
+that cannot be read or parsed: the client fails with `failed` and its result
+document, whether it dials or listens; the server exits 1 before `ready`,
+whether it listens or dials.
 
 **Providing certificates.** The images contain no certificates. Mount a
 directory with PEM files and pass the paths, for example
@@ -395,10 +391,7 @@ datagrams, without connections.
 There is no connection: a client is `connected` once its socket is open, and
 an outstation that does not answer is `timeout`. A socket that cannot be
 opened, or a host that cannot be resolved, is `connect-failed`;
-`--connect-timeout-ms` bounds opening the socket (opendnp3 waits for its
-channel on every transport). stepfunc's master is an exception: it resolves
-the host without that bound, and reports a socket that cannot be opened
-later, as the failure of the operation, not as `connect-failed`. The DSC
+`--connect-timeout-ms` bounds resolving the host and opening the socket. The DSC
 go-dnp3 outstation (dscsystems) keeps answering the first endpoint it heard from for its whole life, so give
 masters a fixed endpoint (`--udp-local-port`, a fixed IP) or restart the
 outstation per master.
@@ -492,7 +485,7 @@ Server event `file`, for every file request the outstation answered:
 
 | Field | Meaning |
 |-------|---------|
-| `action` | `read` (opened for reading), `write` (written and closed), `delete`, `info` (GET_FILE_INFO), `list` (a directory opened for reading); 1.3: `append` (appended and closed), `authenticate` (AUTHENTICATE_FILE). dscsystems reports a refused open for appending as `write` |
+| `action` | `read` (opened for reading), `write` (written and closed), `delete`, `info` (GET_FILE_INFO), `list` (a directory opened for reading); 1.3: `append` (appended and closed), `authenticate` (AUTHENTICATE_FILE) |
 | `name` | The file name the master sent; for `authenticate`, the user name (never the password) |
 | `status` | The file status the outstation answered, by name (below) |
 
@@ -500,7 +493,7 @@ Server event `file`, for every file request the outstation answered:
 (`/data/readme.txt`; `/` is the root directory). Other names follow the rules
 of the fixture's file names (at most 200 characters; path elements of
 `A-Za-z0-9._-` not starting with `.`); any other name is a usage error
-(exit 2). The dscsystems master does not check the length.
+(exit 2).
 
 | Operation | Flags | Sends | Succeeds when | Result fields |
 |-----------|-------|-------|---------------|---------------|
@@ -533,7 +526,7 @@ the error `file-error`. Names (IEEE 1815 table 4-8): `SUCCESS` (0),
 | Where | Flag or operation | Meaning |
 |-------|-------------------|---------|
 | client | `file-put --append` | OPEN_FILE in append mode: the content goes after what the file holds. Feature `fileAppendClient` (master), `fileAppendServer` (outstation) |
-| client | `--file-user U --file-password P` on `file-get`, `file-put`, `file-ls`, `file-delete` | AUTHENTICATE_FILE (g70v2) with the credentials first, and the key the outstation answers in the open or delete. Both or neither (exit 2). Feature `fileAuthClient`. `file-info` accepts them but sends none: GET_FILE_INFO carries no key |
+| client | `--file-user U --file-password P` on `file-get`, `file-put`, `file-ls`, `file-delete` | AUTHENTICATE_FILE (g70v2) with the credentials first, and the key the outstation answers in the open or delete. Both or neither (exit 2). Feature `fileAuthClient`. `file-info` takes neither (exit 2): GET_FILE_INFO carries no key |
 | client | `file-authenticate --file-user U --file-password P` | AUTHENTICATE_FILE alone. Succeeds when the outstation answers a key other than 0; key 0 is the error `file-error` with `fileStatus` `PERMISSION_DENIED`. The key is not reported |
 | server | `--file-user U --file-password P` | The outstation requires AUTHENTICATE_FILE with these credentials before an open or delete, and answers PERMISSION_DENIED to one without a valid key. Needs a fixture with files (exit 2 otherwise). Feature `fileAuthServer` |
 
@@ -613,13 +606,12 @@ on and off time 100 ms) and `g41v1..v4:INDEX:VALUE`. Feature
 | Result field | Meaning |
 |--------------|---------|
 | `commandStatus` | The first status other than SUCCESS, or SUCCESS when all succeeded; null when no echo arrived or the response carried a request error |
-| `commandStatuses` | The status of each control in order; null when no echo arrived, when the response carried a request error, or where the master library reports only the first refusal (stepfunc) |
+| `commandStatuses` | The status of each control in order; null when no echo arrived, when only some controls were echoed, when the response carried a request error, or where the master library reports only the first refusal (stepfunc) |
 
-Exceptions: when only some controls were echoed, opendnp3 returns the
-statuses of those (a shorter array) and fails (`failed`, or `command-failed`
-for a refused one); dnp3py then gives `commandStatuses` null and
-`commandStatus` the last status it received, so the operation succeeds when
-that one is SUCCESS.
+When the outstation echoed only some of the controls, `commandStatuses` is
+null (it has one entry per control or none) and the operation fails:
+`command-failed` when an echoed control was refused (`commandStatus` the
+first refusal), `failed` otherwise.
 
 It succeeds when every control is echoed SUCCESS; a refused one is
 `command-failed`, as for `operate`. The outstation carries out the controls
@@ -641,7 +633,9 @@ many controls of a request and answers TOO_MANY_OPS for the rest (feature
 
 An outstation freezes at the time given, once or every interval; time 0 with
 interval 0 freezes at once (IEEE 1815-2012 A.23.2). A time already past with
-no interval is refused, except that stepfunc's outstation freezes at once.
+no interval is refused (PARAMETER_ERROR: the master's error is `rejected`);
+with an interval the first freeze is the next time of the schedule after
+now, without catching up on the ones missed.
 It succeeds when the outstation accepted the request, not when the freeze
 happens.
 
@@ -688,8 +682,11 @@ server event `manage`:
 | `function` | The function code, a number |
 
 ACTIVATE_CONFIG (31, g70v8 file specifications answered with g91v1) is not in
-the contract: no reference master sends it. The dscsystems outstation
-accepts it anyway and reports it as `manage` with function 31.
+the contract: no reference master sends it, and an outstation refuses it
+without a `manage` event. The one difference is how: the dscsystems
+outstation answers PARAMETER_ERROR, not NO_FUNC_CODE_SUPPORT, because DSC
+go-dnp3 v0.8.1 routes 31 to the same handler as 15..19 and answers
+NO_FUNC_CODE_SUPPORT only to an outstation without any management handler.
 
 ## Broadcast
 
@@ -749,9 +746,7 @@ Features `deviceAttributesServer` and `deviceAttributesClient`.
 arrived. `type` is one of `visibleString`, `unsignedInt`, `signedInt`,
 `float`, `octetString`, `bitString`, `time`, `attributeList`,
 `extendedAttributeList`; `value` a string, a number, lower-case hex
-(octet and bit strings), a time stamp, or null (lists). Exceptions:
-dscsystems prints a list as the lower-case hex of its octets, and stepfunc
-reports an extended list as `attributeList`. A read of set 0
+(octet and bit strings), a time stamp, or null (lists). A read of set 0
 returns what the outstation library adds there itself (point counts, sizes);
 compare attributes of the fixture's set.
 
@@ -768,7 +763,7 @@ outstations whose fixture has them (the `extended` fixture; see
 
 | Objects | Served when | Master feature | Document |
 |---------|-------------|----------------|----------|
-| Frozen analog inputs, g31 (static), g33 (events) | `pointTypes` has `frozenAnalogInputs` | `frozenAnalogInputsClient` | as an analog input: `value`, `flags` (analog flags), `time` for the variations with one (the stepfunc and dscsystems masters give none for g31v3, v4) |
+| Frozen analog inputs, g31 (static), g33 (events) | `pointTypes` has `frozenAnalogInputs` | `frozenAnalogInputsClient` | as an analog input: `value`, `flags` (analog flags), `time` for the variations with one |
 | Binary output command events, g13 | feature `commandEventsServer`, and the output has a `commandEventClass` | `commandEventsClient` | `value` the commanded state (true for LATCH_ON, PULSE_ON, CLOSE), `status` the command status by name, `time` for g13v2; no `flags` |
 | Analog output command events, g43 | as g13 | `commandEventsClient` | `value` the commanded value, `status`, `time` for g43v3, v4, v7, v8; no `flags` |
 | Time and interval, g50v4 | `pointTypes` has `timeAndIntervals` | `timeAndIntervalClient` | `value` the interval, `time` the start time, `units` the interval units (IEEE 1815 table A-6: 0 none, 1 ms, 2 s, 3 min, 4 h, 5 day, ...) |
@@ -843,8 +838,8 @@ adapter. Needs no network and no fixture.
 
 `print-fixture [NAME]` (default `baseline`) writes the fixture baked into the
 image to stdout, byte for byte, and exits 0. An unknown name exits 1; a
-name that is empty or contains `/` or `..` is a usage error (exit 2;
-dscsystems and dnp3py also refuse `\`).
+name that is empty or contains a path separator (`/` or `\`) or `..` is a
+usage error (exit 2).
 
 A consumer reads the expected values from the image it tests against, so it
 needs no checkout of this repository and cannot drift from the image.
@@ -853,8 +848,8 @@ needs no checkout of this repository and cannot drift from the image.
 
 | Code | Meaning |
 |------|---------|
-| 0 | Success. `server`: clean stop after SIGTERM/SIGINT (dscsystems, dnp3py: also when the session ends with an error) |
-| 1 | The operation failed (see `error.code`); `server`: could not listen |
+| 0 | Success. `server`: clean stop after SIGTERM/SIGINT |
+| 1 | The operation failed (see `error.code`); `server`: could not listen, TLS files that cannot be loaded, or an end without SIGTERM/SIGINT |
 | 2 | Usage error: unknown command, operation or flag, missing or invalid value. Nothing was sent |
 | 3 | `client`: the connection could not be established |
 | 4 | `server`: the fixture is missing, invalid, or needs what the adapter does not serve |

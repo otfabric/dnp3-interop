@@ -18,6 +18,29 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.4.2
+
+**Date:** 2026-10-21
+**Previous release:** v0.4.1
+
+## Summary
+
+The adapters follow the container contract where the adapter, not its
+library, decides; container contract 1.3 unchanged. The contract now states
+the rules and names only the remaining library differences.
+
+## Changes
+
+- stepfunc: `file-info` refuses `--file-user`/`--file-password` (exit 2); a runtime that cannot be created gives the `failed` result document (the master runs on a current-thread runtime); UDP resolving and opening the socket are bounded by `--connect-timeout-ms`, and either failing is `connect-failed`; FREEZE AT TIME at a time already past is refused without an interval and resumes at the next scheduled time with one; g31v3 and g31v4 carry their time; an extended attribute list is `extendedAttributeList`; `visibleString` attributes are counted in characters, and one over 255 octets of UTF-8 is refused; `print-fixture` refuses `\`.
+- opendnp3: TLS files are loaded up front: the client fails with `failed` and its result document (dialling or listening), the server exits 1 before `ready`; a listening master that cannot bind prints its document; `operate-multi` gives `commandStatuses` null on a partial echo; `print-fixture` refuses `\`; the capability document lists `fileAppend*`, `fileAuth*` and `deadband*` as false.
+- dscsystems: attribute lists have value null; `file-info` refuses `--file-user`/`--file-password`; the master checks the length of `--name` (200 characters); TLS files that cannot be loaded give the complete result document; the server exits 1 without `stopped` when the session ends without SIGTERM/SIGINT; ACTIVATE_CONFIG (31) is refused and not reported as `manage`; a refused open for appending is reported as `append`; `visibleString` attributes are counted in characters, and one over 255 octets of UTF-8 is refused; the master gives the time of g31v3 and g31v4; lint fixes (errcheck).
+- dnp3py: accepts `--transport tcp` (`udp` and `serial` are usage errors); `operate-multi` reports the first refusal and the statuses of the last echo, and a partial echo fails with `commandStatuses` null; the server exits 1 without `stopped` when the runner ends without a signal; the capability document lists the file append/auth and deadband features (false) and no longer has `timeSyncOnDemand` in `serverFeatures`; `versions.yaml` gives it both roles; lint fixes (ruff).
+- `scripts/validate-fixtures.py`: a `visibleString` attribute must also fit in 255 octets of UTF-8; ruff fixes in the scripts.
+- Docs: the corrections of 3587453 (every claim reviewed before going public); CONTAINER_CONTRACT.md, CAPABILITIES.md and FIXTURES.md now state the rules the adapters follow.
+- Licence label: the dscsystems capability document and `versions.yaml` say `GPL-3.0-or-later` (was `GPL-3.0`), as the image label and THIRD_PARTY_NOTICES.md do.
+
+---
+
 ## v0.4.1
 
 **Date:** 2026-10-20
