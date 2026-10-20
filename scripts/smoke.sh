@@ -102,6 +102,7 @@ expect_exit 2 "serial without a device" "${IMAGE}" client integrity-poll --trans
 expect_exit 2 "a file operation without --name" "${IMAGE}" client file-get --host nowhere
 expect_exit 2 "--connect with --port" "${IMAGE}" server --connect master:20000 --port 20001
 expect_exit 2 "--listen with --host" "${IMAGE}" client integrity-poll --listen --host nowhere
+expect_exit 2 "operate-multi with a malformed control" "${IMAGE}" client operate-multi --host nowhere --controls g12v1:0
 expect_exit 2 "an update key of the wrong length" "${IMAGE}" client integrity-poll --host nowhere --sa-update-key 0011
 if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "secure authentication without the feature" "${IMAGE}" client integrity-poll --host nowhere \
@@ -116,7 +117,7 @@ for feature in udp serial; do
             --transport "${feature}"
     fi
 done
-for fixture in files extended attributes; do
+for fixture in files extended attributes controls; do
     if diff -q <(docker run --rm "${IMAGE}" print-fixture "${fixture}" 2>/dev/null) "${ROOT}/fixtures/${fixture}/fixture.json" >/dev/null
     then ok "print-fixture ${fixture}"; else fail "print-fixture ${fixture} differs from fixtures/${fixture}/fixture.json"; fi
 done
