@@ -20,7 +20,7 @@ import (
 )
 
 var operations = []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
-	"enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi"}
+	"enable-unsolicited", "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi", "deadband-write"}
 
 // timed lists the variations with a time stamp; objects of other variations
 // carry no "time".
@@ -210,6 +210,12 @@ func parseOperation(op string, a args) (request, error) {
 		return parseOperate(a)
 	case "operate-multi":
 		return parseOperateMulti(a)
+	case "deadband-write":
+		deadbands, err := parseDeadbands(a)
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx context.Context, s *master.Session, _ *result) error { return s.WriteDeadband(ctx, deadbands) }, nil
 	case "time-sync":
 		switch a.str("procedure", "lan") {
 		case "lan":
@@ -405,6 +411,8 @@ func runClient(argv []string) int {
 		flags = append(flags, "type", "index", "code", "count", "on-ms", "off-ms", "value", "mode")
 	case "operate-multi":
 		flags = append(flags, "controls", "mode")
+	case "deadband-write":
+		flags = append(flags, "deadbands")
 	case "time-sync":
 		flags = append(flags, "procedure")
 	case "restart":
@@ -700,4 +708,24 @@ func freezeTime(text string) (time.Time, error) {
 		return time.UnixMilli(n), nil
 	}
 	return time.Time{}, usagef("--at must be immediately, +MS or milliseconds since the epoch")
+}
+
+// parseDeadbands reads --deadbands of deadband-write: INDEX:VALUE items,
+// comma-separated (contract 1.3).
+func parseDeadbands(a args) (map[uint16]float32, error) {
+	text, err := a.required("deadbands")
+	if err != nil {
+		return nil, err
+	}
+	out := map[uint16]float32{}
+	for _, item := range strings.Split(text, ",") {
+		index, value, ok := strings.Cut(item, ":")
+		i, ierr := strconv.ParseUint(index, 10, 16)
+		v, verr := strconv.ParseFloat(value, 32)
+		if !ok || ierr != nil || verr != nil || v < 0 {
+			return nil, usagef("--deadbands items are INDEX:VALUE, VALUE a non-negative number")
+		}
+		out[uint16(i)] = float32(v)
+	}
+	return out, nil
 }
