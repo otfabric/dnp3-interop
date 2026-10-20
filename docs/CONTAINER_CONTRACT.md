@@ -606,7 +606,7 @@ not when the freeze happens.
 
 | Where | Flag | Meaning |
 |-------|------|---------|
-| client, server | `--link-confirms` | Send user data as CONFIRMED_USER_DATA (after a RESET_LINK_STATES) and retransmit it until the peer acknowledges it. Feature `linkConfirmsClient` (master), `linkConfirmsServer` (outstation). Every library acknowledges confirmed user data from its peer |
+| client, server | `--link-confirms` | Send user data as CONFIRMED_USER_DATA (after a RESET_LINK_STATES) and retransmit it until the peer acknowledges it. Feature `linkConfirmsClient` (master), `linkConfirmsServer` (outstation). A peer acknowledges them (dnp3py's master does not: a known bug) |
 | client | `--keep-alive-ms N` | Send REQUEST_LINK_STATUS when the link has been idle for N ms (0, the default: never). Meaningful with `monitor`. Feature `keepAliveClient` |
 
 Server event `link-status`, no fields: the outstation received a

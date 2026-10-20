@@ -164,8 +164,10 @@ masters send it, go-dnp3's master cannot.
 
 ### Link layer
 
-Only go-dnp3 sends confirmed user data, in both roles; the stepfunc, opendnp3
-and dnp3py peers acknowledge it. The stepfunc, opendnp3 and go-dnp3 masters
+Only go-dnp3 sends confirmed user data, in both roles. The stepfunc, opendnp3
+and dnp3py outstations and the stepfunc and opendnp3 masters acknowledge it;
+dnp3py's master does not, so it gets no answer from an outstation that asks
+for link-layer confirms (a known bug). The stepfunc, opendnp3 and go-dnp3 masters
 send keep-alives (REQUEST_LINK_STATUS) on an idle link; every outstation
 answers them, and go-dnp3's adapter reports each one it receives.
 
