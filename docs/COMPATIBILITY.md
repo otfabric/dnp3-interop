@@ -149,6 +149,17 @@ go-dnp3 records a command event for every control that reaches its control
 handler, with the status it answered: a value out of range produces a g43
 with OUT_OF_RANGE. It records none for SELECT.
 
+### Device attributes: stepfunc and go-dnp3
+
+Both outstations serve the attributes of a private set, accept writes of the
+writable ones and refuse the others (stepfunc with NO_FUNC_CODE_SUPPORT for an
+attribute that is not writable, PARAMETER_ERROR when its application refuses);
+go-dnp3 also derives the standard attributes of set 0 (point counts, fragment
+sizes) itself. Both masters read and write them, with one known bug:
+stepfunc 1.7.0's master reads a signed integer of one octet as unsigned
+(`parse_signed_int` uses `read_u8`): -42 arrives as 214. Both outstations
+encode -42 in one octet, as the standard's shortest form.
+
 ### go-dnp3: security statistics
 
 With secure authentication on, the go-dnp3 outstation serves 18 statistics
