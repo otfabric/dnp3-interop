@@ -90,6 +90,8 @@ expect_exit 2 "TLS over UDP" "${IMAGE}" client integrity-poll --host nowhere --t
     --tls-ca /a --tls-cert /b --tls-key /c
 expect_exit 2 "serial without a device" "${IMAGE}" client integrity-poll --transport serial
 expect_exit 2 "a file operation without --name" "${IMAGE}" client file-get --host nowhere
+expect_exit 2 "--connect with --port" "${IMAGE}" server --connect master:20000 --port 20001
+expect_exit 2 "--listen with --host" "${IMAGE}" client integrity-poll --listen --host nowhere
 expect_exit 2 "an update key of the wrong length" "${IMAGE}" client integrity-poll --host nowhere --sa-update-key 0011
 if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "secure authentication without the feature" "${IMAGE}" client integrity-poll --host nowhere \
