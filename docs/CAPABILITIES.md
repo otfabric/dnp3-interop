@@ -118,7 +118,7 @@ serves it and the master sends it.
 | `linkConfirmsClient` | `client --link-confirms` (1.3) | no ³⁷ | no ³⁸ | yes | no ³⁹ |
 | `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | yes | no ³⁹ |
 | `linkStatusEventServer` | The server event `link-status` (1.3) | no ⁴⁰ | no ⁴⁰ | yes | no ⁴⁰ |
-| `multipleOutstationsServer` | `server --outstations N` (1.3) | no ⁴⁶ | yes | yes | no |
+| `multipleOutstationsServer` | `server --outstations N` (1.3) | no ⁴⁶ | yes | yes ⁴⁷ | no |
 | `manageServer` | The outstation accepts the management functions (1.3) | no | no | yes | no |
 | `manageClient` | `manage` (1.3) | no ⁴⁴ | yes | no ⁴⁵ | no |
 | `broadcastServer` | The outstation carries out a broadcast request and sets IIN1.0 (1.3) | yes | yes | yes | no ⁴¹ |
@@ -273,6 +273,10 @@ them.
 
 ⁴⁶ stepfunc's server gives each connection one outstation, chosen by the
 master's IP address, not by link address.
+
+⁴⁷ On a multidrop bus, which loses a request that arrives on a new
+connection before that outstation's session has re-attached (intermittent,
+tests/known-bugs.tsv).
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
