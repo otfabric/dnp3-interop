@@ -18,10 +18,12 @@ import (
 
 // frames scans a byte stream for DNP3 link frames and calls fn with the user
 // data of every frame: the transport header, then the segment's application
-// octets. CRCs are not checked: the library does that, and this only watches.
+// octets; and link, when set, with the control octet of every frame. CRCs are
+// not checked: the library does that, and this only watches.
 type frames struct {
-	buf []byte
-	fn  func(app []byte)
+	buf  []byte
+	fn   func(app []byte)
+	link func(control byte)
 }
 
 func (f *frames) feed(p []byte) {
@@ -49,6 +51,9 @@ func (f *frames) feed(p []byte) {
 		size := 10 + n + 2*((n+15)/16)
 		if len(f.buf) < size {
 			return
+		}
+		if f.link != nil {
+			f.link(f.buf[3])
 		}
 		var data []byte
 		for off := 10; off < size; {
@@ -78,6 +83,15 @@ func first(fn func(app []byte)) func(segment []byte) {
 		if segment[0]&0x40 != 0 {
 			fn(segment[1:])
 		}
+	}
+}
+
+// linkInbound reports a REQUEST_LINK_STATUS from the master (contract 1.3):
+// a keep-alive, which the library answers without telling the application.
+func linkInbound(control byte) {
+	const prm, requestLinkStatus = 0x40, 9
+	if control&prm != 0 && control&0x0F == requestLinkStatus {
+		emit(object{{"event", "link-status"}})
 	}
 }
 
@@ -113,7 +127,7 @@ func (s sniffChannel) Connect(ctx context.Context) (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &sniffRWC{ReadWriteCloser: c, in: frames{fn: first(inbound)}, out: frames{fn: first(outbound)}}
+	w := &sniffRWC{ReadWriteCloser: c, in: frames{fn: first(inbound), link: linkInbound}, out: frames{fn: first(outbound)}}
 	if m, ok := c.(messageWriter); ok {
 		return sniffMessages{sniffRWC: w, m: m}, nil
 	}

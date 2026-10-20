@@ -28,7 +28,7 @@ const char* kUsage = R"(usage: dnp3-interop <command>
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT] [--connect HOST:PORT]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [LINK] [TRANSPORT] [operation flags]
+         [--collect-ms N] [--keep-alive-ms N] [LINK] [TRANSPORT] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
          [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
@@ -131,6 +131,12 @@ int print_capabilities()
           {"maxControlsServer", true},
           // Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows.
           {"eventBufferServer", true},
+          // Contract 1.3: keep-alives from the master. opendnp3 3.x has no
+          // link-layer confirms.
+          {"linkConfirmsServer", false},
+          {"linkConfirmsClient", false},
+          {"keepAliveClient", true},
+          {"linkStatusEventServer", false},
           // The outstation refuses FREEZE AT TIME and freezes counters only;
           // the master cannot carry g50v2 but freezes any group.
           {"freezeAtTimeServer", false},

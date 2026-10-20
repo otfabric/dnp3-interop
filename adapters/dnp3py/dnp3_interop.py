@@ -1244,6 +1244,11 @@ def print_capabilities():
             "maxControlsServer": False,
             # Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows.
             "eventBufferServer": True,
+            # Contract 1.3: none of the link layer is configurable.
+            "linkConfirmsServer": False,
+            "linkConfirmsClient": False,
+            "keepAliveClient": False,
+            "linkStatusEventServer": False,
             # The master sends FREEZE AT TIME and freezes of any group; the
             # outstation has neither (NO_FUNC_CODE_SUPPORT, counters only).
             "freezeAtTimeServer": False,
