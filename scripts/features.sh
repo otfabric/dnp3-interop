@@ -19,6 +19,9 @@
 #   sa      secure authentication: reads and controls with the shared update
 #           key, the server's auth events, refusal of a wrong key, of a wrong
 #           user and of a master without authentication
+#   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
+#           command events of the outputs (g13, g43) with the status of the
+#           control, and a time and interval object (g50v4)
 #
 # One suite per server adapter, all at the same time, as in interop.sh.
 #
@@ -64,6 +67,16 @@ for adapter in "${ADAPTERS[@]}"; do
 done
 has() { jq -e --arg f "$2" '.features[$f] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
 has_role() { jq -e --arg r "$2" '.roles[$r] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
+# serves_extended <adapter>: its outstation serves the extended fixture.
+serves_extended() {
+    has_role "$1" server && has "$1" commandEventsServer \
+        && jq -e '.pointTypes | index("frozenAnalogInputs") and index("timeAndIntervals")' "${WORK}/caps-$1.json" >/dev/null 2>&1
+}
+# objects of a document with the status of command events and the units of
+# g50v4, as "g13v2:0=true/SUCCESS".
+detail() {
+    jq -r '[.objects[]? | "g\(.group)v\(.variation):\(.index)=\(.value|tostring)\(if .status then "/\(.status)" else "" end)\(if .units then "/\(.time)/\(.units)" else "" end)"] | sort | join(" ")' <<<"$1" 2>/dev/null
+}
 
 SKIPPED=0
 skip() { SKIPPED=$((SKIPPED + 1)); record skip "$*"; [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; return 0; }
@@ -278,6 +291,46 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: files (needs server:fileServer,client:fileClient)"
+        fi
+
+        # ---- point types of the extended fixture (contract 1.2) ----
+        if serves_extended "${server}"; then
+            name="fp-${server}-${RUN_ID}"
+            start "${server}" "${name}" -- --fixture /fixtures/extended/fixture.json
+            if wait_ready "${name}"; then
+                if has "${client}" frozenAnalogInputsClient; then
+                    doc=$(client "${client}" -- read --group 31 --variation 0 --start 0 --stop 1 --host "${name}")
+                    check "${pair}: [points] frozen analog inputs" "g31v1:0=1500 g31v7:1=49.5" "$(detail "${doc}")"
+                    check "${pair}: [points] frozen analog flags" '[["ONLINE"],["ONLINE","OVER_RANGE"]]' \
+                        "$(jq -cS '[.objects[]? | .flags] | sort' <<<"${doc}" 2>/dev/null)"
+                else
+                    skip "${pair}: frozen analog inputs (needs client:frozenAnalogInputsClient)"
+                fi
+                if has "${client}" timeAndIntervalClient; then
+                    check "${pair}: [points] time and interval" "g50v4:0=15/2026-01-01T00:00:00.000Z/3" \
+                        "$(detail "$(client "${client}" -- read --group 50 --variation 4 --start 0 --stop 0 --host "${name}")")"
+                else
+                    skip "${pair}: time and interval (needs client:timeAndIntervalClient)"
+                fi
+                if has "${client}" commandEventsClient; then
+                    client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
+                    client "${client}" -- operate --type g41v1 --index 0 --value 42 --host "${name}" >/dev/null
+                    client "${client}" -- operate --type g41v1 --index 0 --value 5000000 --host "${name}" >/dev/null
+                    check "${pair}: [points] command events with the status of each control" \
+                        "g13v2:0=true/SUCCESS g43v3:0=42/SUCCESS g43v3:0=5000000/OUT_OF_RANGE" \
+                        "$(detail "$(client "${client}" -- event-poll --classes 2 --host "${name}")")"
+                    check "${pair}: [points] the outputs' own events are unchanged" \
+                        "g11v2:0=true g2v2:1=true g32v1:0=42 g42v1:0=42" \
+                        "$(objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")")"
+                else
+                    skip "${pair}: command events (needs client:commandEventsClient)"
+                fi
+            else
+                fail "${pair}: [points] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            skip "${pair}: extended point types (needs a server that serves the extended fixture)"
         fi
 
         # ---- secure authentication ----
