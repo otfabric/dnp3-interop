@@ -107,7 +107,14 @@ int print_capabilities()
           {"fileServer", false},
           {"fileClient", false},
           {"fileDeleteClient", false},
-          {"secureAuthentication", false}}},
+          {"secureAuthentication", false},
+          // Contract 1.2. The master decodes command events (g13, g43) and
+          // g50v4; the library knows no frozen analogs, and its outstation
+          // records no command events.
+          {"commandEventsServer", false},
+          {"commandEventsClient", true},
+          {"frozenAnalogInputsClient", false},
+          {"timeAndIntervalClient", true}}},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},

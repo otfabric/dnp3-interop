@@ -14,11 +14,12 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 var pointTypes = []string{
 	"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters",
-	"analogInputs", "analogOutputs", "octetStrings",
+	"analogInputs", "analogOutputs", "octetStrings", "frozenAnalogInputs",
 }
 
 type point struct {
@@ -31,6 +32,18 @@ type point struct {
 	Target         *uint16
 	SelectRequired bool
 	Min, Max       *float64
+	// Outputs: the class and variation of their command events (groups 13
+	// and 43); class 0 records none.
+	CmdClass int
+	CmdVar   uint8
+}
+
+// timeInterval is a time and interval object (g50v4).
+type timeInterval struct {
+	Index    uint16
+	Time     time.Time
+	Interval uint32
+	Units    uint8
 }
 
 type fixture struct {
@@ -43,6 +56,8 @@ type fixture struct {
 	// every directory, those of the files and the listed empty ones.
 	Files       map[string][]byte
 	Directories []string
+	// TimeIntervals are the g50v4 objects.
+	TimeIntervals []timeInterval
 }
 
 func (f *fixture) find(kind string, index uint16) *point {
@@ -68,6 +83,8 @@ var rules = map[string]rule{
 	"analogInputs":    {[]uint8{1, 2, 3, 4, 5, 6}, []uint8{1, 2, 3, 4, 5, 6, 7, 8}, 1, 1},
 	"analogOutputs":   {[]uint8{1, 2, 3, 4}, []uint8{1, 2, 3, 4, 5, 6, 7, 8}, 1, 1},
 	"octetStrings":    {nil, nil, 0, 0},
+	// g31 without the variations with a time of freeze; g33 without time.
+	"frozenAnalogInputs": {[]uint8{1, 2, 5, 6, 7, 8}, []uint8{1, 2, 5, 6}, 1, 1},
 }
 
 func isFloat32(v float64) bool { return float64(float32(v)) == v }
@@ -110,6 +127,9 @@ func checkPoint(kind string, raw any, position int, errs *[]string) point {
 	}
 	if kind == "analogOutputs" {
 		allowed = append(allowed, "min", "max")
+	}
+	if kind == "binaryOutputs" || kind == "analogOutputs" {
+		allowed = append(allowed, "commandEventClass", "commandEventVariation")
 	}
 	for k := range obj {
 		if !slices.Contains(allowed, k) {
@@ -169,9 +189,33 @@ func checkPoint(kind string, raw any, position int, errs *[]string) point {
 	}
 	// A static variation without flags reports the point ONLINE.
 	noFlags := (kind == "binaryInputs" && p.SVar == 1) || (kind == "counters" && (p.SVar == 5 || p.SVar == 6)) ||
-		(kind == "frozenCounters" && (p.SVar == 9 || p.SVar == 10)) || (kind == "analogInputs" && (p.SVar == 3 || p.SVar == 4))
+		(kind == "frozenCounters" && (p.SVar == 9 || p.SVar == 10)) || (kind == "analogInputs" && (p.SVar == 3 || p.SVar == 4)) ||
+		(kind == "frozenAnalogInputs" && (p.SVar == 5 || p.SVar == 6))
 	if noFlags && p.Flags != 0x01 {
 		add("%s: static variation %d has no flags, so flags must be [\"ONLINE\"]", where, p.SVar)
+	}
+	if v, present := obj["commandEventClass"]; present {
+		c, ok := integer(v)
+		if !ok || c < 1 || c > 3 {
+			add("%s: commandEventClass must be 1..3", where)
+		} else {
+			p.CmdClass = int(c)
+		}
+	}
+	if v, present := obj["commandEventVariation"]; present {
+		n, ok := integer(v)
+		limit := int64(2)
+		if kind == "analogOutputs" {
+			limit = 8
+		}
+		switch {
+		case !ok || n < 1 || n > limit:
+			add("%s: commandEventVariation must be 1..%d", where, limit)
+		case p.CmdClass == 0 && obj["commandEventClass"] == nil:
+			add("%s: commandEventVariation needs commandEventClass", where)
+		default:
+			p.CmdVar = uint8(n)
+		}
 	}
 	if v, present := obj["selectRequired"]; present {
 		b, ok := v.(bool)
@@ -258,8 +302,11 @@ func checkPoint(kind string, raw any, position int, errs *[]string) point {
 		}
 		p.Value = x
 		sint, s16 := []uint8{1, 2}, []uint8{2}
-		if kind == "analogInputs" {
+		switch kind {
+		case "analogInputs":
 			sint, s16 = []uint8{1, 2, 3, 4}, []uint8{2, 4}
+		case "frozenAnalogInputs":
+			sint, s16 = []uint8{1, 2, 5, 6}, []uint8{2, 6}
 		}
 		events := p.Class != 0
 		if (slices.Contains(sint, p.SVar) || (events && slices.Contains([]uint8{1, 2, 3, 4}, p.EVar))) && x != math.Floor(x) {
@@ -306,7 +353,7 @@ func loadFixture(text []byte) (*fixture, error) {
 	fx := &fixture{Points: map[string][]point{}}
 
 	for k := range top {
-		if !slices.Contains([]string{"schemaVersion", "name", "description", "outstation", "files", "directories"}, k) && !slices.Contains(pointTypes, k) {
+		if !slices.Contains([]string{"schemaVersion", "name", "description", "outstation", "files", "directories", "timeAndIntervals"}, k) && !slices.Contains(pointTypes, k) {
 			add("unknown field '%s'", k)
 		}
 	}
@@ -404,6 +451,7 @@ func loadFixture(text []byte) (*fixture, error) {
 		}
 	}
 	checkFiles(fx, top, add)
+	checkTimeIntervals(fx, top, add)
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
@@ -483,4 +531,51 @@ func checkFiles(fx *fixture, top map[string]any, add func(string, ...any)) {
 		fx.Directories = append(fx.Directories, d)
 	}
 	slices.Sort(fx.Directories)
+}
+
+// checkTimeIntervals reads the g50v4 objects of a fixture.
+func checkTimeIntervals(fx *fixture, top map[string]any, add func(string, ...any)) {
+	raw, present := top["timeAndIntervals"]
+	if !present {
+		return
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		add("timeAndIntervals must be an array")
+		return
+	}
+	seen := map[uint16]bool{}
+	for i, item := range list {
+		o, ok := item.(map[string]any)
+		if !ok {
+			add("timeAndIntervals[%d] must be an object", i)
+			continue
+		}
+		for k := range o {
+			if !slices.Contains([]string{"index", "time", "interval", "units"}, k) {
+				add("timeAndIntervals[%d]: unknown field '%s'", i, k)
+			}
+		}
+		index, okI := integer(o["index"])
+		interval, okN := integer(o["interval"])
+		units, okU := integer(o["units"])
+		text, _ := o["time"].(string)
+		at, err := time.Parse("2006-01-02T15:04:05.000Z", text)
+		switch {
+		case !okI || index < 0 || index > 65535:
+			add("timeAndIntervals[%d]: index must be 0..65535", i)
+		case err != nil:
+			add("timeAndIntervals[%d]: time must be YYYY-MM-DDTHH:MM:SS.mmmZ", i)
+		case !okN || interval < 0 || interval > 4294967295:
+			add("timeAndIntervals[%d]: interval must be 0..4294967295", i)
+		case !okU || units < 0 || units > 11:
+			add("timeAndIntervals[%d]: units must be 0..11", i)
+		case seen[uint16(index)]:
+			add("timeAndIntervals[%d]: duplicate index", index)
+		default:
+			seen[uint16(index)] = true
+			fx.TimeIntervals = append(fx.TimeIntervals,
+				timeInterval{Index: uint16(index), Time: at.UTC(), Interval: uint32(interval), Units: uint8(units)})
+		}
+	}
 }

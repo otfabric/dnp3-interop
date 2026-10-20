@@ -39,7 +39,7 @@
     "pointTypes": {
       "type": "array",
       "items": { "enum": ["binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters",
-                          "analogInputs", "analogOutputs", "octetStrings"] }
+                          "analogInputs", "analogOutputs", "octetStrings", "frozenAnalogInputs", "timeAndIntervals"] }
     },
     "commandTypes": { "type": "array", "items": { "enum": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"] } },
     "clientOperations": { "type": "array", "items": { "type": "string" } },

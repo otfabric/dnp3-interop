@@ -98,7 +98,7 @@
       "additionalProperties": false,
       "required": ["group", "variation", "index", "value", "unsolicited"],
       "properties": {
-        "group": { "enum": [1, 2, 3, 4, 10, 11, 20, 21, 22, 23, 30, 32, 40, 42, 110, 111] },
+        "group": { "enum": [1, 2, 3, 4, 10, 11, 13, 20, 21, 22, 23, 30, 31, 32, 33, 40, 42, 43, 50, 110, 111] },
         "variation": { "type": "integer", "minimum": 0, "maximum": 255 },
         "index": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "value": { "type": ["boolean", "number", "string"] },
@@ -106,13 +106,18 @@
           "ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED", "CHATTER_FILTER", "ROLLOVER",
           "DISCONTINUITY", "OVER_RANGE", "REFERENCE_ERR"] } },
         "time": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
-        "unsolicited": { "type": "boolean" }
+        "unsolicited": { "type": "boolean" },
+        "status": { "description": "Contract 1.2. Groups 13 and 43: the status of the command.", "type": "string" },
+        "units": { "description": "Contract 1.2. Group 50 variation 4: the units of the interval.", "type": "integer", "minimum": 0, "maximum": 255 }
       },
       "allOf": [
         { "if": { "properties": { "group": { "enum": [1, 2, 10, 11] } } }, "then": { "properties": { "value": { "type": "boolean" } }, "required": ["flags"] } },
         { "if": { "properties": { "group": { "enum": [3, 4] } } }, "then": { "properties": { "value": { "enum": [0, 1, 2, 3] } }, "required": ["flags"] } },
         { "if": { "properties": { "group": { "enum": [20, 21, 22, 23] } } }, "then": { "properties": { "value": { "type": "integer", "minimum": 0, "maximum": 4294967295 } }, "required": ["flags"] } },
-        { "if": { "properties": { "group": { "enum": [30, 32, 40, 42] } } }, "then": { "properties": { "value": { "type": "number" } }, "required": ["flags"] } },
+        { "if": { "properties": { "group": { "enum": [30, 31, 32, 33, 40, 42] } } }, "then": { "properties": { "value": { "type": "number" } }, "required": ["flags"] } },
+        { "if": { "properties": { "group": { "const": 13 } } }, "then": { "properties": { "value": { "type": "boolean" } }, "required": ["status"] } },
+        { "if": { "properties": { "group": { "const": 43 } } }, "then": { "properties": { "value": { "type": "number" } }, "required": ["status"] } },
+        { "if": { "properties": { "group": { "const": 50 } } }, "then": { "properties": { "value": { "type": "integer", "minimum": 0 } }, "required": ["time", "units"] } },
         { "if": { "properties": { "group": { "enum": [110, 111] } } }, "then": { "properties": { "value": { "type": "string", "pattern": "^([0-9a-f]{2})*$" } }, "not": { "required": ["flags"] } } }
       ]
     }

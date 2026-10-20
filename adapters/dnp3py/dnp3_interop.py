@@ -687,6 +687,11 @@ def print_capabilities():
             "fileClient": False,
             "fileDeleteClient": False,
             "secureAuthentication": False,
+            # Contract 1.2: the decoders know none of g13, g31, g33, g43, g50v4.
+            "commandEventsServer": False,
+            "commandEventsClient": False,
+            "frozenAnalogInputsClient": False,
+            "timeAndIntervalClient": False,
         },
         "pointTypes": [],
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],

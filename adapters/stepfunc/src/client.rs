@@ -40,7 +40,7 @@ const OPERATIONS: [&str; 11] = [
 ];
 
 /// Variations with a time stamp; objects of other variations carry no `time`.
-const TIMED: [(u8, u8); 19] = [
+const TIMED: [(u8, u8); 28] = [
     (2, 2),
     (2, 3),
     (4, 2),
@@ -60,6 +60,15 @@ const TIMED: [(u8, u8); 19] = [
     (42, 4),
     (42, 7),
     (42, 8),
+    (13, 2),
+    (33, 3),
+    (33, 4),
+    (33, 7),
+    (33, 8),
+    (43, 3),
+    (43, 4),
+    (43, 7),
+    (43, 8),
 ];
 
 /// What the library reports from its tasks.
@@ -107,6 +116,36 @@ impl Handler {
                 let ts = match t {
                     Time::Synchronized(ts) | Time::Unsynchronized(ts) => ts,
                 };
+                o["time"] = json!(format_time(ts.raw_value()));
+            }
+            o["unsolicited"] = json!(self.unsolicited);
+            r.objects.push(o);
+        }
+    }
+}
+
+impl Handler {
+    /// Command events (g13, g43): the commanded state or value and the
+    /// status, without flags.
+    fn push_command_events<T>(
+        &mut self,
+        info: HeaderInfo,
+        iter: &mut dyn Iterator<Item = (T, u16)>,
+        value: impl Fn(&T) -> Value,
+        status: impl Fn(&T) -> CommandStatus,
+        time: impl Fn(&T) -> Option<Time>,
+    ) {
+        let (group, variation) = group_variation(info.variation);
+        let timed = TIMED.contains(&(group, variation));
+        let mut r = self.received.lock().unwrap_or_else(|e| e.into_inner());
+        for (x, index) in iter {
+            let mut o = json!({
+                "group": group, "variation": variation, "index": index,
+                "value": value(&x), "status": command_status_name(status(&x).as_u8()),
+            });
+            if let (true, Some(Time::Synchronized(ts) | Time::Unsynchronized(ts))) =
+                (timed, time(&x))
+            {
                 o["time"] = json!(format_time(ts.raw_value()));
             }
             o["unsolicited"] = json!(self.unsolicited);
@@ -205,6 +244,48 @@ impl ReadHandler for Handler {
             |x| x.flags.value,
             |x| x.time,
         );
+    }
+
+    fn handle_frozen_analog_input(
+        &mut self,
+        info: HeaderInfo,
+        iter: &mut dyn Iterator<Item = (FrozenAnalogInput, u16)>,
+    ) {
+        self.push(
+            info,
+            iter,
+            |x| number(x.value),
+            |x| x.flags.value,
+            |x| x.time,
+        );
+    }
+
+    fn handle_binary_output_command_event(
+        &mut self,
+        info: HeaderInfo,
+        iter: &mut dyn Iterator<Item = (BinaryOutputCommandEvent, u16)>,
+    ) {
+        self.push_command_events(
+            info,
+            iter,
+            |x| json!(x.commanded_state),
+            |x| x.status,
+            |x| x.time,
+        );
+    }
+
+    fn handle_analog_output_command_event(
+        &mut self,
+        info: HeaderInfo,
+        iter: &mut dyn Iterator<Item = (AnalogOutputCommandEvent, u16)>,
+    ) {
+        let value = |x: &AnalogOutputCommandEvent| match x.commanded_value {
+            AnalogCommandValue::I16(v) => number(f64::from(v)),
+            AnalogCommandValue::I32(v) => number(f64::from(v)),
+            AnalogCommandValue::F32(v) => number(f64::from(v)),
+            AnalogCommandValue::F64(v) => number(v),
+        };
+        self.push_command_events(info, iter, value, |x| x.status, |x| x.time);
     }
 
     fn handle_analog_output_status(
@@ -316,6 +397,24 @@ fn variation(g: u8, v: u8) -> Option<Variation> {
         (30, 4) => Group30Var4,
         (30, 5) => Group30Var5,
         (30, 6) => Group30Var6,
+        (31, 0) => Group31Var0,
+        (31, 1) => Group31Var1,
+        (31, 2) => Group31Var2,
+        (31, 3) => Group31Var3,
+        (31, 4) => Group31Var4,
+        (31, 5) => Group31Var5,
+        (31, 6) => Group31Var6,
+        (31, 7) => Group31Var7,
+        (31, 8) => Group31Var8,
+        (33, 0) => Group33Var0,
+        (33, 1) => Group33Var1,
+        (33, 2) => Group33Var2,
+        (33, 3) => Group33Var3,
+        (33, 4) => Group33Var4,
+        (33, 5) => Group33Var5,
+        (33, 6) => Group33Var6,
+        (33, 7) => Group33Var7,
+        (33, 8) => Group33Var8,
         (32, 0) => Group32Var0,
         (32, 1) => Group32Var1,
         (32, 2) => Group32Var2,

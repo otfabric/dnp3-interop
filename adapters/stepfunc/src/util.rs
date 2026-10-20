@@ -127,7 +127,7 @@ enum Family {
 fn family_of_group(group: u8) -> Family {
     match group {
         20..=23 => Family::Counter,
-        30 | 32 | 40 | 42 => Family::Analog,
+        30 | 31 | 32 | 33 | 40 | 42 => Family::Analog,
         _ => Family::Binary,
     }
 }
