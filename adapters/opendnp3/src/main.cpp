@@ -25,7 +25,7 @@ namespace
 const char* kUsage = R"(usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
-         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [--outstations N] [LINK] [TRANSPORT]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT] [--connect HOST:PORT]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [--keep-alive-ms N] [LINK] [TRANSPORT] [operation flags]
@@ -146,6 +146,8 @@ int print_capabilities()
           // Contract 1.3: the management functions, master only.
           {"manageServer", false},
           {"manageClient", true},
+          // Contract 1.3: server --outstations N.
+          {"multipleOutstationsServer", true},
           // The outstation refuses FREEZE AT TIME and freezes counters only;
           // the master cannot carry g50v2 but freezes any group.
           {"freezeAtTimeServer", false},

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dscsystems/go-dnp3"
+	"github.com/dscsystems/go-dnp3/multidrop"
 	"github.com/dscsystems/go-dnp3/outstation"
 )
 
@@ -332,9 +333,9 @@ func runServer(argv []string) int {
 	flags := []string{"fixture", "bind-address", "port", "ready-file", "select-timeout-ms",
 		"confirm-timeout-ms", "local-addr", "remote-addr"}
 	flags = append(append(append(flags, serverTransportFlags...), saFlags...), statisticsFlags...)
-	flags = append(flags, "file-user", "file-password")
+	flags = append(flags, "file-user", "file-password", "outstations")
 	a, err := parseArgs(argv, flags, []string{"link-confirms"})
-	var port, selectTimeout, confirmTimeout, local, remote int64
+	var port, selectTimeout, confirmTimeout, local, remote, count int64
 	var tr transport
 	var sec security
 	if err == nil {
@@ -357,6 +358,9 @@ func runServer(argv []string) int {
 	}
 	if err == nil {
 		remote, err = a.integer("remote-addr", -1, 0, 65519)
+	}
+	if err == nil {
+		count, err = a.integer("outstations", 1, 1, 16)
 	}
 	_, hasUser := a["file-user"]
 	if _, hasPassword := a["file-password"]; err == nil && hasUser != hasPassword {
@@ -387,6 +391,10 @@ func runServer(argv []string) int {
 	}
 	if remote < 0 {
 		remote = int64(fx.MasterAddress)
+	}
+	if last := local + count - 1; last > 65519 || (remote >= local && remote <= last) {
+		logf("server: --outstations %d from link address %d leaves the range or meets the master's", count, local)
+		return exitUsage
 	}
 
 	counts := outstation.DatabaseConfig{
@@ -421,7 +429,6 @@ func runServer(argv []string) int {
 		}
 		files.Authenticate = fileAuthenticator(user, a["file-password"])
 	}
-	ctrl := &controls{fx: fx}
 	config := outstation.Config{
 		LocalAddr:      uint16(local),
 		RemoteAddr:     uint16(remote),
@@ -440,11 +447,19 @@ func runServer(argv []string) int {
 		SecureAuthentication: sec.outstation(),
 	}
 	attributeConfig(fx, &config)
-	session := outstation.New(config, &application{fx: fx}, ctrl)
-	ctrl.session = session
-	if err := configure(session.Database(), fx); err != nil {
-		logf("server: fixture %s: %v", path, err)
-		return exitFixtureInvalid
+	// --outstations N (contract 1.3): N outstations at consecutive link
+	// addresses, each with its own copy of the fixture, on one channel.
+	sessions := make([]*outstation.Session, count)
+	for i := range sessions {
+		c := config
+		c.LocalAddr = uint16(local + int64(i))
+		ctrl := &controls{fx: fx}
+		sessions[i] = outstation.New(c, &application{fx: fx}, ctrl)
+		ctrl.session = sessions[i]
+		if err := configure(sessions[i].Database(), fx); err != nil {
+			logf("server: fixture %s: %v", path, err)
+			return exitFixtureInvalid
+		}
 	}
 
 	ch, address, listening, err := serverChannel(tr, bind, port)
@@ -455,8 +470,21 @@ func runServer(argv []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	done := make(chan error, 1)
-	go func() { done <- session.Run(ctx, sniffChannel{ch}) }()
+	done := make(chan error, len(sessions))
+	if len(sessions) == 1 {
+		go func() { done <- sessions[0].Run(ctx, sniffChannel{ch}) }()
+	} else {
+		bus := multidrop.New(sniffChannel{ch}, multidrop.Config{Log: libraryLog()})
+		defer func() { _ = bus.Close() }()
+		for i, s := range sessions {
+			station, err := bus.Add(multidrop.Station{LocalAddr: uint16(local + int64(i)), RemoteAddr: uint16(remote)})
+			if err != nil {
+				logf("server: %v", err)
+				return exitFailed
+			}
+			go func() { done <- s.Run(ctx, station) }()
+		}
+	}
 	for deadline := time.Now().Add(5 * time.Second); !listening(); time.Sleep(10 * time.Millisecond) {
 		select {
 		case err := <-done:
