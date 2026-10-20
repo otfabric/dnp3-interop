@@ -6,7 +6,7 @@ If you discover a security vulnerability in `dnp3-interop`, please report it res
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email **security@otfabric.com**, or open a private advisory on GitHub (the [Security](https://github.com/otfabric/dnp3-interop/security) tab → **Advisories** → **Report a vulnerability**), with a description, steps to reproduce and the affected image tag or digest.
+Instead, please email **security@otfabric.io**, or open a private advisory on GitHub (the [Security](https://github.com/otfabric/dnp3-interop/security) tab → **Advisories** → **Report a vulnerability**), with a description, steps to reproduce and the affected image tag or digest.
 
 Vulnerabilities in the bundled implementations themselves (opendnp3, Step Function I/O dnp3, dnp3py, DSC Systems go-dnp3) belong upstream; report them there, and tell us so that the pin can be moved.
 
