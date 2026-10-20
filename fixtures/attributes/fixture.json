@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "name": "attributes",
+  "description": "Device attributes (group 0) in the private attribute set 1: read-only and writable ones of each type the contract uses. For adapters with the feature deviceAttributesServer.",
+  "outstation": {
+    "address": 1024,
+    "masterAddress": 1,
+    "needTime": true
+  },
+  "binaryInputs": [
+    {
+      "index": 0,
+      "value": true
+    }
+  ],
+  "deviceAttributes": [
+    {
+      "set": 1,
+      "variation": 1,
+      "type": "visibleString",
+      "value": "dnp3-interop reference outstation"
+    },
+    {
+      "set": 1,
+      "variation": 2,
+      "type": "unsignedInt",
+      "value": 4000000000
+    },
+    {
+      "set": 1,
+      "variation": 3,
+      "type": "signedInt",
+      "value": -42
+    },
+    {
+      "set": 1,
+      "variation": 10,
+      "type": "visibleString",
+      "value": "writable text",
+      "writable": true
+    },
+    {
+      "set": 1,
+      "variation": 11,
+      "type": "unsignedInt",
+      "value": 7,
+      "writable": true
+    }
+  ]
+}

@@ -106,6 +106,18 @@ fixture with these only if it declares them (`pointTypes`, feature
 
 The value rules of analog inputs apply to frozen analog inputs.
 
+### Device attributes
+
+*Fixture format 1.0, used from container contract 1.3.* Only an adapter with
+the feature `deviceAttributesServer` serves a fixture with `deviceAttributes`.
+
+| Field | Meaning |
+|-------|---------|
+| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt", "value", "writable": false }]`. Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
+
+A writable attribute accepts a WRITE of the same type, which replaces its
+value until the outstation restarts.
+
 ### Files
 
 *Fixture format 1.0, used from container contract 1.1.* Files the
@@ -338,6 +350,19 @@ restart 1000 ms.
 Every outstation whose point types cover it serves it;
 `FIXTURE=dnp3py scripts/interop.sh` runs tests/cases-dnp3py.tsv against all
 of them.
+
+## The attributes fixture
+
+`fixtures/attributes/fixture.json`: outstation 1024, master 1, NEED_TIME at
+start, one binary input, and in attribute set 1:
+
+| Variation | Type | Value | Writable |
+|----------:|------|-------|:--------:|
+| 1 | visibleString | "dnp3-interop reference outstation" | no |
+| 2 | unsignedInt | 4000000000 | no |
+| 3 | signedInt | -42 | no |
+| 10 | visibleString | "writable text" | yes |
+| 11 | unsignedInt | 7 | yes |
 
 ## The extended fixture
 

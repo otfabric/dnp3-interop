@@ -131,6 +131,27 @@
         }
       }
     },
+    "deviceAttributes": {
+      "description": "Device attributes, group 0 (contract 1.3). Served only by adapters with the feature deviceAttributesServer.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["set", "variation", "type", "value"],
+        "properties": {
+          "set": { "type": "integer", "minimum": 1, "maximum": 255 },
+          "variation": { "type": "integer", "minimum": 1, "maximum": 253 },
+          "type": { "enum": ["visibleString", "unsignedInt", "signedInt"] },
+          "value": { "type": ["string", "integer"] },
+          "writable": { "type": "boolean" }
+        },
+        "allOf": [
+          { "if": { "properties": { "type": { "const": "visibleString" } } }, "then": { "properties": { "value": { "type": "string", "maxLength": 255 } } } },
+          { "if": { "properties": { "type": { "const": "unsignedInt" } } }, "then": { "properties": { "value": { "type": "integer", "minimum": 0, "maximum": 4294967295 } } } },
+          { "if": { "properties": { "type": { "const": "signedInt" } } }, "then": { "properties": { "value": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 } } } }
+        ]
+      }
+    },
     "directories": {
       "description": "Directories the outstation serves besides those that hold files: empty ones.",
       "type": "array",
