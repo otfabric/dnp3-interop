@@ -505,11 +505,13 @@ func runServer(argv []string) int {
 	emit(object{{"event", "ready"}, {"adapter", adapter}, {"address", address}, {"fixture", fx.Name},
 		{"linkAddress", local}, {"masterAddress", remote}, {"transport", tr.name()}, {"dial", tr.connect != ""}})
 
+	signalled := false
 	select {
 	case <-ctx.Done():
+		signalled = true
 		logf("server: signal, stopping")
 	case err := <-done:
-		logf("server: the session ended: %v", err)
+		logf("server: the session ended without a signal: %v", err)
 	}
 	_ = os.Remove(readyFile)
 	_ = ch.Close()
@@ -517,15 +519,28 @@ func runServer(argv []string) int {
 	case <-done:
 	case <-time.After(2 * time.Second):
 	}
+	// A clean stop is one asked for by SIGTERM or SIGINT; a session that
+	// ends on its own is a failure, without the stopped event.
+	if !signalled {
+		return exitFailed
+	}
 	emit(object{{"event", "stopped"}})
 	return exitOK
 }
 
-// management accepts the management functions (contract 1.3) and reports
-// each one.
+// management accepts the management functions of the contract (1.3: 15..19)
+// and reports each one. The library routes ACTIVATE_CONFIG (31) here too; it
+// is not in the contract, so it is refused and not reported. The library
+// answers a refusal by the handler with PARAMETER_ERROR: with a handler set
+// it has no way to answer 31 with NO_FUNC_CODE_SUPPORT.
 type management struct{}
 
 func (management) Manage(op outstation.ManagementOperation, _ []byte) bool {
-	emit(object{{"event", "manage"}, {"function", uint8(op)}})
-	return true
+	switch op {
+	case outstation.InitializeData, outstation.InitializeApplication, outstation.StartApplication,
+		outstation.StopApplication, outstation.SaveConfiguration:
+		emit(object{{"event", "manage"}, {"function", uint8(op)}})
+		return true
+	}
+	return false
 }

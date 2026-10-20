@@ -75,10 +75,10 @@ OPERATIONS = [
 USAGE = """usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
-         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [--transport tcp] [LINK]
          (serves fixtures within dnp3py's limits: fixtures/dnp3py)
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [LINK] [operation flags]
+         [--collect-ms N] [--transport tcp] [LINK] [operation flags]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
@@ -238,6 +238,15 @@ class Args:
             raise UsageError(f"--{name} must be a number")
         return v
 
+    def transport(self):
+        """--transport: tcp, the one transport dnp3py has; udp and serial need features it lacks."""
+        t = self.str("transport", "tcp")
+        if t in ("udp", "serial"):
+            raise UsageError(f"--transport {t}: this image has TCP only (feature {t} is false)")
+        if t != "tcp":
+            raise UsageError("--transport must be tcp, udp or serial")
+        return t
+
     def classes(self, name, default, minimum):
         out = []
         for item in self.str(name, default).split(","):
@@ -262,6 +271,9 @@ class Recorder:
         self.iin = None
         self.statuses = []
         self.delay_ms = None
+        # operate-multi: the statuses of the last request's echo (the OPERATE,
+        # or the SELECT when the select failed); None until one is sent.
+        self.echo = None
 
     def record(self, blocks, info):
         unsolicited = info.is_unsolicited
@@ -560,14 +572,21 @@ def parse_operate_multi(a):
         else:
             raise UsageError(f"--controls: '{item}' is not a control type with a value in its range")
 
+    async def echo(c, function):
+        """Sends the request and keeps the statuses of its echo, and only those, in recorder.echo."""
+        c.recorder.echo = []
+        before = len(c.recorder.statuses)
+        await c.request(function, objs)
+        c.recorder.echo = c.recorder.statuses[before:]
+        return c.recorder.echo
+
     async def run(c):
         if mode == "direct":
-            await c.request(FunctionCode.DIRECT_OPERATE, objs)
+            await echo(c, FunctionCode.DIRECT_OPERATE)
             return
-        await c.request(FunctionCode.SELECT, objs)
-        last = c.recorder.statuses[-len(objs):]
-        if len(last) == len(objs) and not any(last) and not (c.recorder.iin or 0) & REQUEST_ERRORS:
-            await c.request(FunctionCode.OPERATE, objs)
+        selected = await echo(c, FunctionCode.SELECT)
+        if len(selected) == len(objs) and not any(selected) and not (c.recorder.iin or 0) & REQUEST_ERRORS:
+            await echo(c, FunctionCode.OPERATE)
 
     run.count = len(objs)
     return run
@@ -640,10 +659,14 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
 
     command_status = recorder.statuses[-1] if recorder.statuses else None
     command_statuses = None
-    if op == "operate-multi" and len(recorder.statuses) >= request.count:
-        # The statuses of the last response: the OPERATE, or the SELECT that failed.
-        command_statuses = recorder.statuses[-request.count:]
-        command_status = next((s for s in command_statuses if s != 0), 0)
+    if op == "operate-multi":
+        # One status per control echoed in the last response: the OPERATE, or
+        # the SELECT that failed. The first refusal decides, not the last
+        # status received.
+        command_status = None
+        if recorder.echo:
+            command_statuses = recorder.echo
+            command_status = next((s for s in command_statuses if s != 0), 0)
     recorder.command_statuses = command_statuses
     if failure is None and connected and op != "monitor":
         if (recorder.iin or 0) & REQUEST_ERRORS and not getattr(request, "no_response", False):
@@ -655,6 +678,8 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             recorder.command_statuses = None
         elif op in ("operate", "operate-multi") and command_status is not None and command_status != 0:
             failure = Failure("command-failed", f"the outstation answered {status_name(command_status)}")
+        elif op == "operate-multi" and command_statuses is not None and len(command_statuses) < request.count:
+            failure = Failure("failed", f"the outstation echoed {len(command_statuses)} of {request.count} controls")
         elif op in ("operate", "operate-multi") and command_status is None and not getattr(request, "no_response", False):
             failure = Failure("failed", "the outstation's echo did not carry a status")
         elif op == "restart" and recorder.delay_ms is None:
@@ -683,7 +708,7 @@ def client_main(argv):
     if op not in OPERATIONS:
         log(f"client: unknown operation '{op}'")
         return EXIT_USAGE
-    flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms"}
+    flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "transport"}
     switches = set()
     flags |= {
         "event-poll": {"classes"}, "enable-unsolicited": {"classes"}, "disable-unsolicited": {"classes"},
@@ -697,6 +722,7 @@ def client_main(argv):
         switches = {"clear", "no-ack"}
     try:
         a = Args(argv[1:], flags, switches)
+        a.transport()
         host = a.required("host")
         port = a.integer("port", 20000, 1, 65535)
         local = a.integer("local-addr", 1, 0, 65519)
@@ -1115,7 +1141,8 @@ def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
 def server_main(argv):
     try:
         a = Args(argv, ["fixture", "bind-address", "port", "ready-file", "select-timeout-ms", "confirm-timeout-ms",
-                        "local-addr", "remote-addr"])
+                        "local-addr", "remote-addr", "transport"])
+        a.transport()
         path = a.str("fixture", DEFAULT_FIXTURE)
         bind = a.str("bind-address", "0.0.0.0")
         port = a.integer("port", 20000, 1, 65535)
@@ -1164,8 +1191,9 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     done, _ = await asyncio.wait([task, asyncio.create_task(stop.wait())], return_when=asyncio.FIRST_COMPLETED)
-    if task in done:
-        log(f"server: the runner ended: {task.exception() if not task.cancelled() else 'cancelled'}")
+    signalled = stop.is_set()
+    if task in done and not signalled:
+        log(f"server: the runner ended without a signal: {task.exception() if not task.cancelled() else 'cancelled'}")
     try:
         os.remove(ready_file)
     except OSError:
@@ -1176,6 +1204,10 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
         await asyncio.wait_for(task, 2)
     except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
         pass
+    # A clean stop is one asked for by SIGTERM or SIGINT; a runner that ends
+    # on its own is a failure, without the stopped event.
+    if not signalled:
+        return EXIT_FAILED
     emit({"event": "stopped"})
     return EXIT_OK
 
@@ -1224,6 +1256,10 @@ def print_capabilities():
             "fileServer": False,
             "fileClient": False,
             "fileDeleteClient": False,
+            "fileAppendServer": False,
+            "fileAppendClient": False,
+            "fileAuthServer": False,
+            "fileAuthClient": False,
             "secureAuthentication": False,
             # Contract 1.2: the decoders know none of g13, g31, g33, g43, g50v4.
             "commandEventsServer": False,
@@ -1264,6 +1300,12 @@ def print_capabilities():
             "freezeAtTimeClient": True,
             "analogFreezeServer": False,
             "analogFreezeClient": True,
+            # Contract 1.3: neither role reads or writes group 34 (the
+            # outstation's deadbands are configuration only).
+            "deadbandWriteServer": False,
+            "deadbandWriteClient": False,
+            "deadbandReadServer": False,
+            "deadbandReadClient": False,
         },
         "pointTypes": list(SERVED),
         # Contract 1.2: what the outstation does differently from the master.
@@ -1273,7 +1315,6 @@ def print_capabilities():
             "read": False,
             "unsolicited": False,
             "octetStrings": False,
-            "timeSyncOnDemand": True,
         },
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": OPERATIONS,
