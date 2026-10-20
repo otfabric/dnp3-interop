@@ -1,0 +1,159 @@
+name: Release qualification
+run-name: "Release qualification of ${{ inputs.tag }}"
+
+# Qualifies the published images of a release: the smoke and cross-stack
+# self-tests run again against exactly the images in the registry, natively on
+# linux/amd64 and linux/arm64, and produce a compatibility report; every image
+# is scanned for vulnerabilities and gets a CycloneDX SBOM per architecture.
+# The report, the scan summary, the scan results and the SBOMs are attached to
+# the GitHub release.
+#
+# The release workflow calls this after it has published a release; run it by
+# hand to qualify an earlier release again. The tooling (scripts/) is this
+# workflow's revision; the fixtures and the cases (fixtures/, tests/) are the
+# release's own, so the images are tested against what they were built with.
+# Vulnerability findings are recorded, not gated on (SECURITY.md); a failing
+# self-test fails the qualification after its report has been attached.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.1.0"
+        required: true
+        type: string
+      upload:
+        description: "Attach the results to the GitHub release"
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      upload:
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # attach the results to the release
+
+env:
+  REGISTRY: ghcr.io/otfabric
+  VERSION: ${{ inputs.tag }}
+  TOOLS_REGISTRY: mirror.gcr.io
+
+jobs:
+  selftest:
+    name: Self-test the published images (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema
+
+      - name: The release's fixtures and cases
+        run: |
+          git checkout "refs/tags/${VERSION}" -- fixtures tests
+          git diff --cached --stat
+
+      - name: Pull the published images
+        run: |
+          for a in $(make -s print-adapters); do
+            scripts/retry.sh docker pull --quiet "${REGISTRY}/dnp3-interop-${a}:${VERSION}"
+            echo "${a} $(docker image inspect --format '{{index .RepoDigests 0}}' "${REGISTRY}/dnp3-interop-${a}:${VERSION}")"
+          done | tee pulled.txt
+
+      - name: Smoke and cross-stack self-test of those images
+        id: test
+        continue-on-error: true
+        run: make documents
+
+      - name: Compatibility report
+        id: report
+        continue-on-error: true
+        run: |
+          python3 scripts/compat-report.py reports \
+            --title "dnp3-interop ${VERSION} on linux/${{ matrix.arch }}" > "compatibility-${{ matrix.arch }}.md"
+          {
+            echo ""
+            echo "## Images"
+            echo ""
+            # shellcheck disable=SC2016  # the backticks are Markdown
+            sed 's/^\([a-z0-9]*\) \(.*\)$/- `\1`: `\2`/' pulled.txt
+          } >> "compatibility-${{ matrix.arch }}.md"
+          cat "compatibility-${{ matrix.arch }}.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: qualify-selftest-${{ matrix.arch }}
+          path: |
+            compatibility-${{ matrix.arch }}.md
+            reports/
+          if-no-files-found: ignore
+
+      - name: The self-test passed
+        if: steps.test.outcome != 'success' || steps.report.outcome != 'success'
+        run: |
+          echo "::error::the self-test of the published images failed; see compatibility-${{ matrix.arch }}.md"
+          exit 1
+
+  scan:
+    name: Vulnerability scan and SBOMs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan every image for linux/amd64 and linux/arm64
+        run: |
+          read -ra adapters <<<"$(make -s print-adapters)"
+          scripts/qualify.sh qualify "${adapters[@]}"
+          cat qualify/vulnerabilities.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: qualify-scan
+          path: qualify/
+          if-no-files-found: ignore
+
+  attach:
+    name: Attach to the release
+    runs-on: ubuntu-24.04
+    needs: [selftest, scan]
+    if: always() && inputs.upload
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: qualify-*
+          path: artifacts
+      - name: Assemble and attach
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p out
+          {
+            for arch in amd64 arm64; do
+              f="artifacts/qualify-selftest-${arch}/compatibility-${arch}.md"
+              if [[ -f "${f}" ]]; then cat "${f}"; else echo "# dnp3-interop ${VERSION} on linux/${arch}"; echo; echo "The self-test produced no report."; fi
+              echo
+            done
+          } > out/compatibility-report.md
+          cp artifacts/qualify-scan/vulnerabilities.md out/ 2>/dev/null || echo "The scan produced no summary." > out/vulnerabilities.md
+          tar -czf out/sboms.tar.gz -C artifacts/qualify-scan --wildcards 'sbom-*.cdx.json' 2>/dev/null || true
+          tar -czf out/vulnerability-scans.tar.gz -C artifacts/qualify-scan --wildcards 'vulns-*.json' 2>/dev/null || true
+          ls -l out
+          gh release upload "${VERSION}" out/* --clobber

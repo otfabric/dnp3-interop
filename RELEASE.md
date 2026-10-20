@@ -5,7 +5,8 @@
 1. `make ci` on the commit to release.
 2. Update `interop_version` in `versions.yaml` and the notes below.
 3. Tag `vX.Y.Z` and push the tag. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates, builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly them to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins and the digests of the multi-arch images) and `checksums.txt`.
-4. Consumers pin the digests from `manifest.json`.
+4. The release workflow then runs the **Release qualification** workflow on what it published: the smoke and cross-stack self-tests again, natively on both architectures, against the images in the registry; a compatibility report from their documents; a Trivy vulnerability scan and a CycloneDX SBOM of every image and architecture. It attaches `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz` to the release. Run it by hand (Actions → Release qualification) to qualify an earlier release again; vulnerability findings are recorded, not gated on.
+5. Consumers pin the digests from `manifest.json`.
 
 Tags are immutable. A fix is a new version.
 

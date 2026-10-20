@@ -168,3 +168,14 @@ jobs:
           files: |
             manifest.json
             checksums.txt
+
+  # Qualification of what was just published: the self-tests again against the
+  # registry's images, a compatibility report, a vulnerability scan and SBOMs,
+  # all attached to the release.
+  qualify:
+    name: Release qualification
+    needs: release
+    uses: ./.github/workflows/qualify.yml
+    with:
+      tag: ${{ github.ref_name }}
+      upload: true

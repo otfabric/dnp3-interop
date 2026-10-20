@@ -1,6 +1,7 @@
 .git
 .github
 reports
+qualify
 **/target
 **/build
 adapters/tmw/vendor

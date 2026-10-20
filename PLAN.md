@@ -132,7 +132,10 @@ each other (REQUIREMENTS.md R8.3):
 - Secure authentication v5 (g120): go-dnp3 in both roles; a second stack only with Triangle MicroWorks, which is on hold.
 - Further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
 
-## Phase 7 - Release qualification (open)
+## Phase 7 - Release qualification
 
-- Image scanning and SBOMs attached to releases
-- A compatibility report generated from the self-test documents
+- Every check of the smoke and cross-stack self-tests is recorded (`results-*.tsv` beside the documents when `REPORT_DIR` is set); `scripts/compat-report.py` turns them and the capability documents into a compatibility report: adapters, totals, a client × server matrix, failures, known-bug hits, skips by reason, declared features.
+- `scripts/qualify.sh` scans every image of a release from the registry with Trivy 0.76.0 (pinned by digest), for linux/amd64 and linux/arm64, and writes a CycloneDX SBOM of each and a summary (`vulnerabilities.md`).
+- The **Release qualification** workflow (`.github/workflows/qualify.yml`) runs both against a published release, natively on both architectures, and attaches the results to the GitHub release; the release workflow calls it after publishing.
+
+**Gate:** a release carries its compatibility report, scan summary and SBOMs, produced from the published images.

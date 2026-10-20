@@ -177,6 +177,8 @@ make validate    # fixtures against the schema and the cross-field rules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
 make candidate-dnp3py CANDIDATE_VERSION=0.7.0      # self-test an adapter on another upstream release
+make documents report                              # self-tests with every document kept, then the compatibility report
+VERSION=v0.1.0 make qualify                        # Trivy scan and SBOMs of a published release, into qualify/
 ```
 
 The **Upstream candidates** workflow resolves the latest release of every

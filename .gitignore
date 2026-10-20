@@ -4,6 +4,7 @@ adapters/stepfunc/target/
 adapters/dscsystems/dnp3-interop
 adapters/tmw/vendor/
 reports/
+qualify/
 
 # Editors and OS
 .vscode/

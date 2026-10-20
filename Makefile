@@ -43,7 +43,7 @@ export REGISTRY VERSION
 
 # image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop buildx publish buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint images smoke interop qualify report print-adapters buildx publish buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -69,7 +69,7 @@ validate: ## Validate every fixture against the schema and the cross-field rules
 	fi
 
 documents: ## Run the self-tests keeping every document, and validate them against schemas/
-	@rm -rf reports && mkdir -p reports
+	@rm -rf reports qualify && mkdir -p reports
 	@REPORT_DIR=reports $(MAKE) --no-print-directory -j$(JOBS) smoke
 	@REPORT_DIR=reports $(MAKE) --no-print-directory interop
 	@echo "Validating documents..."
@@ -134,6 +134,17 @@ candidate-%: FORCE ## Build one adapter on CANDIDATE_VERSION (opendnp3: and CAND
 	@for a in $(filter-out $*,$(ADAPTERS)); do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate || exit 1; done
 	@VERSION=candidate scripts/smoke.sh $*
 	@VERSION=candidate scripts/interop.sh $(ADAPTERS)
+
+# ── Release qualification ─────────────────────────────────────────────────────
+
+qualify: ## Scan the images of VERSION from the registry with Trivy and write SBOMs into qualify/ (scripts/qualify.sh)
+	@scripts/qualify.sh qualify $(ADAPTERS)
+
+report: ## Write the compatibility report of the documents in reports/ (run make documents first)
+	@python3 scripts/compat-report.py reports --title "dnp3-interop $(VERSION) compatibility report"
+
+print-adapters: ## Print the adapters (ADAPTERS), one line
+	@echo $(ADAPTERS)
 
 capabilities: ## Print the capability document of every adapter
 	@for a in $(ADAPTERS); do docker run --rm $(call image,$$a):$(VERSION) print-capabilities; done

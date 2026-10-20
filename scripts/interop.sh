@@ -88,7 +88,7 @@ supported() {
 }
 
 SKIPPED=0
-skip() { SKIPPED=$((SKIPPED + 1)); [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; return 0; }
+skip() { SKIPPED=$((SKIPPED + 1)); record skip "$*"; [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; return 0; }
 
 # known_bug <client> <server> <operation>: prints the description of a known
 # bug that may affect this pairing and operation, if there is one.
@@ -108,6 +108,7 @@ known_bug() {
 hit_known_bug() {
     KNOWN=$((KNOWN + 1))
     echo "$3" >> "${WORK}/reproduced"
+    record known "$1: $2 -- $3"
     [[ -n "${VERBOSE:-}" ]] && log "known bug: $1: $2"
     return 0
 }
@@ -174,6 +175,7 @@ want_flags=$(jq -cS '
 suite() {
     local server="$1" n=0 state want_exit want_summary needs operation client pair name doc summary bug got got_flags procedure
     PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
+    if [[ -n "${REPORT_DIR:-}" ]]; then RESULTS_FILE="${REPORT_DIR}/results-interop-${server}.tsv"; : > "${RESULTS_FILE}"; fi
     while IFS=$'\t' read -r state want_exit want_summary needs operation; do
         [[ -z "${state}" || "${state}" == \#* ]] && continue
         n=$((n + 1))
@@ -343,6 +345,7 @@ suite() {
 }
 
 log "adapters: ${ADAPTERS[*]} (${VERSION})"
+[[ -n "${REPORT_DIR:-}" ]] && mkdir -p "${REPORT_DIR}"
 servers=()
 for adapter in "${ADAPTERS[@]}"; do
     has_role "${adapter}" server && servers+=("${adapter}")
@@ -361,6 +364,8 @@ for server in "${servers[@]}"; do
     read -r p f s k < "${WORK}/tally-${server}"
     PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
+
+[[ -n "${REPORT_DIR:-}" ]] && { RESULTS_FILE="${REPORT_DIR}/results-interop-agreement.tsv"; : > "${RESULTS_FILE}"; }
 
 # ---- every pairing that met a case's expectation returned the same document ----
 n=0

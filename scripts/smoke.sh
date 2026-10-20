@@ -38,6 +38,8 @@ expect_exit() {  # expect_exit <code> <label> <docker run args...>
 caps=$(docker run --rm "${IMAGE}" print-capabilities 2>/dev/null)
 if [[ -n "${REPORT_DIR:-}" ]]; then
     mkdir -p "${REPORT_DIR}"
+    RESULTS_FILE="${REPORT_DIR}/results-smoke-${ADAPTER}.tsv"
+    : > "${RESULTS_FILE}"
     printf '%s\n' "${caps}" > "${REPORT_DIR}/capabilities-${ADAPTER}.json"
 fi
 if jq -e --arg a "${ADAPTER}" '

@@ -16,8 +16,11 @@ PASS=0
 FAIL=0
 
 log()  { echo "[$(basename "$0" .sh)] $*" >&2; }
-ok()   { PASS=$((PASS + 1)); [[ -n "${VERBOSE:-}" ]] && log "ok: $*"; return 0; }
-fail() { FAIL=$((FAIL + 1)); log "FAIL: $*"; return 0; }
+# record <outcome> <label>: one line per check in RESULTS_FILE, when set, for
+# scripts/compat-report.py. Outcomes: ok, fail, skip, known.
+record() { [[ -n "${RESULTS_FILE:-}" ]] && printf '%s\t%s\n' "$1" "$2" >> "${RESULTS_FILE}"; return 0; }
+ok()   { PASS=$((PASS + 1)); record ok "$*"; [[ -n "${VERBOSE:-}" ]] && log "ok: $*"; return 0; }
+fail() { FAIL=$((FAIL + 1)); record fail "$*"; log "FAIL: $*"; return 0; }
 
 image_of() { echo "${REGISTRY}/dnp3-interop-$1:${VERSION}"; }
 
