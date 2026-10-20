@@ -44,7 +44,7 @@ framework.
   | P0 | Step Function I/O dnp3 (`stepfunc/dnp3`) | Rust | non-commercial licence | yes |
   | P0 | opendnp3 (`dnp3/opendnp3`, archived) | C++ | Apache-2.0 | yes |
   | P1 | dnp3py (`craigpnnl/dnp3py`) | Python | MIT | yes |
-  | P1 | DSC Systems go-dnp3 (`dscsystems/go-dnp3`), experimental | Go | GPL-3.0 | yes |
+  | P1 | DSC Systems go-dnp3 (`dscsystems/go-dnp3`), experimental | Go | GPL-3.0-or-later | yes |
   | P2 | Triangle MicroWorks DNP3 Source Code Library | C | commercial | yes |
 
   P0 adapters are mandatory, P1 strongly recommended (dnp3py) or recommended

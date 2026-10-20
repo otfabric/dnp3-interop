@@ -17,11 +17,13 @@ integrating third-party protocol stacks into production applications.
 
 The stacks do not all do the same: the stepfunc outstation refuses ASSIGN
 CLASS, opendnp3's master synchronizes time only when the outstation asks for
-it, DSC go-dnp3's master reads only ranges and classes, and dnp3py's outstation (¹)
-serves only the `dnp3py` fixture, the baseline within its limits. Each image says what it supports (`print-capabilities`); see
+it, DSC go-dnp3's master reads only ranges and classes, and dnp3py's
+outstation (¹) serves only the `dnp3py` fixture, the baseline within its
+limits. Each image says what it supports (`print-capabilities`); see
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
-Beyond DNP3 over TCP (container contract 1.0), contract 1.1 covers:
+Container contract 1.0 covers DNP3 over TCP. Contract 1.1 adds transports,
+file transfer and secure authentication:
 
 | | stepfunc | opendnp3 | dscsystems | dnp3py |
 |---|:-:|:-:|:-:|:-:|
@@ -30,6 +32,15 @@ Beyond DNP3 over TCP (container contract 1.0), contract 1.1 covers:
 | Secure authentication v5 (g120) | no | no | both roles | no |
 
 ¹ dnp3py's outstation serves the `dnp3py` fixture only.
+
+Contract 1.2 adds frozen analog inputs, command events, time and interval
+objects, dual end point (the outstation dials) and security statistics.
+Contract 1.3, the current one, adds device attributes, several controls in
+one request, freeze at time and analog freeze, analog deadbands, file append
+and authentication, event buffer overflow, link-layer confirms and
+keep-alives, broadcast, management functions and several outstations on one
+channel. Which adapter has which is in
+[docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
 The Step Function I/O dnp3 crate is distributed under a non-commercial,
 non-production licence. Its image exists for interoperability testing only;
@@ -78,16 +89,15 @@ make smoke       # container contract of each image
 make interop     # every master against every outstation
 ```
 
-A reference outstation on loopback, and a reference master against it:
+A reference outstation, and a reference master in its network namespace:
 
 ```sh
-make run-opendnp3        # 127.0.0.1:20001, baseline fixture, Ctrl-C to stop
-```
-
-```sh
-docker run --rm --add-host=host.docker.internal:host-gateway \
+docker run -d --rm --name ref ghcr.io/otfabric/dnp3-interop-opendnp3:dev server
+until docker exec ref test -f /run/dnp3-interop/ready; do sleep 0.1; done
+docker run --rm --network container:ref \
   ghcr.io/otfabric/dnp3-interop-stepfunc:dev \
-  client integrity-poll --host host.docker.internal --port 20001 | jq .
+  client integrity-poll --host 127.0.0.1 --port 20000 | jq .
+docker stop ref
 ```
 
 ```json
@@ -106,13 +116,27 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
 }
 ```
 
-(abridged). Every image has the same commands:
+(abridged). `make run-stepfunc`, `make run-opendnp3` and
+`make run-dscsystems` run an outstation on 127.0.0.1:20000, 20001 and 20002
+(baseline fixture, Ctrl-C to stop). dnp3py has no such target and serves its
+own fixture:
+
+```sh
+docker run --rm -p 127.0.0.1:20003:20000 ghcr.io/otfabric/dnp3-interop-dnp3py:dev \
+  server --fixture /fixtures/dnp3py/fixture.json
+```
+
+Every image has the same commands:
 
 ```text
 server               an outstation serving a fixture
 client <operation>   a master running one of: integrity-poll, event-poll, read,
-                     operate, time-sync, restart, enable-unsolicited,
-                     disable-unsolicited, assign-class, freeze, monitor
+                     operate, operate-multi, time-sync, restart,
+                     enable-unsolicited, disable-unsolicited, assign-class,
+                     freeze, monitor, file-get, file-put, file-ls, file-info,
+                     file-delete, file-authenticate, attribute-read,
+                     attribute-write, deadband-write, manage
+                     (see docs/CONTAINER_CONTRACT.md; not every image has all)
 print-capabilities   what this adapter supports, as JSON
 print-fixture        the fixture baked into the image
 version              adapter and upstream versions
@@ -145,6 +169,9 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
   --host host.docker.internal --port <port of the library's outstation>
 ```
 
+This is for Docker Desktop. On Linux use `--network host` and
+`--host 127.0.0.1` instead of `--add-host` and `host.docker.internal`.
+
 **Expected values** come from the image: `print-fixture baseline` prints the
 fixture it was built with, so expectations cannot drift from the image.
 
@@ -163,13 +190,17 @@ dnp3-interop/
 │   ├── opendnp3/        C++ adapter: Dockerfile, CMakeLists.txt, src/
 │   ├── stepfunc/        Rust adapter: Dockerfile, Cargo.toml, Cargo.lock, src/
 │   ├── dscsystems/      Go adapter: Dockerfile, go.mod, *.go
-│   └── dnp3py/          Python adapter: Dockerfile, requirements.txt, dnp3_interop.py
+│   ├── dnp3py/          Python adapter: Dockerfile, requirements.txt, dnp3_interop.py
+│   └── LICENSE          MIT, except adapters/dscsystems/ (GPL-3.0-or-later)
 ├── fixtures/
 │   ├── schema/          JSON Schema of the fixture format
-│   └── baseline/        the baseline outstation
+│   ├── baseline/        the baseline outstation
+│   ├── dnp3py/          what dnp3py's outstation can serve
+│   └── extended/, files/, attributes/, controls/, events/   fixtures of contract 1.1..1.3 features
 ├── schemas/             JSON Schemas of the capability and client result documents
 ├── tests/cases.tsv      self-test cases: operation, expected outcome, features needed
-├── tests/known-bugs.tsv bugs of upstream versions that are built as candidates
+├── tests/cases-dnp3py.tsv the cases against the dnp3py fixture
+├── tests/known-bugs.tsv known bugs of upstream versions
 ├── scripts/             validate, smoke, cross-stack self-test
 ├── docs/                contract, fixtures, capabilities, compatibility
 ├── licenses/            licence texts the adapters refer to
@@ -182,14 +213,14 @@ dnp3-interop/
 
 ```sh
 make help        # all targets
-make ci          # validate, lint, build, smoke, cross-stack and contract 1.1 self-tests, document schemas
-make features    # cross-stack self-test of TLS, UDP, serial, file transfer and secure authentication
+make ci          # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
+make features    # cross-stack self-test of the contract 1.1..1.3 features (TLS, UDP, serial, files, SAv5, ...)
 make validate    # fixtures against the schema and the cross-field rules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
 make candidate-dnp3py CANDIDATE_VERSION=0.7.0      # self-test an adapter on another upstream release
 make documents report                              # self-tests with every document kept, then the compatibility report
-VERSION=v0.1.0 make qualify                        # Trivy scan and SBOMs of a published release, into qualify/
+VERSION=v0.4.1 make qualify                        # Trivy scan and SBOMs of a published release, into qualify/
 ```
 
 The **Upstream candidates** workflow resolves the latest release of every
@@ -214,9 +245,9 @@ only, and they must never be attached to a plant network. See
 ## License
 
 The repository's own code and documentation, and the adapter sources, are
-MIT-licensed, except `adapters/dscsystems/`, which links a GPL-3.0 library and
-is GPL-3.0-or-later. The images contain the upstream libraries under their
-own licences: opendnp3 is Apache-2.0, DSC go-dnp3 is GPL-3.0, dnp3py is MIT, and the Step
-Function I/O dnp3 crate is under a non-commercial, non-production licence
-agreement. See [LICENSE](LICENSE) and
+MIT-licensed, except `adapters/dscsystems/`, which links a GPL-3.0-or-later
+library and is GPL-3.0-or-later. The images contain the upstream libraries
+under their own licences: opendnp3 is Apache-2.0, DSC go-dnp3 is
+GPL-3.0-or-later, dnp3py is MIT, and the Step Function I/O dnp3 crate is
+under a non-commercial, non-production licence agreement. See [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -39,15 +39,18 @@ SIXTEEN_BIT = {
 # Static variations that carry an integer (not floating point) value.
 INTEGER_ANALOG = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2}, "frozenAnalogInputs": {1, 2, 5, 6}}
 DEFAULT_STATIC = {"counters": 1, "frozenCounters": 1, "analogInputs": 1, "analogOutputs": 1, "frozenAnalogInputs": 1}
-# Event variations whose value field is 16 bits wide.
+# Event variations whose value field is 16 bits wide. Frozen analog input
+# events (g33) differ from the static g31: v1 32-bit, v2 16-bit, v3 and v4
+# the same with time, v5..v8 floating point; the fixture format allows 1, 2,
+# 5 and 6.
 SIXTEEN_BIT_EVENT = {
     "counters": {2, 6},
     "frozenCounters": {2, 6},
     "analogInputs": {2, 4},
     "analogOutputs": {2, 4},
-    "frozenAnalogInputs": {2, 6},
+    "frozenAnalogInputs": {2},
 }
-INTEGER_ANALOG_EVENT = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2, 3, 4}, "frozenAnalogInputs": {1, 2, 5, 6}}
+INTEGER_ANALOG_EVENT = {"analogInputs": {1, 2, 3, 4}, "analogOutputs": {1, 2, 3, 4}, "frozenAnalogInputs": {1, 2}}
 DEFAULT_EVENT = {"counters": 1, "frozenCounters": 1, "analogInputs": 1, "analogOutputs": 1, "frozenAnalogInputs": 1}
 # Static variations without a flags octet: such a point is reported ONLINE.
 NO_FLAGS = {"binaryInputs": {1}, "counters": {5, 6}, "frozenCounters": {9, 10}, "analogInputs": {3, 4},

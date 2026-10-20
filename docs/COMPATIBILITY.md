@@ -16,7 +16,7 @@ self-tested as a candidate.
 |---------|----------|--------|--------|-----|--------|
 | `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.7.0 | 1.7.0 | crate `dnp3 =1.7.0` from crates.io, checksum in `Cargo.lock` (tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca`) | independent, Rust |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
-| `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (client role) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
+| `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.1 | v0.8.1 | Go module `github.com/dscsystems/go-dnp3@v0.8.1` (commit `70ff72bb09755db183d1bd69859adc72cd663aec`), checksum in `go.sum` | independent, Go |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
@@ -66,22 +66,15 @@ can send.
 ⁴ with two known bugs of the DSC go-dnp3 outstation's freeze, below.
 ⁵ with the known address-filtering bug below.
 ⁶ with direct operate no ack and the freezes without acknowledgement, which
-the dnp3py master sends. dnp3py has no server column: it is a master only.
+the dnp3py master sends. dnp3py has no server column: it cannot serve the
+baseline. How the four outstations compare on the `dnp3py` fixture is below
+([dnp3py's outstation: the dnp3py fixture](#dnp3pys-outstation-the-dnp3py-fixture)).
 
-Verified on linux/arm64 with the pins above on 2026-10-20: 48 cases, the
-value checks over 12 pairings; 1114 checks passed, none failed, 19 known-bug
-hits, 117 skipped (a capability a pairing does not declare; pairings with
-dnp3py as the server are not counted, it has no server role). The known-bug
-hits: the first SELECT on a fresh stepfunc outstation, 12 (stepfunc, opendnp3
-and dnp3py masters; for the first two it depends on timing, so the count
-varies between runs); the DSC go-dnp3 freeze, 6; DSC go-dnp3 against itself with a
-wrong master address, 1. The 484 documents the run kept validate against
-`schemas/`. `make smoke`: 32 of 32 checks for each server adapter, 28 of 28
-for dnp3py.
-
-The same on GitHub Actions, natively on both architectures (CI runs
-39336826490 and 39339934244): every smoke check passed for all four adapters,
-and the cross-stack self-test had no failure on linux/amd64 or linux/arm64.
+The numbers of a run (checks passed and failed, known-bug hits, skips, per
+pairing and architecture) are not kept here: every release's qualification
+runs the self-tests on the published images, natively on linux/amd64 and
+linux/arm64, and attaches them as `compatibility-report.md` to the
+[GitHub release](https://github.com/otfabric/dnp3-interop/releases).
 
 The cross-stack self-test runs one suite per server adapter at the same time
 (an outstation serves one master at a time, so the work is split by server)
@@ -228,6 +221,15 @@ opendnp3 and DSC go-dnp3 outstations apply a limit the same way: the controls
 within it are carried out, the rest answered TOO_MANY_OPS. dnp3py's ignores
 the limit. stepfunc's master reports only the first refused control.
 
+### Event buffer overflow
+
+All four outstations apply the fixture's `eventBufferSize` and set IIN2.3
+EVENT_BUFFER_OVERFLOW when an event does not fit; the event is lost. They
+count differently: stepfunc and opendnp3 per type, DSC go-dnp3 over all types
+(one buffer), dnp3py per type and class, so a class holds three times the
+size (FIXTURES.md). dnp3py 0.6.0 keeps IIN2.3 set after the master has
+confirmed the events, where the others clear it (a known bug).
+
 ### Device attributes: stepfunc and DSC go-dnp3
 
 Both outstations serve the attributes of a private set, accept writes of the
@@ -361,14 +363,15 @@ outstation that does not set NEED_TIME it fails with `failed`; the capability
 `timeSyncOnDemand` is false. The baseline fixture sets NEED_TIME at start for
 this reason.
 
-### No master here sends DIRECT OPERATE NO ACK or the `_NR` freezes
+### Neither opendnp3's nor stepfunc's master sends DIRECT OPERATE NO ACK or the `_NR` freezes
 
 Neither opendnp3's master nor stepfunc's has a direct-operate-no-ack mode,
 and both send any other function code through a task that waits for a
 response (`PerformFunction`, `send_and_expect_empty_response`), so a `_NR`
-request would end in a timeout. Both outstations handle these requests, but
-nothing in the repository can send them yet; the features are declared false
-on both sides.
+request would end in a timeout. Their `directOperateNoAckClient` and
+`freezeNoAckClient` are false. The DSC go-dnp3 and dnp3py masters send them
+(DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested with
+them.
 
 ### The first SELECT on a fresh stepfunc outstation fails with NO_SELECT
 
@@ -529,8 +532,9 @@ outstation's first-SELECT bug every time.
 
 It has no double-bit inputs, octet strings or per-point variations (analog
 inputs are always g30v1), no analog output events, and its TCP runner does
-not appear to send unsolicited responses. The adapter has the client role
-only; serving dnp3py would need a second fixture within those limits.
+not send unsolicited responses. The adapter serves the `dnp3py` fixture
+instead (see
+[dnp3py's outstation: the dnp3py fixture](#dnp3pys-outstation-the-dnp3py-fixture)).
 
 ### DSC go-dnp3 refuses a READ without object headers
 

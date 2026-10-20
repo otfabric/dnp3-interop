@@ -37,7 +37,8 @@ way; this document says what "the same way" is.
 
 ### Points
 
-Eight arrays, one per point type, each optional. Within a type, indexes are
+Eight arrays, one per point type, each optional (two more under
+[More point types](#more-point-types)). Within a type, indexes are
 unique; they need not be contiguous.
 
 | Array | Static group | Event group | Controlled by |
@@ -74,7 +75,9 @@ unique; they need not be contiguous.
 | `analogOutputs` | number | 1, 2, 3, 4 | 1, 2, 3, 4, 5, 6, 7, 8 |
 | `octetStrings` | 1..255 octets, lower-case hex | the length | the length |
 
-These are the variations both P0 adapters serve. Variations with relative
+These are the variations the stepfunc, opendnp3 and dscsystems outstations
+serve (dnp3py serves fewer: see the `dnp3py` fixture in
+[COMPATIBILITY.md](COMPATIBILITY.md#dnp3pys-outstation-the-dnp3py-fixture)). Variations with relative
 time (g2v3, g4v3) are left out because they need a CTO header whose content
 depends on the outstation.
 
@@ -91,8 +94,10 @@ Cross-field rules, checked by `make validate` and by every adapter:
 - Every frozen counter has a counter with the same index: that is the
   counter a freeze copies.
 - A point whose static variation has no flags octet (g1v1, g20v5, g20v6,
-  g21v9, g21v10, g30v3, g30v4) keeps the default flags `["ONLINE"]`: a master
-  reads it as online whatever the outstation holds.
+  g21v9, g21v10, g30v3, g30v4, g31v5, g31v6) keeps the default flags
+  `["ONLINE"]`: a master reads it as online whatever the outstation holds.
+- `commandEventVariation` needs `commandEventClass`.
+- Each (`set`, `variation`) of `deviceAttributes` is listed once.
 
 ### More point types
 
@@ -115,7 +120,7 @@ the feature `deviceAttributesServer` serves a fixture with `deviceAttributes`.
 
 | Field | Meaning |
 |-------|---------|
-| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt", "value", "writable": false }]`. Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
+| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt", "value", "writable": false }]`; a `visibleString` value has at most 255 characters (the stepfunc and dscsystems adapters count octets). Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
 
 A writable attribute accepts a WRITE of the same type, which replaces its
 value until the outstation restarts.
@@ -130,7 +135,7 @@ every other adapter refuses it (exit 4).
 
 | Field | Meaning |
 |-------|---------|
-| `files` | `[{ "name": "/data/blocks.bin", "content": "<hex>" }]`: absolute names of path elements of letters, digits, `.`, `_` and `-` (not starting with `.`); content up to 65536 octets, lower-case hex |
+| `files` | `[{ "name": "/data/blocks.bin", "content": "<hex>" }]`: absolute names of at most 200 characters, of path elements of letters, digits, `.`, `_` and `-` (not starting with `.`); content up to 65536 octets, lower-case hex |
 | `directories` | Further directories, empty at start: `["/logs"]`. The directories that hold files exist without being listed |
 
 A name is a file or a directory, not both, and is listed once. Writes may

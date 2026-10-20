@@ -1,4 +1,5 @@
-# Known bugs of upstream versions, for scripts/interop.sh.
+# Known bugs of upstream versions, read by scripts/interop.sh and
+# scripts/features.sh.
 #
 # Entries exist for versions that are built as candidates (make
 # candidate-stepfunc), so that one upstream bug is reported as such instead of
@@ -10,10 +11,11 @@
 #   1  adapter, or adapter:server / adapter:client for a bug of one role
 #   2  upstream version, as print-capabilities reports it
 #   3  extended regular expression matched against the operation and its flags,
-#      or against the description scripts/interop.sh gives a value check
+#      or against the description scripts/interop.sh gives a value check,
+#      or (features) against the label of a check of scripts/features.sh
 #   4  what is wrong (docs/COMPATIBILITY.md has the details)
-#   5  the fixture of the runs it applies to (scripts/interop.sh FIXTURE);
-#      absent: baseline
+#   5  the fixture of the interop runs it applies to (scripts/interop.sh
+#      FIXTURE), or "features" for scripts/features.sh; absent: baseline
 #
 # For a pairing that involves the adapter at that version, a matching case
 # may fail and is counted as "known bug" rather than as a failure. If no
