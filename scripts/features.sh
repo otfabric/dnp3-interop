@@ -36,6 +36,9 @@
 #   deadbands (contract 1.3) an analog deadband written (g34v3) holds back
 #           an event of a smaller change and lets a larger one through, and
 #           reads back (g34) where declared
+#   link    (contract 1.3) link-layer confirms from the master and from the
+#           outstation, and keep-alives (REQUEST_LINK_STATUS) on an idle link
+#           with the server's link-status events where it reports them
 #   events  (contract 1.3) the events fixture's buffer of three overflows:
 #           IIN2.3, the events that did not fit lost, and IIN2.3 cleared
 #           once the master has confirmed what was reported
@@ -559,6 +562,44 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
+        fi
+
+        # ---- link layer (contract 1.3) ----
+        if has_role "${server}" server && { has "${client}" linkConfirmsClient || has "${server}" linkConfirmsServer \
+                || has "${client}" keepAliveClient; }; then
+            name="fl-${server}-${RUN_ID}"
+            if has "${client}" linkConfirmsClient; then
+                start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
+                if wait_ready "${name}"; then
+                    doc=$(client "${client}" -- integrity-poll --link-confirms --host "${name}")
+                    check "${pair}: [link] a poll with link-layer confirms" "ok=true error=-" "$(outcome "${doc}")"
+                    doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --link-confirms --host "${name}")
+                    check "${pair}: [link] a control with link-layer confirms" "ok=true error=-" "$(outcome "${doc}")"
+                fi
+                stop_server "${name}"
+            fi
+            if has "${server}" linkConfirmsServer; then
+                start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json --link-confirms
+                if wait_ready "${name}"; then
+                    doc=$(client "${client}" -- integrity-poll --host "${name}")
+                    check "${pair}: [link] a poll of an outstation that confirms" "ok=true error=-" "$(outcome "${doc}")"
+                fi
+                stop_server "${name}"
+            fi
+            if has "${client}" keepAliveClient; then
+                start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
+                if wait_ready "${name}"; then
+                    doc=$(client "${client}" -- monitor --duration-ms 3500 --keep-alive-ms 1000 --host "${name}")
+                    check "${pair}: [link] keep-alives on an idle link" "ok=true error=-" "$(outcome "${doc}")"
+                    if has "${server}" linkStatusEventServer; then
+                        check "${pair}: [link] the server sees them" "true" \
+                            "$(docker logs "${name}" 2>/dev/null | jq -s '[.[] | select(.event == "link-status")] | length >= 2')"
+                    fi
+                fi
+                stop_server "${name}"
+            fi
+        else
+            skip "${pair}: link layer (needs client:linkConfirmsClient|server:linkConfirmsServer|client:keepAliveClient)"
         fi
 
         # ---- event buffer overflow (contract 1.3) ----
