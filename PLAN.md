@@ -9,8 +9,8 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
 | 3 | stepfunc adapter; cross-stack self-test | done |
 | 4 | First published images; consumption from a library's tests | done: v0.1.0 and v0.2.0 published; a library pins the v0.2.0 digests |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | go-dnp3 done (both roles); dnp3py done (master only); Triangle MicroWorks on hold |
-| 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | done as container contract 1.1 (v0.2.0); further point types open |
-| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 and v0.2.0 qualified, results attached to their releases |
+| 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication | done as container contract 1.1 (v0.2.0) and 1.2 (v0.3.0: point types, dual end point, security statistics); contract 1.3 in progress |
+| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0, v0.2.0 and v0.3.0 qualified, results attached to their releases |
 
 ## Phase 1 - Foundation (done)
 

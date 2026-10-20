@@ -120,7 +120,7 @@ def main(argv):
             out.append(f"| smoke `{a}` | {s['ok']} | {s['fail']} | | |")
     out.append(f"| cross-stack | {totals['ok']} | {totals['fail']} | {totals['known']} | {totals['skip']} |")
     if features:
-        out.append(f"| contract 1.1 features (TLS, UDP, serial, files, SAv5) | {ftotals['ok']} | {ftotals['fail']} "
+        out.append(f"| contract 1.1+ features (scripts/features.sh) | {ftotals['ok']} | {ftotals['fail']} "
                    f"| {ftotals['known']} | {ftotals['skip']} |")
     out.append("")
     out.append("## Pairings")
