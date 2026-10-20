@@ -162,6 +162,13 @@ is connected runs when the next one is. Only go-dnp3's outstation freezes
 analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
 masters send it, go-dnp3's master cannot.
 
+### Management functions
+
+Only go-dnp3's outstation accepts the management functions (INITIALIZE DATA,
+INITIALIZE/START/STOP APPLICATION, SAVE CONFIGURATION), and only opendnp3's
+master sends them all. ACTIVATE CONFIG is served by go-dnp3's outstation, but
+no reference master sends it, so the contract leaves it out.
+
 ### Broadcast
 
 Only go-dnp3's master can send a broadcast (a DIRECT OPERATE NO ACK to

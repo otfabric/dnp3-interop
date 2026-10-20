@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: management functions
+
+- `manage --function initialize-data|initialize-application|start-application|stop-application|save-configuration`, the server event `manage`; features `manageServer`, `manageClient`.
+- Served by go-dnp3's outstation, sent by opendnp3's master. ACTIVATE CONFIG (g70v8 → g91) is dropped: no reference master sends it.
+
+**Gate:** `make features` sends each function and sees the server's event, and a refusal from an outstation without them.
+
 ### Contract 1.3: broadcast
 
 - `operate --mode direct-no-ack --broadcast`, the server event `broadcast`, IIN1.0 in `iin`; features `broadcastServer`, `broadcastEventServer`, `broadcastClient`.
