@@ -166,7 +166,10 @@ masters send it, go-dnp3's master cannot.
 
 opendnp3 (several stacks on one channel) and go-dnp3 (its multidrop bus)
 serve several outstations on one port, told apart by link address; every
-master reaches each by its address. stepfunc's server picks an outstation per
+master reaches each by its address. go-dnp3's bus detaches every station when
+a connection closes and re-attaches each as its session reconnects; a request
+that arrives on the next connection before its station is back is unrouted
+and lost, so the master times out (intermittent, a known bug). stepfunc's server picks an outstation per
 connection by the master's IP address, so it cannot. A master that listens and
 picks among outstations dialling in by link address is not in the contract:
 of the references only stepfunc's master can do it.
