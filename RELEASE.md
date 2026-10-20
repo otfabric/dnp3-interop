@@ -18,6 +18,26 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.3.0
+
+**Date:** 2026-10-20
+
+## Summary
+
+Container contract 1.2: more point types, the dual end point, security
+statistics, and dnp3py's outstation role. Additions only; documents still
+carry `schemaVersion` `"1.0"`.
+
+## Changes
+
+- Point types: the `extended` fixture with frozen analog inputs (g31/g33), command events of the outputs (g13/g43, with the status of the control) and time and interval (g50v4); object documents get `status` and `units`; features `commandEventsServer`, `commandEventsClient`, `frozenAnalogInputsClient`, `timeAndIntervalClient`. Served by dscsystems; read by the stepfunc, opendnp3 and dscsystems masters as each can.
+- Dual end point: `server --connect HOST:PORT [--tls-server-name NAME]` (the outstation dials) and `client --listen [--bind-address ADDR]` (the master listens), over TCP and TLS; features `dualEndpointServer`, `dualEndpointClient`, `dualEndpointClientTls`. stepfunc, opendnp3 and dscsystems, both ways; stepfunc's master listens over TCP only.
+- Security statistics: with secure authentication on, dscsystems serves g121 and raises g122 events (`--sa-statistics-class`, `--sa-statistics-threshold`); object documents get `association`; features `securityStatisticsServer`, `securityStatisticsClient`.
+- dnp3py has the server role: it serves the new `dnp3py` fixture (the baseline within its limits), which every outstation serves; `FIXTURE=dnp3py scripts/interop.sh` (in `make interop`) compares the four. `serverFeatures` in the capability document gives the features of the server role where they differ.
+- Known bugs can be scoped to a fixture (fifth column of tests/known-bugs.tsv).
+
+---
+
 ## v0.2.0
 
 **Date:** 2026-10-20
