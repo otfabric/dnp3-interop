@@ -135,7 +135,14 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` passes for every pairing that declares a feature, and smoke and cross-stack stay green.
 
-**Status:** done, released as v0.2.0: `make features` 191 passed, 0 failed (27 skipped for features a pairing lacks) locally and in the release qualification on both architectures. Open: further point types (frozen analogs, g13/g43 command events, time-and-interval) where two stacks serve them.
+**Status:** done, released as v0.2.0: `make features` 191 passed, 0 failed (27 skipped for features a pairing lacks) locally and in the release qualification on both architectures.
+
+### Contract 1.2: more point types
+
+- The `extended` fixture with frozen analog inputs (g31/g33), command events of the outputs (g13/g43) and a g50v4 object; object documents with `status` and `units`; features `commandEventsServer`, `commandEventsClient`, `frozenAnalogInputsClient`, `timeAndIntervalClient`.
+- Served by go-dnp3 only (no other outstation has them); read by the stepfunc and go-dnp3 masters (g31, g13/g43), the opendnp3 master (g13/g43, g50v4).
+
+**Gate:** `make features` covers each type for every master that declares it, against the go-dnp3 outstation.
 
 ## Phase 7 - Release qualification
 

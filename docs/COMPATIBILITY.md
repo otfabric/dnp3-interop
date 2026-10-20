@@ -134,6 +134,21 @@ taking effect.
 
 dnp3py has TCP only and none of the 1.1 features.
 
+### Contract 1.2 point types: one outstation, three masters
+
+Only the go-dnp3 outstation serves the extended fixture: frozen analog inputs,
+command events of its outputs and g50v4. Its masters' counterparts:
+
+| Objects | stepfunc master | opendnp3 master | go-dnp3 master | dnp3py master |
+|---------|:-:|:-:|:-:|:-:|
+| g31/g33 frozen analogs | yes | no: the response fails to parse | yes | no |
+| g13/g43 command events | yes | yes | yes | no |
+| g50v4 time and interval | no: ignored | yes | no: dropped | no |
+
+go-dnp3 records a command event for every control that reaches its control
+handler, with the status it answered: a value out of range produces a g43
+with OUT_OF_RANGE. It records none for SELECT.
+
 ### opendnp3: one UDP peer, no TLS name check
 
 Its UDP channel binds and then connects to the remote endpoint, so an
