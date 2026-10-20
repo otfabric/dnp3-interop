@@ -61,7 +61,7 @@ const USAGE: &str = "usage: dnp3-interop <command>
       file-put             --name NAME --content HEX
       file-ls              --name DIRECTORY
       file-info            --name NAME
-                           file operations: [--file-user U --file-password P]; file-put: [--append]
+                           file-get, file-put, file-ls: [--file-user U --file-password P]; file-put: [--append]
       file-authenticate    --file-user U --file-password P
       attribute-read       --set N [--variation V]
       attribute-write      --set N --variation V (--text S | --uint N | --int N)
@@ -213,7 +213,7 @@ fn print_capabilities() -> i32 {
 }
 
 fn print_fixture(name: &str) -> i32 {
-    if name.is_empty() || name.contains('/') || name.contains("..") {
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         logf!("print-fixture: '{name}' is not a fixture name");
         return EXIT_USAGE;
     }

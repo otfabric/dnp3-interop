@@ -341,20 +341,38 @@ impl OutstationApplication for Application {
             FreezeInterval::PeriodicallyFreeze(t, ms) => (t.raw_value(), Some(ms)),
             FreezeInterval::PeriodicallyFreezeRelative(ms) => (start_ms + u64::from(ms), Some(ms)),
         };
+        // A time already past: without an interval the request is refused
+        // (PARAMETER_ERROR); with one, the first freeze is the next one of
+        // the schedule after now, without catching up on the missed ones.
+        let period = period.filter(|ms| *ms > 0).map(u64::from);
+        if period.is_none() && first_ms < start_ms {
+            return Err(RequestError::ParameterError);
+        }
         let mut db = database.clone();
         tokio::spawn(async move {
             let mut at = first_ms;
             loop {
-                let wait = at.saturating_sub(now_ms());
-                tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                let now = now_ms();
+                at = next_freeze(at, now, period);
+                tokio::time::sleep(std::time::Duration::from_millis(at.saturating_sub(now))).await;
                 freeze(&fx, &mut db, indices, false);
                 match period {
-                    Some(ms) if ms > 0 => at += u64::from(ms),
-                    _ => break,
+                    Some(ms) => at += ms,
+                    None => break,
                 }
             }
         });
         Ok(())
+    }
+}
+
+/// When a scheduled freeze happens: at `at`, or, when that is past and the
+/// freeze repeats, at the first time of the schedule from `now` on. Missed
+/// freezes are skipped, not caught up.
+fn next_freeze(at: u64, now: u64, period: Option<u64>) -> u64 {
+    match period {
+        Some(ms) if ms > 0 && at < now => at + (now - at).div_ceil(ms) * ms,
+        _ => at,
     }
 }
 
@@ -980,4 +998,18 @@ async fn serve(
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     emit(&json!({"event": "stopped"}));
     EXIT_OK
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_freeze;
+
+    #[test]
+    fn a_past_schedule_resumes_at_its_next_time() {
+        assert_eq!(next_freeze(1_000, 500, Some(100)), 1_000);
+        assert_eq!(next_freeze(1_000, 1_000, Some(100)), 1_000);
+        assert_eq!(next_freeze(1_000, 1_001, Some(100)), 1_100);
+        assert_eq!(next_freeze(1_000, 10_050, Some(100)), 10_100);
+        assert_eq!(next_freeze(1_000, 2_000, None), 1_000);
+    }
 }

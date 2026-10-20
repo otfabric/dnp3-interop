@@ -40,6 +40,12 @@ struct Transport
 // Parses the transport flags; throws UsageError.
 Transport parse_transport(const Args& args, bool server);
 
+// Loads the TLS files as the library does when it connects (CA, certificate
+// chain, private key); the empty string when they load, what failed
+// otherwise. The library reads them only per connection, so a file that
+// cannot be read would surface late or not at all (contract 1.1, TLS).
+std::string tls_files_error(const Transport& t);
+
 // The outstation's channel. "address" is what the ready event reports.
 // Throws std::exception when the channel cannot be opened.
 std::shared_ptr<opendnp3::IChannel> server_channel(opendnp3::DNP3Manager& manager,

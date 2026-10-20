@@ -552,6 +552,18 @@ int run_server(const std::vector<std::string>& argv)
         std::string address;
         const bool stream = transport.kind == "tcp";
         auto listener = std::make_shared<ConnectionListener>(stream);
+        // Unreadable TLS files end the process before ready, listening or
+        // dialling (the library would read them only when a connection
+        // comes, and a dialling outstation would never say).
+        if (transport.tls)
+        {
+            const auto error = tls_files_error(transport);
+            if (!error.empty())
+            {
+                logf("server: TLS: %s", error.c_str());
+                return kExitFailed;
+            }
+        }
         try
         {
             channel = server_channel(manager, transport, bindAddress, static_cast<uint16_t>(port), listener, address);

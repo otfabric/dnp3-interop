@@ -734,11 +734,33 @@ int run_client(const std::vector<std::string>& argv)
     State s;
     std::optional<Outcome> failure;
     bool connected = false;
+    // TLS files that cannot be loaded fail the operation before anything is
+    // opened (contract 1.1: failed); the library would read them only per
+    // connection attempt.
+    if (transport.tls)
     {
-        DNP3Manager manager(1, stderr_log_handler());
-        std::string address;
-        auto channel = client_channel(manager, transport, host, static_cast<uint16_t>(port),
-                                      std::make_shared<ChannelListener>(s), address);
+        const auto error = tls_files_error(transport);
+        if (!error.empty())
+            failure = Outcome{"failed", "TLS: " + error};
+    }
+    DNP3Manager manager(1, stderr_log_handler());
+    std::string address;
+    std::shared_ptr<IChannel> channel;
+    if (!failure)
+    {
+        try
+        {
+            channel = client_channel(manager, transport, host, static_cast<uint16_t>(port),
+                                     std::make_shared<ChannelListener>(s), address);
+        }
+        catch (const std::exception& e)
+        {
+            // A listening master that cannot bind, for one.
+            failure = Outcome{"failed", std::string("cannot open the channel: ") + e.what()};
+        }
+    }
+    if (channel)
+    {
 
         MasterStackConfig config;
         config.master.responseTimeout = TimeDuration::Milliseconds(timeout);
@@ -863,8 +885,8 @@ int run_client(const std::vector<std::string>& argv)
 
         master->Disable();
         channel->Shutdown();
-        manager.Shutdown();
     }
+    manager.Shutdown();
 
     std::lock_guard<std::mutex> lock(s.mutex);
     json doc{{"schemaVersion", kSchemaVersion},
@@ -883,7 +905,9 @@ int run_client(const std::vector<std::string>& argv)
         json statuses = json::array();
         for (auto st : s.commandStatuses)
             statuses.push_back(command_status_name(st));
-        doc["commandStatuses"] = s.commandStatuses.empty() ? json(nullptr) : statuses;
+        // One status per control sent, or null: the schema has no entry for
+        // a control without an echo, so a partial echo is null as no echo is.
+        doc["commandStatuses"] = s.commandStatuses.empty() || s.commandMismatch ? json(nullptr) : statuses;
     }
     if (op == "restart")
         doc["restartDelayMs"] = s.restartDelayMs ? json(*s.restartDelayMs) : json(nullptr);
