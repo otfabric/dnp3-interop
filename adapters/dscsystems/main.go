@@ -36,7 +36,7 @@ var (
 const usage = `usage: dnp3-interop <command>
 
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
-         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT] [SA]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [--outstations N] [LINK] [TRANSPORT] [SA]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
          [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P] [--link-confirms]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
@@ -188,6 +188,8 @@ func printCapabilities() int {
 			// and reports them; the master cannot send them.
 			{"manageServer", true},
 			{"manageClient", false},
+			// Contract 1.3: server --outstations N, on a multidrop bus.
+			{"multipleOutstationsServer", true},
 			// FREEZE AT TIME both ways; the outstation also freezes analog
 			// inputs (g30 in a freeze), the master counters only.
 			{"freezeAtTimeServer", true},
