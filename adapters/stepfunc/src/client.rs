@@ -735,12 +735,35 @@ fn parse_op(op: &str, args: &Args) -> Result<Op, UsageError> {
                     "--no-ack: the library's master always expects a response to a freeze",
                 );
             }
-            let fc = if args.has("clear") {
-                FunctionCode::FreezeClear
-            } else {
-                FunctionCode::ImmediateFreeze
+            let objects = match args.integer("group", 20, 20, 30)? {
+                20 => Variation::Group20Var0,
+                30 => Variation::Group30Var0,
+                _ => return usage("--group must be 20 or 30"),
             };
-            Op::Empty(fc, Headers::new().add_all_objects(Variation::Group20Var0))
+            if args.has("at") {
+                // FREEZE AT TIME (contract 1.3): g50v2, then the objects.
+                if args.has("clear") {
+                    return usage("--clear does not go with --at");
+                }
+                let time = freeze_time(&args.str("at", ""))?;
+                let interval = args.integer("interval-ms", 0, 0, 4_294_967_295)? as u32;
+                Op::Empty(
+                    FunctionCode::FreezeAtTime,
+                    Headers::new()
+                        .add_time_and_interval(Timestamp::new(time), interval)
+                        .add_all_objects(objects),
+                )
+            } else {
+                if args.has("interval-ms") {
+                    return usage("--interval-ms needs --at");
+                }
+                let fc = if args.has("clear") {
+                    FunctionCode::FreezeClear
+                } else {
+                    FunctionCode::ImmediateFreeze
+                };
+                Op::Empty(fc, Headers::new().add_all_objects(objects))
+            }
         }
         "monitor" => {
             Op::Monitor(Duration::from_millis(
@@ -788,7 +811,10 @@ pub fn run(argv: &[String]) -> i32 {
         "time-sync" => flags.push("procedure"),
         "restart" => flags.push("type"),
         "assign-class" => flags.extend(["class", "group", "start", "stop"]),
-        "freeze" => switches.extend(["clear", "no-ack"]),
+        "freeze" => {
+            switches.extend(["clear", "no-ack"]);
+            flags.extend(["group", "at", "interval-ms"]);
+        }
         "monitor" => flags.push("duration-ms"),
         _ => {}
     }
@@ -1368,4 +1394,20 @@ fn parse_operate_multi(args: &Args) -> Result<Op, UsageError> {
         builder.finish_header();
     }
     Ok(Op::Operate(mode, builder.build()))
+}
+
+/// --at of `freeze`: "immediately" (time 0), "+MS" (from now) or milliseconds
+/// since the epoch.
+fn freeze_time(text: &str) -> Result<u64, UsageError> {
+    if text == "immediately" {
+        return Ok(0);
+    }
+    let parsed = match text.strip_prefix('+') {
+        Some(ms) => ms.parse::<u64>().ok().map(|ms| now_ms() + ms),
+        None => text.parse::<u64>().ok(),
+    };
+    match parsed {
+        Some(ms) if ms < (1 << 48) => Ok(ms),
+        _ => usage("--at must be immediately, +MS or milliseconds since the epoch"),
+    }
 }
