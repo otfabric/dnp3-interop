@@ -149,6 +149,19 @@ go-dnp3 records a command event for every control that reaches its control
 handler, with the status it answered: a value out of range produces a g43
 with OUT_OF_RANGE. It records none for SELECT.
 
+### Freeze at time and analog freeze
+
+FREEZE AT TIME works with stepfunc's outstation (the adapter schedules what the
+library hands over) and go-dnp3's (the library schedules it), from the
+stepfunc, go-dnp3 and dnp3py masters; opendnp3's and dnp3py's outstations do
+not support it and opendnp3's master cannot send it. go-dnp3 differs in two
+ways: time 0 with interval 0 is refused with PARAMETER_ERROR rather than
+frozen at once (a known bug), and scheduled freezes run on a tick of the
+session that serves a connection, so a freeze that comes due while no master
+is connected runs when the next one is. Only go-dnp3's outstation freezes
+analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
+masters send it, go-dnp3's master cannot.
+
 ### Several controls in one request
 
 All four outstations carry out each control of a request on its own: in a
