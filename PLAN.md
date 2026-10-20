@@ -167,6 +167,13 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` runs an integrity poll and a control with the connection reversed for every pairing that declares it.
 
+### Contract 1.3: link layer
+
+- `--link-confirms` (client and server), `client --keep-alive-ms`, the server event `link-status`; features `linkConfirmsServer/Client`, `keepAliveClient`, `linkStatusEventServer`.
+- Confirms: go-dnp3 both roles. Keep-alive: stepfunc, opendnp3 and go-dnp3 masters; go-dnp3's adapter reports them.
+
+**Gate:** `make features` polls with confirms both ways, and keeps a link alive and sees the link status requests, for every pairing that declares it.
+
 ### Contract 1.3: event buffer overflow
 
 - The fixture's `outstation.eventBufferSize` and the `events` fixture; feature `eventBufferServer`. All four outstations.

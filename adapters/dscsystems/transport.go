@@ -22,7 +22,7 @@ var (
 		"serial-device", "baud", "data-bits", "parity", "stop-bits", "connect", "tls-server-name"}
 	clientTransportFlags = []string{"transport", "tls-ca", "tls-cert", "tls-key", "tls-server-name",
 		"udp-local-port", "serial-device", "baud", "data-bits", "parity", "stop-bits", "bind-address"}
-	clientTransportSwitches = []string{"tls", "listen"}
+	clientTransportSwitches = []string{"tls", "listen", "link-confirms"}
 	serialFlags             = []string{"serial-device", "baud", "data-bits", "parity", "stop-bits"}
 )
 

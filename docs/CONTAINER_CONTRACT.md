@@ -13,7 +13,7 @@ and changes only with the major version.
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
-| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; additions |
+| 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; [link layer](#link-layer): `--link-confirms`, `--keep-alive-ms`, the `link-status` event; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -599,6 +599,21 @@ An outstation freezes at the time given, once or every interval; time 0 with
 interval 0 freezes at once (IEEE 1815-2012 A.23.2). A time already past with
 no interval is refused. It succeeds when the outstation accepted the request,
 not when the freeze happens.
+
+## Link layer
+
+*Contract 1.3.* Link-layer confirmation and keep-alives (IEEE 1815 clause 9).
+
+| Where | Flag | Meaning |
+|-------|------|---------|
+| client, server | `--link-confirms` | Send user data as CONFIRMED_USER_DATA (after a RESET_LINK_STATES) and retransmit it until the peer acknowledges it. Feature `linkConfirmsClient` (master), `linkConfirmsServer` (outstation). A peer acknowledges them (dnp3py's master does not: a known bug) |
+| client | `--keep-alive-ms N` | Send REQUEST_LINK_STATUS when the link has been idle for N ms (0, the default: never). Meaningful with `monitor`. Feature `keepAliveClient` |
+
+Server event `link-status`, no fields: the outstation received a
+REQUEST_LINK_STATUS. Feature `linkStatusEventServer`.
+
+An exchange that the peer does not acknowledge fails as the operation would
+without an answer (`timeout` or `connection-lost`).
 
 ## Event buffer overflow
 
