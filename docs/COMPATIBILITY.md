@@ -162,6 +162,14 @@ is connected runs when the next one is. Only go-dnp3's outstation freezes
 analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
 masters send it, go-dnp3's master cannot.
 
+### File append and authentication
+
+Only go-dnp3's outstation serves files, so it is the only one to test
+against. It appends and, given `--file-user`, requires AUTHENTICATE_FILE
+before every open and delete. stepfunc's master appends and authenticates;
+go-dnp3's master authenticates but opens files for writing only. Both
+masters get PERMISSION_DENIED without credentials and with a wrong password.
+
 ### Analog deadbands
 
 The stepfunc and go-dnp3 masters write deadbands (g34v3) to the stepfunc and

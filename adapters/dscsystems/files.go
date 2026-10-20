@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -95,7 +96,11 @@ func (f fileEvents) OpenWrite(name string, mode dnp3.FileMode, size uint32) (io.
 		fileEvent("write", name, status)
 		return w, status
 	}
-	return &writeEvent{WriteCloser: w, name: name}, status
+	action := "write"
+	if mode == dnp3.FileModeAppend {
+		action = "append"
+	}
+	return &writeEvent{WriteCloser: w, name: name, action: action}, status
 }
 
 func (f fileEvents) Delete(name string) dnp3.FileStatus {
@@ -107,8 +112,9 @@ func (f fileEvents) Delete(name string) dnp3.FileStatus {
 // writeEvent reports a write when the file is closed: when it is complete.
 type writeEvent struct {
 	io.WriteCloser
-	name string
-	once sync.Once
+	name   string
+	action string
+	once   sync.Once
 }
 
 func (w *writeEvent) Close() error {
@@ -118,14 +124,47 @@ func (w *writeEvent) Close() error {
 		if err != nil {
 			status = dnp3.FileFatal
 		}
-		fileEvent("write", w.name, status)
+		fileEvent(w.action, w.name, status)
 	})
 	return err
 }
 
 // ---- master ----
 
-var fileOperations = []string{"file-get", "file-put", "file-ls", "file-info", "file-delete"}
+var fileOperations = []string{"file-get", "file-put", "file-ls", "file-info", "file-delete", "file-authenticate"}
+
+// parseFileCredentials reads --file-user and --file-password (contract 1.3):
+// both or neither, and both for file-authenticate. The library then sends
+// AUTHENTICATE_FILE before every open and delete.
+func parseFileCredentials(op string, a args) (*master.FileCredentials, error) {
+	user, hasUser := a["file-user"]
+	password, hasPassword := a["file-password"]
+	switch {
+	case op == "file-authenticate" && (!hasUser || !hasPassword):
+		return nil, usagef("file-authenticate needs --file-user and --file-password")
+	case hasUser != hasPassword:
+		return nil, usagef("--file-user and --file-password go together")
+	case !hasUser:
+		return nil, nil
+	}
+	return &master.FileCredentials{User: user, Password: password}, nil
+}
+
+// fileAuthenticator checks the credentials of AUTHENTICATE_FILE against the
+// server's --file-user and --file-password and reports the outcome; never the
+// password.
+func fileAuthenticator(user, password string) outstation.FileAuthenticator {
+	return func(u, p string) bool {
+		ok := subtle.ConstantTimeCompare([]byte(u), []byte(user)) == 1 &&
+			subtle.ConstantTimeCompare([]byte(p), []byte(password)) == 1
+		status := dnp3.FileSuccess
+		if !ok {
+			status = dnp3.FilePermissionDenied
+		}
+		fileEvent("authenticate", u, status)
+		return ok
+	}
+}
 
 // fileResult is what a file operation adds to the result document.
 type fileResult struct {
@@ -172,6 +211,12 @@ func fileStatusOf(err error) (dnp3.FileStatus, bool) {
 type fileRequest func(ctx context.Context, s *master.Session, r *fileResult) error
 
 func parseFileOperation(op string, a args) (fileRequest, error) {
+	if op == "file-authenticate" {
+		return func(ctx context.Context, s *master.Session, _ *fileResult) error {
+			_, err := s.AuthenticateFile(ctx, a["file-user"], a["file-password"])
+			return err
+		}, nil
+	}
 	name, err := a.required("name")
 	if err != nil {
 		return nil, err

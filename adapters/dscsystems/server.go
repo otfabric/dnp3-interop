@@ -331,6 +331,7 @@ func runServer(argv []string) int {
 	flags := []string{"fixture", "bind-address", "port", "ready-file", "select-timeout-ms",
 		"confirm-timeout-ms", "local-addr", "remote-addr"}
 	flags = append(append(append(flags, serverTransportFlags...), saFlags...), statisticsFlags...)
+	flags = append(flags, "file-user", "file-password")
 	a, err := parseArgs(argv, flags, nil)
 	var port, selectTimeout, confirmTimeout, local, remote int64
 	var tr transport
@@ -355,6 +356,10 @@ func runServer(argv []string) int {
 	}
 	if err == nil {
 		remote, err = a.integer("remote-addr", -1, 0, 65519)
+	}
+	_, hasUser := a["file-user"]
+	if _, hasPassword := a["file-password"]; err == nil && hasUser != hasPassword {
+		err = usagef("--file-user and --file-password go together")
 	}
 	if err != nil {
 		logf("server: %v", err)
@@ -407,6 +412,13 @@ func runServer(argv []string) int {
 			return exitFailed
 		}
 		files.Handler = fileEvents{h}
+	}
+	if user, ok := a["file-user"]; ok {
+		if files.Handler == nil {
+			logf("server: --file-user needs a fixture with files")
+			return exitUsage
+		}
+		files.Authenticate = fileAuthenticator(user, a["file-password"])
 	}
 	ctrl := &controls{fx: fx}
 	config := outstation.Config{

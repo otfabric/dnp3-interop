@@ -396,9 +396,11 @@ func runClient(argv []string) int {
 	switches := append([]string(nil), clientTransportSwitches...)
 	switch op {
 	case "file-get", "file-ls", "file-info", "file-delete":
-		flags = append(flags, "name")
+		flags = append(flags, "name", "file-user", "file-password")
 	case "file-put":
-		flags = append(flags, "name", "content")
+		flags = append(flags, "name", "content", "file-user", "file-password")
+	case "file-authenticate":
+		flags = append(flags, "file-user", "file-password")
 	case "attribute-read":
 		flags = append(flags, "set", "variation")
 	case "attribute-write":
@@ -435,6 +437,7 @@ func runClient(argv []string) int {
 		areq                                                            attributeRequest
 		tr                                                              transport
 		sec                                                             security
+		credentials                                                     *master.FileCredentials
 	)
 	a, err := parseArgs(argv[1:], flags, switches)
 	if err == nil {
@@ -463,6 +466,9 @@ func runClient(argv []string) int {
 			*f.dst, err = a.integer(f.name, f.def, f.min, f.max)
 		}
 	}
+	if err == nil {
+		credentials, err = parseFileCredentials(op, a)
+	}
 	fileOp := slices.Contains(fileOperations, op)
 	attributeOp := slices.Contains(attributeOperations, op)
 	switch {
@@ -488,6 +494,7 @@ func runClient(argv []string) int {
 		Log:             libraryLog(),
 
 		SecureAuthentication: sec.master(),
+		FileCredentials:      credentials,
 	}, h)
 	inner, addr, err := clientChannel(tr, host, port)
 	if err != nil {
