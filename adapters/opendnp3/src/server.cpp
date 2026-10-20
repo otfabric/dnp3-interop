@@ -595,7 +595,8 @@ int run_server(const std::vector<std::string>& argv)
                   {"fixture", fx.name},
                   {"linkAddress", local},
                   {"masterAddress", remote},
-                  {"transport", transport.name()}});
+                  {"transport", transport.name()},
+                  {"dial", !transport.connect.empty()}});
 
         int sig = 0;
         sigwait(&signals, &sig);
