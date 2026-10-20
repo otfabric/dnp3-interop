@@ -30,6 +30,10 @@ type security struct {
 	on   bool
 	user uint16
 	key  []byte
+	// Security statistics (contract 1.2): the class of the g122 events and
+	// how many increments of a statistic raise one.
+	statisticsClass     int
+	statisticsThreshold uint32
 }
 
 func parseSecurity(a args) (security, error) {
@@ -41,8 +45,10 @@ func parseSecurity(a args) (security, error) {
 		return security{}, usagef("--sa-mac %s: the library has %s only", mac, strings.Join(supportedMACs, ", "))
 	}
 	if !a.has("sa-update-key") {
-		if a.has("sa-user") || a.has("sa-mac") {
-			return security{}, usagef("--sa-user and --sa-mac need --sa-update-key")
+		for _, n := range append([]string{"sa-user", "sa-mac"}, statisticsFlags...) {
+			if a.has(n) {
+				return security{}, usagef("--%s needs --sa-update-key", n)
+			}
 		}
 		return security{}, nil
 	}
@@ -54,7 +60,16 @@ func parseSecurity(a args) (security, error) {
 	if err != nil {
 		return security{}, err
 	}
-	return security{on: true, user: uint16(user), key: key}, nil
+	class, err := a.integer("sa-statistics-class", 1, 1, 3)
+	if err != nil {
+		return security{}, err
+	}
+	threshold, err := a.integer("sa-statistics-threshold", 10, 1, 1000000)
+	if err != nil {
+		return security{}, err
+	}
+	return security{on: true, user: uint16(user), key: key, statisticsClass: int(class),
+		statisticsThreshold: uint32(threshold)}, nil
 }
 
 func (s security) outstation() *outstation.SecureAuthenticationConfig {
@@ -62,7 +77,9 @@ func (s security) outstation() *outstation.SecureAuthenticationConfig {
 		return nil
 	}
 	return &outstation.SecureAuthenticationConfig{
-		Users: map[uint16][]byte{s.user: s.key},
+		Users:               map[uint16][]byte{s.user: s.key},
+		StatisticsClass:     dnpClass(s.statisticsClass),
+		StatisticsThreshold: s.statisticsThreshold,
 		// Called for a critical request whose challenge was answered with a
 		// valid MAC, just before it is executed.
 		Authorize: func(user uint16, function uint8) bool {

@@ -16,9 +16,9 @@ import (
 	"github.com/dscsystems/go-dnp3/channel"
 )
 
-// frames scans a byte stream for DNP3 link frames and calls fn with the
-// application octets of every first transport segment. CRCs are not checked:
-// the library does that, and this only watches.
+// frames scans a byte stream for DNP3 link frames and calls fn with the user
+// data of every frame: the transport header, then the segment's application
+// octets. CRCs are not checked: the library does that, and this only watches.
 type frames struct {
 	buf []byte
 	fn  func(app []byte)
@@ -57,8 +57,8 @@ func (f *frames) feed(p []byte) {
 			off += k + 2
 		}
 		f.buf = f.buf[size:]
-		if len(data) >= 1 && data[0]&0x40 != 0 {
-			f.fn(data[1:])
+		if len(data) >= 1 {
+			f.fn(data)
 		}
 	}
 }
@@ -71,6 +71,15 @@ const (
 	fcGetFileInfo  = 28
 	fcAuthResponse = 0x83
 )
+
+// first passes the application octets of first transport segments to fn.
+func first(fn func(app []byte)) func(segment []byte) {
+	return func(segment []byte) {
+		if segment[0]&0x40 != 0 {
+			fn(segment[1:])
+		}
+	}
+}
 
 func inbound(app []byte) {
 	if len(app) >= 2 {
@@ -104,7 +113,7 @@ func (s sniffChannel) Connect(ctx context.Context) (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &sniffRWC{ReadWriteCloser: c, in: frames{fn: inbound}, out: frames{fn: outbound}}
+	w := &sniffRWC{ReadWriteCloser: c, in: frames{fn: first(inbound)}, out: frames{fn: first(outbound)}}
 	if m, ok := c.(messageWriter); ok {
 		return sniffMessages{sniffRWC: w, m: m}, nil
 	}

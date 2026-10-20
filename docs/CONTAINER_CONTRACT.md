@@ -12,7 +12,7 @@ and changes only with the major version.
 |---------|--------|
 | 1.0 | First release |
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
-| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; additions |
+| 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -524,6 +524,28 @@ Server events:
 The master's error is `auth-failed` when the outstation refused its
 authentication or a session key change failed.
 
+### Security statistics
+
+*Contract 1.2.* An outstation with secure authentication on serves its
+security statistics (IEEE 1815-2012 table 7-8): g121v1 by READ of a range
+(not in class 0) and g122 events in a class, one each time a statistic has
+grown by a threshold.
+
+| `server` flag | Default | Meaning |
+|---------------|---------|---------|
+| `--sa-statistics-class N` | 1 | The class (1..3) of the g122 events |
+| `--sa-statistics-threshold N` | 10 | How many increments of a statistic raise an event |
+
+Both need `--sa-update-key`. Features: `securityStatisticsServer` (the
+outstation serves them), `securityStatisticsClient` (the master reports
+them). Object documents for groups 121 and 122: `value` the count, `flags`
+(the counter flags), `association`, `time` for g122v2. An outstation without
+secure authentication refuses g121 (`rejected`).
+
+go-dnp3's master drops groups 121 and 122, so the dscsystems adapter reads
+them from the frames itself, from responses that carry nothing but them (a
+class poll that returns other events before them leaves them out).
+
 ## More point types
 
 *Contract 1.2.* Object documents for three more kinds of object, served by
@@ -561,6 +583,7 @@ declare it.
 | `unsolicited` | The object came in an unsolicited response |
 | `status` | Groups 13 and 43 (1.2): the command status of the control, by name ([command status](#command-status)) |
 | `units` | Group 50 variation 4 (1.2): the units of the interval |
+| `association` | Groups 121 and 122 (1.2): the association of the security statistic |
 
 | Groups | `value` |
 |--------|---------|
@@ -573,6 +596,7 @@ declare it.
 | 13 | the commanded state, boolean (1.2) |
 | 43 | the commanded value, number (1.2) |
 | 50 (variation 4) | the interval, integer (1.2) |
+| 121, 122 | the count of the security statistic, integer (1.2) |
 
 `flags` names by bit, in bit order. The state bits of the binary types are
 in `value`, not in `flags`.

@@ -330,7 +330,7 @@ func (c *eventConn) Close() error {
 func runServer(argv []string) int {
 	flags := []string{"fixture", "bind-address", "port", "ready-file", "select-timeout-ms",
 		"confirm-timeout-ms", "local-addr", "remote-addr"}
-	flags = append(append(flags, serverTransportFlags...), saFlags...)
+	flags = append(append(append(flags, serverTransportFlags...), saFlags...), statisticsFlags...)
 	a, err := parseArgs(argv, flags, nil)
 	var port, selectTimeout, confirmTimeout, local, remote int64
 	var tr transport

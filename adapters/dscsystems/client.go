@@ -441,7 +441,7 @@ func runClient(argv []string) int {
 
 		SecureAuthentication: sec.master(),
 	}, h)
-	ch, addr, err := clientChannel(tr, host, port)
+	inner, addr, err := clientChannel(tr, host, port)
 	if err != nil {
 		// Certificate files that cannot be used.
 		emit(object{{"schemaVersion", schemaVersion}, {"adapter", adapter}, {"operation", op}, {"ok", false},
@@ -449,6 +449,7 @@ func runClient(argv []string) int {
 			{"objects", []object{}}, {"elapsedMs", time.Since(started).Milliseconds()}})
 		return exitFailed
 	}
+	ch := statisticsChannel{Channel: inner, h: h}
 	ctx, cancel := context.WithCancel(context.Background())
 	runDone := make(chan struct{})
 	go func() {

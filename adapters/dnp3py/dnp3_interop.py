@@ -696,6 +696,8 @@ def print_capabilities():
             "dualEndpointServer": False,
             "dualEndpointClient": False,
             "dualEndpointClientTls": False,
+            "securityStatisticsServer": False,
+            "securityStatisticsClient": False,
         },
         "pointTypes": [],
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],

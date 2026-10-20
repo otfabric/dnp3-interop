@@ -149,6 +149,16 @@ go-dnp3 records a command event for every control that reaches its control
 handler, with the status it answered: a value out of range produces a g43
 with OUT_OF_RANGE. It records none for SELECT.
 
+### go-dnp3: security statistics
+
+With secure authentication on, the go-dnp3 outstation serves 18 statistics
+(g121v1, indexes 0..17, association 0, flags ONLINE) by range READ and raises
+g122v2 events in a configurable class every n increments. Of the 18, it
+counts 1, 2, 3, 5, 6, 8 to 14; 0, 4, 7 and 15 to 17 stay 0. Statistic 5
+counts only the authentication responses it sends. Its master drops both
+groups: the dscsystems adapter decodes them itself. No other image has
+them, so they are checked go-dnp3 against go-dnp3 only.
+
 ### Dual end point: three stacks, both ways
 
 The outstations of stepfunc (`spawn_outstation_tcp_client`,
