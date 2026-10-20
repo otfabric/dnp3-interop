@@ -398,7 +398,11 @@ func runClient(argv []string) int {
 	if err == nil {
 		sec, err = parseSecurity(a)
 	}
-	if err == nil && tr.kind != "serial" {
+	switch {
+	case err != nil:
+	case tr.listen:
+		host = a.str("bind-address", "0.0.0.0")
+	case tr.kind != "serial":
 		host, err = a.required("host")
 	}
 	for _, f := range []struct {

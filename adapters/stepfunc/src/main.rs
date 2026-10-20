@@ -3,6 +3,10 @@
 //! dnp3-interop adapter for the Step Function I/O dnp3 crate. Implements
 //! docs/CONTAINER_CONTRACT.md.
 
+// The capability document is one json! literal, deeper than the default
+// macro recursion limit.
+#![recursion_limit = "256"]
+
 mod client;
 mod files;
 mod fixture;
@@ -34,10 +38,11 @@ const USAGE: &str = "usage: dnp3-interop <command>
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
+         [--connect HOST:PORT [--tls-server-name NAME]]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [LINK] [TRANSPORT] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
-         [--udp-local-port N]
+         [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
@@ -140,6 +145,11 @@ fn print_capabilities() -> i32 {
             "commandEventsClient": true,
             "frozenAnalogInputsClient": true,
             "timeAndIntervalClient": false,
+            // Dual end point: the outstation dials (TCP and TLS); the master
+            // listens over TCP only (the crate has no TLS listener).
+            "dualEndpointServer": true,
+            "dualEndpointClient": true,
+            "dualEndpointClientTls": false,
         },
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],

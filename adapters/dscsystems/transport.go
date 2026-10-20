@@ -19,10 +19,10 @@ import (
 
 var (
 	serverTransportFlags = []string{"transport", "tls-cert", "tls-key", "tls-ca", "udp-peer",
-		"serial-device", "baud", "data-bits", "parity", "stop-bits"}
+		"serial-device", "baud", "data-bits", "parity", "stop-bits", "connect", "tls-server-name"}
 	clientTransportFlags = []string{"transport", "tls-ca", "tls-cert", "tls-key", "tls-server-name",
-		"udp-local-port", "serial-device", "baud", "data-bits", "parity", "stop-bits"}
-	clientTransportSwitches = []string{"tls"}
+		"udp-local-port", "serial-device", "baud", "data-bits", "parity", "stop-bits", "bind-address"}
+	clientTransportSwitches = []string{"tls", "listen"}
 	serialFlags             = []string{"serial-device", "baud", "data-bits", "parity", "stop-bits"}
 )
 
@@ -33,6 +33,10 @@ type transport struct {
 	udpPeer                   string
 	udpLocalPort              int64
 	serial                    channel.SerialConfig
+	// Dual end point (contract 1.2): the outstation dials the master at
+	// connect; the master listens.
+	connect string
+	listen  bool
 }
 
 // name is what the ready event reports.
@@ -67,6 +71,23 @@ func parseTransport(a args, server bool) (transport, error) {
 
 	if server {
 		t.cert, t.key, t.ca = a.str("tls-cert", ""), a.str("tls-key", ""), a.str("tls-ca", "")
+		if a.has("connect") {
+			t.connect = a.str("connect", "")
+			if _, _, err := net.SplitHostPort(t.connect); err != nil {
+				return t, usagef("--connect must be HOST:PORT")
+			}
+			for _, n := range []string{"bind-address", "port"} {
+				if a.has(n) {
+					return t, usagef("--%s does not go with --connect: the outstation dials", n)
+				}
+			}
+			if t.kind != "tcp" {
+				return t, usagef("--connect needs --transport tcp")
+			}
+			t.serverName = a.str("tls-server-name", "")
+		} else if a.has("tls-server-name") {
+			return t, usagef("--tls-server-name needs --connect")
+		}
 		t.tls = a.has("tls-cert")
 		if !t.tls && (a.has("tls-key") || a.has("tls-ca")) {
 			return t, usagef("--tls-key and --tls-ca need --tls-cert")
@@ -82,6 +103,16 @@ func parseTransport(a args, server bool) (transport, error) {
 		}
 	} else {
 		t.tls = a.has("tls")
+		t.listen = a.has("listen")
+		if t.listen && t.kind != "tcp" {
+			return t, usagef("--listen needs --transport tcp")
+		}
+		if t.listen && a.has("host") {
+			return t, usagef("--host does not go with --listen: the master waits for the outstation")
+		}
+		if !t.listen && a.has("bind-address") {
+			return t, usagef("--bind-address needs --listen")
+		}
 		t.cert, t.key, t.ca = a.str("tls-cert", ""), a.str("tls-key", ""), a.str("tls-ca", "")
 		t.serverName = a.str("tls-server-name", "")
 		if !t.tls && (a.has("tls-cert") || a.has("tls-key") || a.has("tls-ca") || a.has("tls-server-name")) {
@@ -152,6 +183,11 @@ var clientRetry = channel.Retry{Min: 100 * time.Millisecond, Max: time.Second}
 func clientChannel(t transport, host string, port int64) (channel.Channel, string, error) {
 	addr := net.JoinHostPort(host, strconv.Itoa(int(port)))
 	switch {
+	case t.listen && t.tls:
+		ch, err := channel.TLSServer(addr, t.tlsConfig())
+		return ch, addr, err
+	case t.listen:
+		return channel.TCPServer(addr), addr, nil
 	case t.kind == "serial":
 		return channel.SerialChannel(t.serial, clientRetry), t.serial.Device, nil
 	case t.kind == "udp":
@@ -215,6 +251,14 @@ func serverChannel(t transport, bind string, port int64) (ch channel.Channel, ad
 	addr := net.JoinHostPort(bind, strconv.Itoa(int(port)))
 	now := func() bool { return true }
 	switch {
+	case t.connect != "" && t.tls:
+		ch, err := channel.TLSClient(t.connect, t.tlsConfig(), clientRetry)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		return eventChannel{ch}, t.connect, now, nil
+	case t.connect != "":
+		return eventChannel{channel.TCPClient(t.connect, clientRetry)}, t.connect, now, nil
 	case t.kind == "serial":
 		ch := channel.SerialChannel(t.serial, channel.Retry{Min: 100 * time.Millisecond, Max: time.Second})
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

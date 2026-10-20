@@ -324,6 +324,49 @@ impl AssociationHandler for AssocHandler {}
 struct AssocInformation;
 impl AssociationInformation for AssocInformation {}
 
+/// The master of `client --listen`: hands the channel of the first outstation
+/// that connects to the operation.
+struct ListenHandler {
+    config: MasterChannelConfig,
+    channel: Option<tokio::sync::oneshot::Sender<MasterChannel>>,
+}
+
+impl ConnectionHandler for ListenHandler {
+    async fn accept(&mut self, _addr: SocketAddr) -> Result<AcceptAction, Reject> {
+        if self.channel.is_none() {
+            return Err(Reject); // one outstation per operation
+        }
+        Ok(AcceptAction::Accept(AcceptConfig {
+            error_mode: LinkErrorMode::Close,
+            config: self.config,
+        }))
+    }
+
+    async fn start(&mut self, channel: MasterChannel, _addr: SocketAddr) {
+        if let Some(tx) = self.channel.take() {
+            let _ = tx.send(channel);
+        }
+    }
+
+    async fn accept_link_id(
+        &mut self,
+        _addr: SocketAddr,
+        _source: u16,
+        _destination: u16,
+    ) -> Result<AcceptConfig, Reject> {
+        Err(Reject)
+    }
+
+    async fn start_with_link_id(
+        &mut self,
+        _channel: MasterChannel,
+        _addr: SocketAddr,
+        _source: u16,
+        _destination: u16,
+    ) {
+    }
+}
+
 /// Whether the channel is connected (TCP, TLS) or open (serial).
 struct StateListener {
     tx: watch::Sender<bool>,
@@ -727,7 +770,9 @@ pub fn run(argv: &[String]) -> i32 {
     let parsed = (|| -> Result<_, UsageError> {
         let args = Args::parse(&argv[1..], &flags, &switches)?;
         let transport = transport::parse(&args, false)?;
-        let host = if transport.kind == Kind::Serial {
+        let host = if transport.listen {
+            args.str("bind-address", "0.0.0.0")
+        } else if transport.kind == Kind::Serial {
             String::new()
         } else {
             args.required("host")?
@@ -849,6 +894,8 @@ async fn execute(
         Kind::Serial => transport.device.clone(),
         _ => format!("{host}:{port}"),
     };
+    // What has to live as long as the operation: the listening socket.
+    let mut _server = None;
     let strategy = ConnectStrategy::new(
         Duration::from_millis(100),
         Duration::from_secs(1),
@@ -856,6 +903,50 @@ async fn execute(
     );
     let mut udp_destination = None;
     let mut channel = match (transport.kind, &transport.tls) {
+        (Kind::Tcp, _) if transport.listen => {
+            // The master waits for the outstation to connect.
+            let Some(local) = transport::resolve(&address) else {
+                return (
+                    false,
+                    Some(fail("failed", format!("cannot resolve {address}"))),
+                    None,
+                    None,
+                );
+            };
+            let (channel_tx, channel_rx) = tokio::sync::oneshot::channel();
+            let handler = ListenHandler {
+                config,
+                channel: Some(channel_tx),
+            };
+            match spawn_master_tcp_server(local, LinkIdConfig::new(), handler).await {
+                Ok(h) => _server = Some(h),
+                Err(e) => {
+                    return (
+                        false,
+                        Some(fail("failed", format!("cannot listen on {address}: {e}"))),
+                        None,
+                        None,
+                    )
+                }
+            }
+            match tokio::time::timeout(connect_timeout, channel_rx).await {
+                Ok(Ok(channel)) => {
+                    let _ = tx.send(true);
+                    channel
+                }
+                _ => {
+                    return (
+                        false,
+                        Some(fail(
+                            "connect-failed",
+                            format!("no outstation connected to {address}"),
+                        )),
+                        None,
+                        None,
+                    )
+                }
+            }
+        }
         (Kind::Serial, _) => spawn_master_serial(
             config,
             &transport.device,

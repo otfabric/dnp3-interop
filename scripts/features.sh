@@ -19,6 +19,8 @@
 #   sa      secure authentication: reads and controls with the shared update
 #           key, the server's auth events, refusal of a wrong key, of a wrong
 #           user and of a master without authentication
+#   reverse (contract 1.2) dual end point: the outstation dials a master
+#           that listens, over TCP and, where declared, TLS
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
@@ -165,6 +167,42 @@ BLOCKS_HEX=$(jq -r '.files[] | select(.name == "/data/blocks.bin") | .content' "
 NORMALIZE_FILES='del(.adapter, .elapsedMs, .error.message?) | (.file?.time?) |= empty | (.files[]?.time?) |= empty
   | (if .files then .files |= sort_by(.name) else . end)'
 
+# reverse_op <server> <client> <tag> <client args...>: one operation with the
+# roles of the connection reversed; prints the master's result document. The
+# master listens under the name the outstation dials; the outstation is
+# started for the operation and stopped after it.
+reverse_op() {
+    local server="$1" client="$2" tag="$3"; shift 3
+    local listener="fr-${server}-${client}-${RUN_ID}" outst="fo-${server}-${client}-${RUN_ID}"
+    local ctls=() stls=()
+    if [[ "${tag}" == tls ]]; then
+        # The master is the TLS server now: it shows the server certificate.
+        ctls=(--tls --tls-ca /pki/ca.pem --tls-cert /pki/server.pem --tls-key /pki/server.key)
+        stls=(--tls-cert /pki/client.pem --tls-key /pki/client.key --tls-ca /pki/ca.pem --tls-server-name dnp3-interop-server)
+    fi
+    docker rm -f "${listener}" "${outst}" >/dev/null 2>&1
+    docker run -d --name "${listener}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" -v "${PKI}:/pki:ro" \
+        "$(image_of "${client}")" client "$@" --listen --connect-timeout-ms 30000 "${ctls[@]}" >/dev/null
+    start "${server}" "${outst}" -- --connect "${listener}:20000" "${stls[@]}"
+    docker wait "${listener}" >/dev/null 2>&1
+    docker logs "${listener}" 2>/dev/null | keep
+    # The caller runs this in a subshell: the outstation's events go to a file.
+    docker logs "${outst}" 2>/dev/null > "${WORK}/events-${outst}"
+    docker rm -f "${listener}" "${outst}" >/dev/null 2>&1
+}
+
+# reverse <server> <client> <pair> <tcp|tls>
+reverse() {
+    local server="$1" client="$2" pair="$3" tag="$4" doc
+    doc=$(reverse_op "${server}" "${client}" "${tag}" integrity-poll)
+    check "${pair}: [reverse ${tag}] integrity-poll" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
+    check "${pair}: [reverse ${tag}] the outstation dialled" "true ${tag} true" \
+        "$(jq -rs '(map(select(.event == "ready")) | .[0]) as $r | "\($r.dial) \($r.transport) \(any(.[]; .event == "connection-opened"))"' \
+            "${WORK}/events-fo-${server}-${client}-${RUN_ID}" 2>/dev/null)"
+    doc=$(reverse_op "${server}" "${client}" "${tag}" operate --type g12v1 --index 0 --code LATCH_ON)
+    check "${pair}: [reverse ${tag}] operate" "SUCCESS" "$(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+}
+
 suite() {
     local server="$1" k="$2" client pair name doc host run ip_server ip_client
     PASS=0 FAIL=0 SKIPPED=0
@@ -291,6 +329,18 @@ suite() {
             stop_server "${name}"
         else
             skip "${pair}: files (needs server:fileServer,client:fileClient)"
+        fi
+
+        # ---- dual end point: the outstation dials, the master listens (1.2) ----
+        if has "${server}" dualEndpointServer && has "${client}" dualEndpointClient; then
+            reverse "${server}" "${client}" "${pair}" tcp
+            if has "${server}" tls && has "${client}" dualEndpointClientTls; then
+                reverse "${server}" "${client}" "${pair}" tls
+            else
+                skip "${pair}: dual end point over TLS (needs server:tls,client:dualEndpointClientTls)"
+            fi
+        else
+            skip "${pair}: dual end point (needs server:dualEndpointServer,client:dualEndpointClient)"
         fi
 
         # ---- point types of the extended fixture (contract 1.2) ----

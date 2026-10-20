@@ -455,7 +455,7 @@ func runServer(argv []string) int {
 		return exitFailed
 	}
 	emit(object{{"event", "ready"}, {"adapter", adapter}, {"address", address}, {"fixture", fx.Name},
-		{"linkAddress", local}, {"masterAddress", remote}, {"transport", tr.name()}})
+		{"linkAddress", local}, {"masterAddress", remote}, {"transport", tr.name()}, {"dial", tr.connect != ""}})
 
 	select {
 	case <-ctx.Done():

@@ -502,6 +502,24 @@ analog_support!(Group41Var2, "g41v2");
 analog_support!(Group41Var3, "g41v3");
 analog_support!(Group41Var4, "g41v4");
 
+/// Reports the connections of an outstation that dials its master.
+struct ClientEvents {
+    open: bool,
+}
+
+impl Listener<ClientState> for ClientEvents {
+    fn update(&mut self, value: ClientState) -> MaybeAsync<()> {
+        let open = value == ClientState::Connected;
+        if open && !self.open {
+            emit(&json!({"event": "connection-opened"}));
+        } else if !open && self.open {
+            emit(&json!({"event": "connection-closed"}));
+        }
+        self.open = open;
+        MaybeAsync::ready(())
+    }
+}
+
 struct PortListener {
     tx: watch::Sender<bool>,
 }
@@ -665,13 +683,75 @@ async fn serve(
         need_time,
     });
     let controls = Box::new(Controls { fx: fx.clone() });
-    let address = match transport.kind {
-        Kind::Serial => transport.device.clone(),
+    let address = match (&transport.connect, transport.kind) {
+        (Some(addr), _) => addr.clone(),
+        (None, Kind::Serial) => transport.device.clone(),
         _ => format!("{bind}:{port}"),
     };
     // What has to live as long as the outstation runs.
     let mut server_handle = None;
     let outstation = match (transport.kind, &transport.tls) {
+        (Kind::Tcp, tls) if transport.connect.is_some() => {
+            // The outstation dials the master and redials after a
+            // connection ends.
+            let endpoints = EndpointList::single(address.clone());
+            let strategy = ConnectStrategy::new(
+                Duration::from_millis(100),
+                Duration::from_secs(1),
+                Duration::from_millis(100),
+            );
+            let listener = Box::new(ClientEvents { open: false });
+            let mut outstation = match tls {
+                Some(tls) => {
+                    let host = address
+                        .rsplit_once(':')
+                        .map(|(h, _)| h.to_string())
+                        .unwrap_or_default();
+                    let tls_config = match TlsClientConfig::full_pki(
+                        Some(tls.server_name.clone().unwrap_or(host)),
+                        Path::new(&tls.ca),
+                        Path::new(&tls.cert),
+                        Path::new(&tls.key),
+                        None,
+                        MinTlsVersion::V12,
+                    ) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            logf!("server: TLS: {e}");
+                            return EXIT_FAILED;
+                        }
+                    };
+                    spawn_outstation_tls_client(
+                        LinkErrorMode::Close,
+                        endpoints,
+                        strategy,
+                        ConnectOptions::default(),
+                        config,
+                        application,
+                        Box::new(Information),
+                        controls,
+                        listener,
+                        tls_config,
+                    )
+                }
+                None => spawn_outstation_tcp_client(
+                    LinkErrorMode::Close,
+                    endpoints,
+                    strategy,
+                    ConnectOptions::default(),
+                    config,
+                    application,
+                    Box::new(Information),
+                    controls,
+                    listener,
+                ),
+            };
+            if outstation.enable().await.is_err() {
+                logf!("server: the outstation task ended");
+                return EXIT_FAILED;
+            }
+            outstation
+        }
         (Kind::Serial, _) => {
             let (tx, mut rx) = watch::channel(false);
             let outstation = spawn_outstation_serial_2(
@@ -790,7 +870,7 @@ async fn serve(
     emit(&json!({
         "event": "ready", "adapter": ADAPTER, "address": address,
         "fixture": fx.name, "linkAddress": local, "masterAddress": remote,
-        "transport": transport.name(),
+        "transport": transport.name(), "dial": transport.connect.is_some(),
     }));
 
     let mut term = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {

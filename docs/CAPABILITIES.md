@@ -100,6 +100,9 @@ serves it and the master sends it.
 | `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes | no ¹⁷ |
 | `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | yes | no ¹⁶ | yes | no ¹⁷ |
 | `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | no ¹⁸ | yes | no ¹⁸ | no ¹⁷ |
+| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | yes | — |
+| `dualEndpointClient` | `client --listen`: the master listens, over TCP (1.2) | yes | yes | yes | no ¹⁴ |
+| `dualEndpointClientTls` | `client --listen --tls` (1.2) | no ¹⁹ | yes | yes | no ¹⁴ |
 
 ² The library's master has no way to send it: opendnp3's `PerformFunction`
 and stepfunc's `send_and_expect_empty_response` always wait for a response,
@@ -164,6 +167,9 @@ analogs, stepfunc cannot.
 ¹⁸ stepfunc's master and go-dnp3's master drop g50v4 objects (stepfunc warns
 "ignored header variation"; go-dnp3 has no handler for the type). go-dnp3's
 outstation serves them.
+
+¹⁹ stepfunc's master listens with `spawn_master_tcp_server`; the crate has
+no TLS listener for a master.
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
