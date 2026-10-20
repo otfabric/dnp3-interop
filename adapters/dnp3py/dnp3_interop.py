@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: MIT
 """dnp3-interop adapter for dnp3py. Implements docs/CONTAINER_CONTRACT.md.
 
-The client (master) role only: dnp3py's outstation cannot serve the baseline
-fixture (it has no double-bit inputs, no octet strings and no per-point
-variations), so `server` is refused as a role the adapter does not have.
+Both roles. dnp3py's outstation cannot serve the baseline fixture (it has no
+double-bit inputs, no octet strings and no per-point variations): `server`
+serves the fixtures within its limits, the `dnp3py` fixture, and refuses
+others before it listens (exit 4).
 
 dnp3py's master runs the link, transport and application layers and decodes
 responses. Its high-level calls cover polls and unsolicited responses; every
@@ -17,6 +18,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import signal
 import struct
 import sys
 import time
@@ -26,7 +29,17 @@ from importlib.metadata import version as package_version
 from dnp3.application.fragment import ObjectBlock, RequestFragment
 from dnp3.application.header import RequestHeader
 from dnp3.application.qualifiers import ObjectHeader, PrefixCode, RangeCode
-from dnp3.core.enums import FunctionCode
+from dnp3.core.enums import CommandStatus, FunctionCode
+from dnp3.core.flags import AnalogQuality, BinaryQuality, CounterQuality
+from dnp3.database import (
+    AnalogInputConfig,
+    AnalogOutputConfig,
+    BinaryInputConfig,
+    BinaryOutputConfig,
+    CounterConfig,
+    Database,
+    EventClass,
+)
 from dnp3.master.config import MasterConfig
 from dnp3.master.handler import DefaultSOEHandler
 
@@ -43,6 +56,7 @@ from dnp3.master.master import (
 )
 from dnp3.master.tcp_runner import LinkError, LinkResetPolicy, MasterRunnerError, MasterTcpRunner, ResponseTimeoutError
 from dnp3.objects.layout import layout_for
+from dnp3.outstation import CommandResult, Outstation, OutstationConfig, OutstationTcpRunner, UnsolicitedConfig
 
 ADAPTER = "dnp3py"
 SCHEMA_VERSION = "1.0"
@@ -58,6 +72,9 @@ OPERATIONS = [
 
 USAGE = """usage: dnp3-interop <command>
 
+  server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
+         [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK]
+         (serves fixtures within dnp3py's limits: fixtures/dnp3py)
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [LINK] [operation flags]
       integrity-poll
@@ -80,7 +97,7 @@ USAGE = """usage: dnp3-interop <command>
 
   LINK: [--local-addr N] [--remote-addr N]
 
-The adapter has no server role. See docs/CONTAINER_CONTRACT.md in
+See docs/CONTAINER_CONTRACT.md in
 https://github.com/otfabric/dnp3-interop
 """
 
@@ -642,6 +659,432 @@ def client_main(argv):
     return EXIT_CONNECT_FAILED if failure.code == "connect-failed" else EXIT_FAILED
 
 
+# ---- server (outstation) ---------------------------------------------------
+
+DEFAULT_FIXTURE = "/fixtures/baseline/fixture.json"
+DEFAULT_READY_FILE = "/run/dnp3-interop/ready"
+EXIT_FIXTURE_INVALID = 4
+
+# What dnp3py's outstation serves: one static and one event variation per
+# type, each type's events in one class (it answers an event read of g2 with
+# every class 1 event, of g32 with class 2, of g22 with class 3), no events of
+# outputs and frozen counters (it encodes them as g2 and g22), integer analog
+# values (g30v1 and g40v1 carry integers).
+SERVED = {
+    # type: (static variations, default, event classes, event variations, default)
+    "binaryInputs": ({2}, 2, {0, 1}, {1}, 2),
+    "binaryOutputs": ({2}, 2, {0}, set(), 2),
+    "counters": ({1}, 1, {0, 3}, {5}, 1),
+    "frozenCounters": ({1}, 1, {0}, set(), 1),
+    "analogInputs": ({1}, 1, {0, 2}, {1}, 1),
+    "analogOutputs": ({1, 2}, 1, {0}, set(), 1),
+}
+POINT_FIELDS = {"index", "value", "class", "flags", "staticVariation", "eventVariation"}
+FLAG_BITS = {
+    "binary": {**{n: 1 << i for i, n in enumerate(COMMON_FLAGS)}, "CHATTER_FILTER": 0x20},
+    "output": {n: 1 << i for i, n in enumerate(COMMON_FLAGS)},
+    "counter": {**{n: 1 << i for i, n in enumerate(COMMON_FLAGS)}, "DISCONTINUITY": 0x40},
+    "analog": {**{n: 1 << i for i, n in enumerate(COMMON_FLAGS)}, "OVER_RANGE": 0x20, "REFERENCE_ERR": 0x40},
+}
+FAMILY = {"binaryInputs": "binary", "binaryOutputs": "output", "counters": "counter", "frozenCounters": "counter",
+          "analogInputs": "analog", "analogOutputs": "analog"}
+QUALITY = {"binary": BinaryQuality, "output": BinaryQuality, "counter": CounterQuality, "analog": AnalogQuality}
+
+
+class FixtureError(Exception):
+    pass
+
+
+def is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def load_fixture(text):
+    """The fixture, checked against docs/FIXTURES.md and what dnp3py serves."""
+    try:
+        fx = json.loads(text)
+    except ValueError as e:
+        raise FixtureError(f"not JSON: {e}") from None
+    errors = []
+    if not isinstance(fx, dict):
+        raise FixtureError("not a JSON object")
+    for k in fx:
+        if k not in ("schemaVersion", "name", "description", "outstation", *SERVED):
+            errors.append(f"{k}: dnp3py's outstation does not serve it" if k in (
+                "doubleBitInputs", "octetStrings", "frozenAnalogInputs", "timeAndIntervals", "files", "directories")
+                else f"unknown field '{k}'")
+    if fx.get("schemaVersion") != "1.0":
+        errors.append('schemaVersion must be "1.0"')
+    if not isinstance(fx.get("name"), str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", fx["name"]):
+        errors.append("name is missing or invalid")
+    o = fx.get("outstation")
+    if not isinstance(o, dict):
+        errors.append("outstation is required")
+        o = {}
+    for k in o:
+        if k not in ("address", "masterAddress", "unsolicited", "needTime", "coldRestartDelayMs", "warmRestartDelayMs"):
+            errors.append(f"outstation: unknown field '{k}'")
+    for k in ("address", "masterAddress"):
+        if not is_int(o.get(k)) or not 0 <= o[k] <= 65519:
+            errors.append(f"outstation: {k} must be 0..65519")
+    if o.get("address") == o.get("masterAddress"):
+        errors.append("outstation: address and masterAddress are equal")
+    for k in ("unsolicited", "needTime"):
+        if k in o and not isinstance(o[k], bool):
+            errors.append(f"outstation: {k} must be a boolean")
+    if o.get("unsolicited"):
+        errors.append("outstation.unsolicited: dnp3py's outstation sends no unsolicited responses")
+    for k in ("coldRestartDelayMs", "warmRestartDelayMs"):
+        if k in o and (not is_int(o[k]) or not 0 <= o[k] <= 65535):
+            errors.append(f"outstation: {k} must be 0..65535")
+
+    points = {}
+    for kind, (svars, sdef, classes, evars, edef) in SERVED.items():
+        points[kind] = {}
+        items = fx.get(kind, [])
+        if not isinstance(items, list):
+            errors.append(f"{kind} must be an array")
+            continue
+        for p in items:
+            where = f"{kind}[{p.get('index') if isinstance(p, dict) else '?'}]"
+            if not isinstance(p, dict):
+                errors.append(f"{where}: not an object")
+                continue
+            allowed = set(POINT_FIELDS)
+            if kind in ("binaryOutputs", "analogOutputs"):
+                allowed |= {"target", "selectRequired"}
+            if kind == "analogOutputs":
+                allowed |= {"min", "max"}
+            for k in p:
+                if k not in allowed:
+                    errors.append(f"{where}: unknown field '{k}'")
+            i = p.get("index")
+            if not is_int(i) or not 0 <= i <= 65535:
+                errors.append(f"{where}: index must be 0..65535")
+                continue
+            if i in points[kind]:
+                errors.append(f"{where}: duplicate index")
+            c = p.get("class", 0)
+            if not is_int(c) or c not in classes:
+                errors.append(f"{where}: class {c}: dnp3py's outstation puts the events of {kind} in class "
+                              f"{max(classes)} only" if max(classes) else f"{where}: dnp3py's outstation raises no events of {kind}")
+            sv = p.get("staticVariation", sdef)
+            if sv not in svars:
+                errors.append(f"{where}: dnp3py's outstation serves static variation {sorted(svars)} only")
+            ev = p.get("eventVariation", edef)
+            if c and c in classes and ev not in evars:
+                errors.append(f"{where}: dnp3py's outstation serves event variation {sorted(evars)} only")
+            family = FAMILY[kind]
+            flags = 0
+            for f in p.get("flags", ["ONLINE"]):
+                bit = FLAG_BITS[family].get(f)
+                if bit is None or flags & bit:
+                    errors.append(f"{where}: flag {f} is not allowed or repeated")
+                else:
+                    flags |= bit
+            v = p.get("value")
+            if kind in ("binaryInputs", "binaryOutputs"):
+                if not isinstance(v, bool):
+                    errors.append(f"{where}: value must be a boolean")
+            elif kind in ("counters", "frozenCounters"):
+                if not is_int(v) or not 0 <= v <= 4294967295:
+                    errors.append(f"{where}: value must be 0..4294967295")
+            else:
+                limit = 32767 if (kind == "analogOutputs" and sv == 2) else 2147483647
+                if not is_int(v) or not -limit - 1 <= v <= limit:
+                    errors.append(f"{where}: dnp3py serves integer analog values only, in the range of the variation")
+            for bound in ("min", "max"):
+                if bound in p and not isinstance(p[bound], (int, float)):
+                    errors.append(f"{where}: {bound} must be a number")
+            if "selectRequired" in p and not isinstance(p["selectRequired"], bool):
+                errors.append(f"{where}: selectRequired must be a boolean")
+            points[kind][i] = dict(p, flags=flags, staticVariation=sv)
+    aovars = {p["staticVariation"] for p in points["analogOutputs"].values()}
+    if len(aovars) > 1:
+        errors.append("analogOutputs: dnp3py's outstation serves one static variation for all of them")
+    for kind, target_kind in (("binaryOutputs", "binaryInputs"), ("analogOutputs", "analogInputs")):
+        seen = {}
+        for i, p in points[kind].items():
+            t = p.get("target")
+            if t is None:
+                continue
+            if t not in points[target_kind]:
+                errors.append(f"{kind}[{i}]: target {t} is not one of the {target_kind}")
+            elif t in seen:
+                errors.append(f"{kind}[{i}]: target {t} is also the target of output {seen[t]}")
+            seen[t] = i
+    for i in points["frozenCounters"]:
+        if i not in points["counters"]:
+            errors.append(f"frozenCounters[{i}]: there is no counter with this index to freeze")
+    if errors:
+        raise FixtureError("; ".join(errors))
+    return fx, points
+
+
+class Controls:
+    """The control rules of docs/FIXTURES.md, for dnp3py's CommandHandler.
+
+    dnp3py tells the handler neither the variation of an analog control nor
+    whether a direct operate expects a response: InteropOutstation notes both
+    from the request before it is processed.
+    """
+
+    def __init__(self, fx, points, outstation_ref):
+        self.points = points
+        self.db = None
+        self.outstation = outstation_ref
+        self.fx = fx
+
+    def _check(self, kind, index, direct, code=None, value=None):
+        p = self.points[kind].get(index)
+        if p is None:
+            return CommandStatus.NOT_SUPPORTED
+        if code is not None and int(code) not in (CODES["LATCH_ON"], CODES["LATCH_OFF"], CODES["CLOSE"], CODES["TRIP"]):
+            return CommandStatus.NOT_SUPPORTED
+        if value is not None and (("min" in p and value < p["min"]) or ("max" in p and value > p["max"])):
+            return CommandStatus.OUT_OF_RANGE
+        if direct and p.get("selectRequired"):
+            return CommandStatus.NOT_SUPPORTED
+        return CommandStatus.SUCCESS
+
+    def _event(self, function, kind, index, status, code=None, value=None, count=0, on=0, off=0):
+        o = {"event": "command", "function": function}
+        if kind == "binaryOutputs":
+            o.update({"type": "g12v1", "index": index, "code": int(code), "count": count, "onMs": on, "offMs": off})
+        else:
+            o.update({"type": f"g41v{self.outstation[0].control_variation}", "index": index, "value": number(value)})
+        o["status"] = status_name(int(status))
+        emit(o)
+
+    def _direct_name(self):
+        return "direct-operate-no-ack" if self.outstation[0].no_ack else "direct-operate"
+
+    # dnp3py's update_* reset the flags to ONLINE unless given: keep them.
+    def _set_binary(self, kind, index, value):
+        p = (self.db.get_binary_output if kind == "binaryOutputs" else self.db.get_binary_input)(index)
+        if p is not None and p.value != value:
+            update = self.db.update_binary_output if kind == "binaryOutputs" else self.db.update_binary_input
+            update(index, value, quality=p.quality)
+
+    def _set_analog(self, kind, index, value):
+        p = (self.db.get_analog_output if kind == "analogOutputs" else self.db.get_analog_input)(index)
+        if p is not None and p.value != value:
+            update = self.db.update_analog_output if kind == "analogOutputs" else self.db.update_analog_input
+            update(index, value, quality=p.quality)
+
+    def _apply_binary(self, index, code):
+        value = int(code) in (CODES["LATCH_ON"], CODES["CLOSE"])
+        self._set_binary("binaryOutputs", index, value)
+        t = self.points["binaryOutputs"][index].get("target")
+        if t is not None:
+            self._set_binary("binaryInputs", t, value)
+
+    def _apply_analog(self, index, value):
+        self._set_analog("analogOutputs", index, value)
+        t = self.points["analogOutputs"][index].get("target")
+        if t is not None:
+            self._set_analog("analogInputs", t, value)
+
+    def select_binary_output(self, index, code, count, on_time, off_time):
+        status = self._check("binaryOutputs", index, False, code=code)
+        self._event("select", "binaryOutputs", index, status, code, count=count, on=on_time, off=off_time)
+        return CommandResult(status)
+
+    def operate_binary_output(self, index, code, count, on_time, off_time, select_sequence):
+        status = self._check("binaryOutputs", index, False, code=code)
+        if status == CommandStatus.SUCCESS:
+            self._apply_binary(index, code)
+        self._event("operate", "binaryOutputs", index, status, code, count=count, on=on_time, off=off_time)
+        return CommandResult(status)
+
+    def direct_operate_binary_output(self, index, code, count, on_time, off_time):
+        status = self._check("binaryOutputs", index, True, code=code)
+        if status == CommandStatus.SUCCESS:
+            self._apply_binary(index, code)
+        self._event(self._direct_name(), "binaryOutputs", index, status, code, count=count, on=on_time, off=off_time)
+        return CommandResult(status)
+
+    def select_analog_output(self, index, value):
+        status = self._check("analogOutputs", index, False, value=value)
+        self._event("select", "analogOutputs", index, status, value=value)
+        return CommandResult(status)
+
+    def operate_analog_output(self, index, value, select_sequence):
+        status = self._check("analogOutputs", index, False, value=value)
+        if status == CommandStatus.SUCCESS:
+            self._apply_analog(index, value)
+        self._event("operate", "analogOutputs", index, status, value=value)
+        return CommandResult(status)
+
+    def direct_operate_analog_output(self, index, value):
+        status = self._check("analogOutputs", index, True, value=value)
+        if status == CommandStatus.SUCCESS:
+            self._apply_analog(index, value)
+        self._event(self._direct_name(), "analogOutputs", index, status, value=value)
+        return CommandResult(status)
+
+    def cold_restart(self):
+        return self._restart("cold", "coldRestartDelayMs")
+
+    def warm_restart(self):
+        return self._restart("warm", "warmRestartDelayMs")
+
+    def _restart(self, kind, key):
+        delay = self.fx["outstation"].get(key)
+        if delay is not None:
+            emit({"event": "restart", "type": kind})
+        return delay
+
+    def freeze_counters(self, start, stop, clear):
+        # dnp3py passes 0..65535 whatever the request's range.
+        for c in self.db.get_all_counters():
+            if not start <= c.index <= stop:
+                continue
+            if self.db.get_frozen_counter(c.index) is not None:
+                self.db.freeze_counter(c.index)
+            if clear and c.value != 0:
+                self.db.update_counter(c.index, 0, quality=c.quality)
+        return CommandResult(CommandStatus.SUCCESS)
+
+
+class InteropOutstation(Outstation):
+    """dnp3py's Outstation, noting what the handler is not told, and without
+    ENABLE and DISABLE UNSOLICITED (the fixture has no unsolicited responses).
+    """
+
+    control_variation = 1
+    no_ack = False
+
+    def process_request(self, data, *, peer=None):
+        if len(data) >= 4:
+            self.no_ack = data[1] == FunctionCode.DIRECT_OPERATE_NO_ACK
+            if data[2] == 41:
+                self.control_variation = data[3]
+        return super().process_request(data, peer=peer)
+
+    def _executors(self, peer):
+        executors = super()._executors(peer)
+        executors.pop(FunctionCode.ENABLE_UNSOLICITED, None)
+        executors.pop(FunctionCode.DISABLE_UNSOLICITED, None)
+        return executors
+
+
+class EventRunner(OutstationTcpRunner):
+    """dnp3py's TCP runner, reporting connections as server events."""
+
+    async def _handle_connection(self, channel):
+        emit({"event": "connection-opened"})
+        try:
+            await super()._handle_connection(channel)
+        finally:
+            emit({"event": "connection-closed"})
+
+
+def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
+    o = fx["outstation"]
+    holder = [None]
+    controls = Controls(fx, points, holder)
+    aovars = {p["staticVariation"] for p in points["analogOutputs"].values()} or {1}
+    config = OutstationConfig(
+        address=local, master_address=remote, select_timeout=select_ms / 1000, confirm_timeout=confirm_ms / 1000,
+        time_sync_required=bool(o.get("needTime", False)), analog_output_static_variation=aovars.pop(),
+        unsolicited=UnsolicitedConfig(enabled=False))
+    db = Database()
+    for i, p in sorted(points["binaryInputs"].items()):
+        db.add_binary_input(i, BinaryInputConfig(event_class=EventClass(p.get("class", 0))), p["value"],
+                            BinaryQuality(p["flags"]))
+    for i, p in sorted(points["binaryOutputs"].items()):
+        db.add_binary_output(i, BinaryOutputConfig(event_class=EventClass.NONE), p["value"], BinaryQuality(p["flags"]))
+    for i, p in sorted(points["counters"].items()):
+        db.add_counter(i, CounterConfig(event_class=EventClass(p.get("class", 0))), p["value"], CounterQuality(p["flags"]))
+    for i, p in sorted(points["frozenCounters"].items()):
+        db.add_frozen_counter(i, None, p["value"], CounterQuality(p["flags"]))
+    for i, p in sorted(points["analogInputs"].items()):
+        db.add_analog_input(i, AnalogInputConfig(event_class=EventClass(p.get("class", 0))), p["value"],
+                            AnalogQuality(p["flags"]))
+    for i, p in sorted(points["analogOutputs"].items()):
+        # The adapter sets the value itself, keeping the flags; dnp3py's
+        # tracking would reset them to ONLINE.
+        db.add_analog_output(i, AnalogOutputConfig(event_class=EventClass.NONE, track_commands=False), p["value"],
+                             AnalogQuality(p["flags"]))
+    controls.db = db
+
+    def time_written(ts):
+        emit({"event": "time-sync", "time": format_time(ts.to_datetime())})
+
+    outstation = InteropOutstation(config=config, database=db, handler=controls, time_handler=time_written)
+    holder[0] = outstation
+    return outstation
+
+
+def server_main(argv):
+    try:
+        a = Args(argv, ["fixture", "bind-address", "port", "ready-file", "select-timeout-ms", "confirm-timeout-ms",
+                        "local-addr", "remote-addr"])
+        path = a.str("fixture", DEFAULT_FIXTURE)
+        bind = a.str("bind-address", "0.0.0.0")
+        port = a.integer("port", 20000, 1, 65535)
+        ready_file = a.str("ready-file", DEFAULT_READY_FILE)
+        select_ms = a.integer("select-timeout-ms", 5000, 1, 3600000)
+        confirm_ms = a.integer("confirm-timeout-ms", 5000, 1, 3600000)
+        local = a.integer("local-addr", -1, 0, 65519)
+        remote = a.integer("remote-addr", -1, 0, 65519)
+    except UsageError as e:
+        log(f"server: {e}")
+        return EXIT_USAGE
+    try:
+        with open(path, encoding="utf-8") as f:
+            fx, points = load_fixture(f.read())
+    except (OSError, FixtureError) as e:
+        log(f"server: fixture {path}: {e}")
+        return EXIT_FIXTURE_INVALID
+    local = fx["outstation"]["address"] if local < 0 else local
+    remote = fx["outstation"]["masterAddress"] if remote < 0 else remote
+    outstation = build_outstation(fx, points, local, remote, select_ms, confirm_ms)
+    return asyncio.run(serve(outstation, fx, bind, port, ready_file, local, remote))
+
+
+async def serve(outstation, fx, bind, port, ready_file, local, remote):
+    runner = EventRunner(outstation=outstation, host=bind, port=port)
+    task = asyncio.create_task(runner.run())
+    deadline = time.monotonic() + 5
+    while runner.local_address is None:
+        if task.done():
+            log(f"server: cannot listen on {bind}:{port}: {task.exception()}")
+            return EXIT_FAILED
+        if time.monotonic() > deadline:
+            log(f"server: not listening on {bind}:{port} after 5 s")
+            return EXIT_FAILED
+        await asyncio.sleep(0.01)
+    try:
+        with open(ready_file, "w", encoding="utf-8"):
+            pass
+    except OSError as e:
+        log(f"server: cannot write the readiness file {ready_file}: {e}")
+        return EXIT_FAILED
+    emit({"event": "ready", "adapter": ADAPTER, "address": f"{bind}:{port}", "fixture": fx["name"],
+          "linkAddress": local, "masterAddress": remote, "transport": "tcp", "dial": False})
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+    done, _ = await asyncio.wait([task, asyncio.create_task(stop.wait())], return_when=asyncio.FIRST_COMPLETED)
+    if task in done:
+        log(f"server: the runner ended: {task.exception() if not task.cancelled() else 'cancelled'}")
+    try:
+        os.remove(ready_file)
+    except OSError:
+        pass
+    await runner.stop()
+    task.cancel()
+    try:
+        await asyncio.wait_for(task, 2)
+    except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+        pass
+    emit({"event": "stopped"})
+    return EXIT_OK
+
+
 def print_capabilities():
     emit({
         "schemaVersion": SCHEMA_VERSION,
@@ -654,7 +1097,7 @@ def print_capabilities():
         },
         # The outstation cannot serve the baseline fixture: no double-bit
         # inputs, octet strings or per-point variations.
-        "roles": {"server": False, "client": True},
+        "roles": {"server": True, "client": True},
         "features": {
             "integrityPoll": True,
             "eventPoll": True,
@@ -663,7 +1106,7 @@ def print_capabilities():
             "directOperate": True,
             "selectBeforeOperate": True,
             "parameterErrorWithNotSupported": False,
-            "directOperateNoAckServer": False,
+            "directOperateNoAckServer": True,
             "directOperateNoAckClient": True,
             "timeSyncLan": True,
             "timeSyncNonLan": True,
@@ -674,7 +1117,7 @@ def print_capabilities():
             "assignClassServer": False,
             "assignClassClient": True,
             "freeze": True,
-            "freezeNoAckServer": False,
+            "freezeNoAckServer": True,
             "freezeNoAckClient": True,
             "octetStrings": True,
             "tcp": True,
@@ -699,7 +1142,16 @@ def print_capabilities():
             "securityStatisticsServer": False,
             "securityStatisticsClient": False,
         },
-        "pointTypes": [],
+        "pointTypes": list(SERVED),
+        # Contract 1.2: what the outstation does differently from the master.
+        "serverFeatures": {
+            # Ranges and specific variations of a read are ignored: every point
+            # of the type comes back in its one variation (tests/known-bugs.tsv).
+            "read": False,
+            "unsolicited": False,
+            "octetStrings": False,
+            "timeSyncOnDemand": True,
+        },
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": OPERATIONS,
     })
@@ -727,8 +1179,7 @@ def main(argv):
     )
     command, rest = (argv[0], argv[1:]) if argv else ("server", [])
     if command == "server":
-        log("server: this adapter has no server role (see print-capabilities)")
-        return EXIT_USAGE
+        return server_main(rest)
     if command == "client":
         return client_main(rest)
     if command == "print-capabilities" and not rest:

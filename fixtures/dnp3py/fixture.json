@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "1.0",
+  "name": "dnp3py",
+  "description": "The baseline within what dnp3py's outstation serves: one static and one event variation per type, binary inputs in class 1, analog inputs in class 2, counters in class 3, outputs and frozen counters without events, integer analog values, no double-bit inputs, octet strings or unsolicited responses. Every outstation that serves its types serves it, so dnp3py's outstation is compared with the others.",
+  "outstation": {
+    "address": 1024,
+    "masterAddress": 1,
+    "unsolicited": false,
+    "needTime": true,
+    "coldRestartDelayMs": 5000,
+    "warmRestartDelayMs": 1000
+  },
+  "binaryInputs": [
+    {
+      "index": 0,
+      "value": true,
+      "class": 1,
+      "eventVariation": 1
+    },
+    {
+      "index": 1,
+      "value": false,
+      "class": 1,
+      "eventVariation": 1
+    },
+    {
+      "index": 2,
+      "value": true,
+      "flags": [
+        "ONLINE",
+        "LOCAL_FORCED"
+      ],
+      "class": 1,
+      "eventVariation": 1
+    },
+    {
+      "index": 3,
+      "value": false,
+      "flags": []
+    }
+  ],
+  "binaryOutputs": [
+    {
+      "index": 0,
+      "value": false,
+      "target": 1
+    },
+    {
+      "index": 1,
+      "value": false,
+      "selectRequired": true
+    }
+  ],
+  "counters": [
+    {
+      "index": 0,
+      "value": 123456,
+      "class": 3,
+      "eventVariation": 5
+    },
+    {
+      "index": 1,
+      "value": 65535,
+      "class": 3,
+      "eventVariation": 5
+    },
+    {
+      "index": 2,
+      "value": 4294967295
+    }
+  ],
+  "frozenCounters": [
+    {
+      "index": 0,
+      "value": 0
+    },
+    {
+      "index": 1,
+      "value": 0
+    }
+  ],
+  "analogInputs": [
+    {
+      "index": 0,
+      "value": -1234,
+      "class": 2
+    },
+    {
+      "index": 1,
+      "value": 32767
+    },
+    {
+      "index": 2,
+      "value": 0,
+      "flags": [
+        "OVER_RANGE"
+      ]
+    },
+    {
+      "index": 3,
+      "value": 0,
+      "class": 2
+    }
+  ],
+  "analogOutputs": [
+    {
+      "index": 0,
+      "value": 0,
+      "target": 3,
+      "min": -1000000,
+      "max": 1000000
+    },
+    {
+      "index": 1,
+      "value": 0,
+      "selectRequired": true,
+      "min": -100,
+      "max": 100
+    }
+  ]
+}

@@ -12,6 +12,8 @@
 #   3  extended regular expression matched against the operation and its flags,
 #      or against the description scripts/interop.sh gives a value check
 #   4  what is wrong (docs/COMPATIBILITY.md has the details)
+#   5  the fixture of the runs it applies to (scripts/interop.sh FIXTURE);
+#      absent: baseline
 #
 # For a pairing that involves the adapter at that version, a matching case
 # may fail and is counted as "known bug" rather than as a failure. If no
@@ -21,3 +23,6 @@ stepfunc:server	1.7.0	--mode sbo	the first SELECT after start fails with NO_SELE
 dscsystems:server	v0.8.1	^freeze --clear	FREEZE AND CLEAR leaves a counter that has no frozen counter of the same index uncleared
 dscsystems:server	v0.8.1	^freeze, unchanged frozen value	a freeze raises frozen counter events even for frozen values that did not change
 dscsystems:client	v0.8.1	--local-addr	the master accepts frames addressed to another master address, and the outstation processes requests from a master address other than its own master's; together, a master with a wrong address reads an IIN instead of timing out
+dscsystems:server	v0.8.1	--local-addr	with unsolicited responses off, the outstation answers requests from any master address, to that address	dnp3py
+dnp3py:server	0.6.0	^read .*--start	a read of a range returns every point of the type: ranges and specific variations are ignored	dnp3py
+dnp3py:server	0.6.0	^operate --type g(12v1|41v2) --index (9|5) 	a control of a point that does not exist is answered NOT_SUPPORTED without IIN2.2 PARAMETER_ERROR	dnp3py

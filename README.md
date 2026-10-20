@@ -13,12 +13,12 @@ integrating third-party protocol stacks into production applications.
 | `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) 1.7.0 | Rust | yes | yes | `ghcr.io/otfabric/dnp3-interop-stepfunc` |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.1 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
-| `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | no | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
+| `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
 
 The stacks do not all do the same: the stepfunc outstation refuses ASSIGN
 CLASS, opendnp3's master synchronizes time only when the outstation asks for
-it, go-dnp3's master reads only ranges and classes, and dnp3py serves as a
-master only. Each image says what it supports (`print-capabilities`); see
+it, go-dnp3's master reads only ranges and classes, and dnp3py's outstation (¹)
+serves only the `dnp3py` fixture, the baseline within its limits. Each image says what it supports (`print-capabilities`); see
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
 Beyond DNP3 over TCP (container contract 1.0), contract 1.1 covers:
@@ -29,11 +29,13 @@ Beyond DNP3 over TCP (container contract 1.0), contract 1.1 covers:
 | File transfer (g70) | master (no delete) | no | both roles | no |
 | Secure authentication v5 (g120) | no | no | both roles | no |
 
+¹ dnp3py's outstation serves the `dnp3py` fixture only.
+
 The Step Function I/O dnp3 crate is distributed under a non-commercial,
 non-production licence. Its image exists for interoperability testing only;
 see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Planned: dnp3py's outstation role. On hold: the Triangle MicroWorks DNP3
+On hold: the Triangle MicroWorks DNP3
 Source Code Library (C), whose licensed source has no agreed way into the
 builds yet. See [PLAN.md](PLAN.md).
 
@@ -104,7 +106,7 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
 }
 ```
 
-(abridged). Every image has the same commands (dnp3py, a master only, refuses `server`):
+(abridged). Every image has the same commands:
 
 ```text
 server               an outstation serving a fixture
@@ -161,7 +163,7 @@ dnp3-interop/
 │   ├── opendnp3/        C++ adapter: Dockerfile, CMakeLists.txt, src/
 │   ├── stepfunc/        Rust adapter: Dockerfile, Cargo.toml, Cargo.lock, src/
 │   ├── dscsystems/      Go adapter: Dockerfile, go.mod, *.go
-│   └── dnp3py/          Python adapter (master only): Dockerfile, requirements.txt, dnp3_interop.py
+│   └── dnp3py/          Python adapter: Dockerfile, requirements.txt, dnp3_interop.py
 ├── fixtures/
 │   ├── schema/          JSON Schema of the fixture format
 │   └── baseline/        the baseline outstation

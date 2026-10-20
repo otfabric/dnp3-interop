@@ -94,13 +94,18 @@ bugs of go-dnp3 v0.8.1 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
 of a counter without frozen counter, freeze events for unchanged values, link
 address filtering). Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-### dnp3py (done as master)
+### dnp3py (done, both roles)
 
-Pin dnp3py 0.6.0 (PyPI, commit `c00d5df2`, MIT). Client role only: its
-outstation cannot serve the baseline fixture (no double-bit inputs, octet
-strings or per-point variations; analog inputs always g30v1; no analog output
-events; the TCP runner does not send unsolicited responses). Serving it would
-need a second fixture within those limits and cases for it; that is open.
+Pin dnp3py 0.6.0 (PyPI, commit `c00d5df2`, MIT). Its outstation cannot serve
+the baseline fixture (no double-bit inputs, octet strings or per-point
+variations; analog inputs always g30v1; no analog output events; the TCP
+runner does not send unsolicited responses). It serves the `dnp3py` fixture,
+the baseline within those limits, which every other outstation serves too:
+`FIXTURE=dnp3py scripts/interop.sh` (part of `make interop`) runs
+tests/cases-dnp3py.tsv for every master against all four outstations and
+checks that they agree. Two dnp3py behaviours are known bugs there: a range
+read returns every point of the type, and a control of a point that does not
+exist is answered without PARAMETER_ERROR.
 
 The master runs dnp3py's link, transport and application layers and its
 decoders; the requests its master has no call for (all-objects and range

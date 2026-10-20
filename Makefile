@@ -108,8 +108,9 @@ smoke: $(addprefix smoke-,$(ADAPTERS)) ## Container-contract smoke test of every
 smoke-%: FORCE ## Smoke test one adapter, e.g. smoke-stepfunc
 	@scripts/smoke.sh $*
 
-interop: ## Cross-stack self-test: every client against every server
+interop: ## Cross-stack self-test: every client against every server, on the baseline and the dnp3py fixture
 	@scripts/interop.sh $(ADAPTERS)
+	@FIXTURE=dnp3py scripts/interop.sh $(ADAPTERS)
 
 features: ## Cross-stack self-test of contract 1.1: TLS, UDP, serial, file transfer, secure authentication
 	@scripts/features.sh $(ADAPTERS)
@@ -138,6 +139,7 @@ candidate-%: FORCE ## Build one adapter on CANDIDATE_VERSION (opendnp3: and CAND
 	@for a in $(filter-out $*,$(ADAPTERS)); do docker tag $(call image,$$a):$(VERSION) $(call image,$$a):candidate || exit 1; done
 	@VERSION=candidate scripts/smoke.sh $*
 	@VERSION=candidate scripts/interop.sh $(ADAPTERS)
+	@VERSION=candidate FIXTURE=dnp3py scripts/interop.sh $(ADAPTERS)
 	@VERSION=candidate scripts/features.sh $(ADAPTERS)
 
 # ── Release qualification ─────────────────────────────────────────────────────
