@@ -4,9 +4,9 @@
 
 1. `make ci` on the commit to release.
 2. Update `interop_version` in `versions.yaml` and the notes below.
-3. Tag `vX.Y.Z` and push the tag. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates, builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly them to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins and the digests of the multi-arch images) and `checksums.txt`.
-4. The release workflow then runs the **Release qualification** workflow on what it published: the smoke and cross-stack self-tests again, natively on both architectures, against the images in the registry; a compatibility report from their documents; a Trivy vulnerability scan and a CycloneDX SBOM of every image and architecture. It attaches `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz` to the release. Run it by hand (Actions → Release qualification) to qualify an earlier release again; vulnerability findings are recorded, not gated on.
-5. Consumers pin the digests from `manifest.json`.
+3. Tag `vX.Y.Z` and push the tag. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates, builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly those of the published adapters (opendnp3, dscsystems, dnp3py: `PUBLISHED_ADAPTERS` in the Makefile) to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. The stepfunc image is built and self-tested but never pushed: the licence of the Step Function I/O dnp3 crate forbids distributing it. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins, the digests of the multi-arch images, and under `localOnly` the stepfunc pin and how to build it) and `checksums.txt`.
+4. The release workflow then runs the **Release qualification** workflow on what it published: the smoke and cross-stack self-tests again, natively on both architectures, against the images in the registry, with the stepfunc image built from the tag; a compatibility report from their documents; a Trivy vulnerability scan and a CycloneDX SBOM of every published image and architecture. It attaches `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz` to the release. Run it by hand (Actions → Release qualification) to qualify an earlier release again; vulnerability findings are recorded, not gated on.
+5. Consumers pin the digests from `manifest.json`, and build the stepfunc image from the tag (`make image-stepfunc VERSION=vX.Y.Z`).
 
 Tags are immutable. A fix is a new version.
 
@@ -15,6 +15,31 @@ Tags are immutable. A fix is a new version.
 | Contract or fixture format changed incompatibly | major |
 | New operation, behaviour, fixture, adapter or document field | minor |
 | Upstream pin, base image or bug fix with unchanged contract | patch |
+
+---
+
+## v0.4.3
+
+**Date:** 2026-10-21
+**Previous release:** v0.4.2
+
+## Summary
+
+The stepfunc image is no longer published, at Step Function I/O's request
+(#19): the licence of their dnp3 crate (LICENSE.txt §2.2) does not permit
+distributing the library, and the image has it compiled in. Interoperability
+testing with it is permitted, so the adapter and its Dockerfile stay: build
+the image locally. Container contract 1.3 unchanged; no adapter code changed.
+
+## Changes
+
+- Release: every image is still built and self-tested natively on linux/amd64 and linux/arm64, but only the opendnp3, dscsystems and dnp3py images are pushed. The Makefile's `PUBLISHED_ADAPTERS` (fixed, not overridable) drives `publish`, `publish-arch`, `publish-manifest`, `digests` and `qualify`; `ADAPTERS` still has all four for `images`, `smoke`, `interop` and `features`. CI fails if any of those targets names stepfunc, also when asked to on the command line.
+- `manifest.json` has no stepfunc image; the stepfunc/dnp3 pin moves to `localOnly.stepfunc` with the command that builds the image. The release notes have no stepfunc digest and say how to build it.
+- Release qualification builds the stepfunc image from the release tag for the self-test; the vulnerability scan and the SBOMs cover the published images only, and `scripts/qualify.sh` refuses `stepfunc`.
+- `compose.yaml` builds the stepfunc service from the checkout instead of pulling it.
+- Docs: README (stepfunc row, quick start with the opendnp3 and dscsystems images, [building the stepfunc image](README.md#building-the-stepfunc-image)), THIRD_PARTY_NOTICES.md (stepfunc not redistributed), REQUIREMENTS.md (R1.2, R5.3, new R7.5), PLAN.md, CONTRIBUTING.md, SECURITY.md, docs/COMPATIBILITY.md, docs/CONTAINER_CONTRACT.md, `adapters/LICENSE`, the header comment of `adapters/stepfunc/Dockerfile`, `versions.yaml` (`interop_version` 0.4.3; stepfunc `published: false`).
+- Upgrading: build the stepfunc image yourself at the tag you test against: `make image-stepfunc VERSION=v0.4.3`, or `docker build --build-arg ADAPTER_VERSION=v0.4.3 -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:v0.4.3 .`; the build fetches the crate from crates.io under Step Function I/O's licence. Do not push it to a registry.
+- The stepfunc images of earlier releases (v0.1.0 to v0.4.2) are withdrawn: a consumer that pins `ghcr.io/otfabric/dnp3-interop-stepfunc@sha256:...` from an earlier `manifest.json` builds the image from that release's tag instead. Their other images are unchanged.
 
 ---
 

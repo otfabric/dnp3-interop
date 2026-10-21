@@ -1,8 +1,10 @@
 # Third-party notices
 
-The images published from this repository contain third-party software.
+The images built from this repository contain third-party software.
 This file is copied into every image as `/licenses/THIRD_PARTY_NOTICES.md`,
-next to the licence texts.
+next to the licence texts. The opendnp3, dscsystems and dnp3py images are
+published; the stepfunc image is not (see
+[Image `dnp3-interop-stepfunc`](#image-dnp3-interop-stepfunc)).
 
 ## What is licensed how
 
@@ -14,7 +16,7 @@ next to the licence texts.
 | `adapters/dscsystems/` (links DSC Systems go-dnp3) | GPL-3.0-or-later |
 | `adapters/dnp3py/` (imports dnp3py) | MIT |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
-| Image `dnp3-interop-stepfunc` | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
+| Image `dnp3-interop-stepfunc` (not published; built locally by each user) | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
 | Image `dnp3-interop-dscsystems` | GPL-3.0-or-later (it contains DSC go-dnp3) |
 | Image `dnp3-interop-dnp3py` | MIT (and the Python licence) |
 
@@ -47,6 +49,17 @@ last release.
 
 ## Image `dnp3-interop-stepfunc`
 
+**Not published, not redistributed.** This repository distributes the
+MIT-licensed adapter source in `adapters/stepfunc/` and its Dockerfile, not
+the Step Function I/O dnp3 crate and not an image containing it. Whoever
+builds the image (`make image-stepfunc`, or
+`docker build -f adapters/stepfunc/Dockerfile .`) gets the crate from
+crates.io during the build, under Step Function I/O's licence agreement, and
+is bound by it. The images of earlier releases (v0.1.0 to v0.4.2) are
+withdrawn from the registry at Step Function I/O's request.
+
+What a local build contains:
+
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
 | dnp3 (Step Function I/O LLC) | 1.7.0 (crates.io), tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
@@ -61,10 +74,11 @@ Licence in the image: `/licenses/dnp3/LICENSE.txt`, the licence agreement the
 crate is distributed with.
 
 **The dnp3 crate is not open source.** Its licence agreement permits
-non-commercial, non-production use only. This image exists for
-interoperability testing of other DNP3 implementations and is published for
-that purpose only; it is not a product and must not be used in production.
-For any other use, obtain a commercial licence from Step Function I/O
+non-commercial, non-production use only and does not permit distributing the
+library, so a locally built image must not be pushed to a registry or passed
+on. Interoperability testing of other DNP3 implementations with it is
+permitted; it is not a product and must not be used in production. For any
+other use, obtain a commercial licence from Step Function I/O
 (https://stepfunc.io).
 
 ## Image `dnp3-interop-dscsystems`
@@ -94,19 +108,23 @@ Licence in the image: `/licenses/dnp3py/LICENSE`.
 
 ## Corresponding source
 
-For every published image the complete corresponding source is:
+For every published image (opendnp3, dscsystems, dnp3py) the complete
+corresponding source is:
 
 1. this repository at the release tag named by the image's
    `org.opencontainers.image.version` label and by `print-capabilities`
    (`adapterVersion`), which contains the adapter source and the build
    instructions (the Dockerfile); and
 2. the upstream sources at exactly the versions pinned by that Dockerfile,
-   `adapters/stepfunc/Cargo.lock`, `adapters/dscsystems/go.mod` and
+   `adapters/dscsystems/go.mod` and
    `adapters/dnp3py/requirements.txt`, recorded in [versions.yaml](versions.yaml)
    and in the `manifest.json` of the release.
 
 `docker build -f adapters/<adapter>/Dockerfile .` at the release tag
-reproduces the image from those sources.
+reproduces the image from those sources. The same command with
+`adapters/stepfunc/Dockerfile` builds the unpublished stepfunc image from the
+pins in `adapters/stepfunc/Cargo.lock`.
 
 Each GitHub release of this repository records the upstream revisions and
-image digests it was built from.
+image digests it was built from; from v0.4.3 the stepfunc pin is under
+`localOnly` in its `manifest.json`, with no image.

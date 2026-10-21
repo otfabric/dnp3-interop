@@ -6,6 +6,9 @@
 #   docker compose down
 #
 # DNP3_INTEROP_VERSION selects the image tag (default: dev, the local build).
+# The stepfunc image is never pulled: it is not published (the licence of the
+# Step Function I/O dnp3 crate forbids distributing it), so compose builds it
+# from this checkout, fetching the crate from crates.io under that licence.
 
 x-server: &server
   command: ["server", "--fixture", "/fixtures/${DNP3_INTEROP_FIXTURE:-baseline}/fixture.json"]
@@ -21,6 +24,12 @@ services:
   stepfunc:
     <<: *server
     image: ghcr.io/otfabric/dnp3-interop-stepfunc:${DNP3_INTEROP_VERSION:-dev}
+    build:
+      context: .
+      dockerfile: adapters/stepfunc/Dockerfile
+      args:
+        ADAPTER_VERSION: ${DNP3_INTEROP_VERSION:-dev}
+    pull_policy: build
     ports:
       - "127.0.0.1:20000:20000"
 

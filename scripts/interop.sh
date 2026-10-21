@@ -221,8 +221,8 @@ suite() {
             else
                 name=$(shared_server "${server}")
             fi
-            # shellcheck disable=SC2086
-            doc=$(run_client "${client}" ${operation} --host "${name}"); CLIENT_EXIT=$?
+            read -r -a op_args <<<"${operation}"
+            doc=$(run_client "${client}" "${op_args[@]}" --host "${name}"); CLIENT_EXIT=$?
             keep "case${SUFFIX}${n}-${pair}" "${doc}"
 
             bug=$(known_bug "${client}" "${server}" "${operation}")

@@ -72,7 +72,8 @@ baseline. How the four outstations compare on the `dnp3py` fixture is below
 
 The numbers of a run (checks passed and failed, known-bug hits, skips, per
 pairing and architecture) are not kept here: every release's qualification
-runs the self-tests on the published images, natively on linux/amd64 and
+runs the self-tests on the published images (and on a stepfunc image built
+from the release tag, which is not published), natively on linux/amd64 and
 linux/arm64, and attaches them as `compatibility-report.md` to the
 [GitHub release](https://github.com/otfabric/dnp3-interop/releases).
 
@@ -404,7 +405,7 @@ No adapter can avoid it without disabling unsolicited responses. It is listed
 in [tests/known-bugs.tsv](../tests/known-bugs.tsv) for the stepfunc outstation
 at 1.7.0, and `scripts/interop.sh` checks select-before-operate on that
 outstation after the null response was confirmed, where it passes. A library
-that tests against the stepfunc image should not make its first request
+that tests against a stepfunc image (built locally) should not make its first request
 after the container start a SELECT, or should expect this.
 
 ### Both outstations set PARAMETER_ERROR with NOT_SUPPORTED, and stepfunc's master drops the echo

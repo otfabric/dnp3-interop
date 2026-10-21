@@ -14,8 +14,8 @@ Vulnerabilities in the bundled implementations themselves (opendnp3, Step Functi
 
 | Version | Supported |
 |---------|-----------|
-| v0.4.x (latest, v0.4.2) | Yes |
-| < v0.4 | No; pull the latest images |
+| v0.4.x (latest, v0.4.3) | Yes |
+| < v0.4 | No; pull the latest images (and build the stepfunc image locally) |
 
 ## Security Considerations
 
@@ -39,5 +39,5 @@ The images run **DNP3 outstations, unauthenticated and unencrypted by default,**
 
 - Upstream sources are fetched during the image build at pinned versions: opendnp3 from GitHub (verified against the pinned commit hash), Step Function I/O dnp3 from crates.io (checksums in `Cargo.lock`), dnp3py from PyPI (hash-pinned `requirements.txt`) and DSC Systems go-dnp3 through the Go module proxy (checksums in `go.sum`).
 - Base images are pinned by digest. CI and the release workflow pull them from `mirror.gcr.io/library`, a mirror of Docker Hub's official images, because anonymous Docker Hub pulls are rate limited; the digest makes the source irrelevant to the content (`BASE_REGISTRY`, default `docker.io/library`). The build tooling images (BuildKit, QEMU handlers, shellcheck) come from the same mirror by tag (`TOOLS_REGISTRY`)
-- Consumers should pin images by digest, taken from the `manifest.json` of a release
-- Every release is scanned with Trivy (pinned by digest) after publishing, and every image gets a CycloneDX SBOM per architecture; `vulnerabilities.md` and `sboms.tar.gz` are attached to the release. Findings are recorded, not gated on: the images are test fixtures, never deployed. Findings with a fix available are taken up in the next release by moving the base image digest or the package; the rest disappear when upstream ships a fix. Trivy sees the Debian packages, the Python packages of the dnp3py image and the Go modules of the dscsystems binary, not what is statically compiled into the Rust and C++ binaries (their versions are in `versions.yaml` and the release's `manifest.json`)
+- Consumers should pin the published images by digest, taken from the `manifest.json` of a release. The stepfunc image is not published (the licence of the Step Function I/O dnp3 crate forbids distributing it): build it from the release tag (`make image-stepfunc VERSION=<tag>`), whose `Cargo.lock` pins every crate by checksum
+- Every release is scanned with Trivy (pinned by digest) after publishing, and every published image gets a CycloneDX SBOM per architecture (the stepfunc image, built locally, is not scanned); `vulnerabilities.md` and `sboms.tar.gz` are attached to the release. Findings are recorded, not gated on: the images are test fixtures, never deployed. Findings with a fix available are taken up in the next release by moving the base image digest or the package; the rest disappear when upstream ships a fix. Trivy sees the Debian packages, the Python packages of the dnp3py image and the Go modules of the dscsystems binary, not what is statically compiled into the C++ binary (their versions are in `versions.yaml` and the release's `manifest.json`)

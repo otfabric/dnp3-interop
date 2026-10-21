@@ -55,7 +55,7 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 
 | Item | Value |
 |------|-------|
-| Image | `ghcr.io/otfabric/dnp3-interop-<adapter>` |
+| Image | `ghcr.io/otfabric/dnp3-interop-<adapter>`; the stepfunc image is not published and exists only where it was built (`make image-stepfunc`) |
 | Entrypoint | `dnp3-interop` (`/usr/local/bin/dnp3-interop`) |
 | Default command | `server` |
 | Port | 20000/tcp (20000/udp with `--transport udp`) |

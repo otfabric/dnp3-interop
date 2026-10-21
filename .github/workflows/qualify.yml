@@ -3,10 +3,14 @@ run-name: "Release qualification of ${{ inputs.tag }}"
 
 # Qualifies the published images of a release: the smoke and cross-stack
 # self-tests run again against exactly the images in the registry, natively on
-# linux/amd64 and linux/arm64, and produce a compatibility report; every image
-# is scanned for vulnerabilities and gets a CycloneDX SBOM per architecture.
-# The report, the scan summary, the scan results and the SBOMs are attached to
-# the GitHub release.
+# linux/amd64 and linux/arm64, and produce a compatibility report; every
+# published image is scanned for vulnerabilities and gets a CycloneDX SBOM per
+# architecture. The report, the scan summary, the scan results and the SBOMs
+# are attached to the GitHub release.
+#
+# The stepfunc image is not published (the licence of the Step Function I/O
+# dnp3 crate forbids distributing it): the self-test builds it here from the
+# release tag, as a user would, and it is neither scanned nor given an SBOM.
 #
 # The release workflow calls this after it has published a release; run it by
 # hand to qualify an earlier release again. The tooling (scripts/) is this
@@ -40,6 +44,7 @@ permissions:
 env:
   REGISTRY: ghcr.io/otfabric
   VERSION: ${{ inputs.tag }}
+  BASE_REGISTRY: mirror.gcr.io/library
   TOOLS_REGISTRY: mirror.gcr.io
 
 jobs:
@@ -71,10 +76,20 @@ jobs:
 
       - name: Pull the published images
         run: |
-          for a in $(make -s print-adapters); do
+          for a in $(make -s print-published-adapters); do
             scripts/retry.sh docker pull --quiet "${REGISTRY}/dnp3-interop-${a}:${VERSION}"
             echo "${a} $(docker image inspect --format '{{index .RepoDigests 0}}' "${REGISTRY}/dnp3-interop-${a}:${VERSION}")"
           done | tee pulled.txt
+
+      - name: Build the stepfunc image from the release tag (not published)
+        run: |
+          git worktree add --detach "${RUNNER_TEMP}/release" "refs/tags/${VERSION}"
+          scripts/retry.sh docker build --quiet \
+            --build-arg BASE_REGISTRY="${BASE_REGISTRY}" --build-arg ADAPTER_VERSION="${VERSION}" \
+            --tag "${REGISTRY}/dnp3-interop-stepfunc:${VERSION}" \
+            --file "${RUNNER_TEMP}/release/adapters/stepfunc/Dockerfile" "${RUNNER_TEMP}/release"
+          git worktree remove --force "${RUNNER_TEMP}/release"
+          echo "stepfunc ${REGISTRY}/dnp3-interop-stepfunc:${VERSION}, built here from ${VERSION} (not published)" | tee -a pulled.txt
 
       - name: Smoke and cross-stack self-test of those images
         id: test
@@ -91,8 +106,9 @@ jobs:
             echo ""
             echo "## Images"
             echo ""
-            # shellcheck disable=SC2016  # the backticks are Markdown
-            sed 's/^\([a-z0-9]*\) \(.*\)$/- `\1`: `\2`/' pulled.txt
+            while read -r adapter ref; do
+              printf -- "- \`%s\`: \`%s\`\n" "${adapter}" "${ref}"
+            done < pulled.txt
           } >> "compatibility-${{ matrix.arch }}.md"
           cat "compatibility-${{ matrix.arch }}.md" >> "$GITHUB_STEP_SUMMARY"
 
@@ -117,9 +133,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - name: Scan every image for linux/amd64 and linux/arm64
+      - name: Scan every published image for linux/amd64 and linux/arm64
         run: |
-          read -ra adapters <<<"$(make -s print-adapters)"
+          read -ra adapters <<<"$(make -s print-published-adapters)"
           scripts/qualify.sh qualify "${adapters[@]}"
           cat qualify/vulnerabilities.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7

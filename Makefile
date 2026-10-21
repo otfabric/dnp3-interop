@@ -29,9 +29,17 @@ RETRY := scripts/retry.sh
 # Name of the docker-container builder "make buildx-setup" creates.
 BUILDER ?= dnp3-interop
 
-# Adapters with a published image, in priority order. The self-tests run over
-# all of them; override to work on one: make smoke ADAPTERS=opendnp3
+# Every adapter, in priority order: built and self-tested everywhere. Override
+# to work on one: make smoke ADAPTERS=opendnp3
 ADAPTERS ?= stepfunc opendnp3 dscsystems dnp3py
+
+# The adapters whose images are pushed to the registry. stepfunc is not one of
+# them and must never be: the licence of the Step Function I/O dnp3 crate
+# forbids distributing it, and its image has the crate compiled in. Each user
+# builds that image locally (make image-stepfunc), getting the crate from
+# crates.io under that licence. 'override': neither the environment nor the
+# command line can change it.
+override PUBLISHED_ADAPTERS := opendnp3 dscsystems dnp3py
 
 # Parallel jobs for "make documents" (the smoke tests); the image builds take
 # -j on the command line, as the workflows do: make -j4 images
@@ -43,7 +51,7 @@ export REGISTRY VERSION
 
 # image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop features qualify report print-adapters buildx publish buildx-setup publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -144,14 +152,17 @@ candidate-%: FORCE ## Build one adapter on CANDIDATE_VERSION (opendnp3: and CAND
 
 # ── Release qualification ─────────────────────────────────────────────────────
 
-qualify: ## Scan the images of VERSION from the registry with Trivy and write SBOMs into qualify/ (scripts/qualify.sh)
-	@scripts/qualify.sh qualify $(ADAPTERS)
+qualify: ## Scan the published images of VERSION from the registry with Trivy and write SBOMs into qualify/ (scripts/qualify.sh)
+	@scripts/qualify.sh qualify $(PUBLISHED_ADAPTERS)
 
 report: ## Write the compatibility report of the documents in reports/ (run make documents first)
 	@python3 scripts/compat-report.py reports --title "dnp3-interop $(VERSION) compatibility report"
 
 print-adapters: ## Print the adapters (ADAPTERS), one line
 	@echo $(ADAPTERS)
+
+print-published-adapters: ## Print the adapters whose images are published (PUBLISHED_ADAPTERS), one line
+	@echo $(PUBLISHED_ADAPTERS)
 
 capabilities: ## Print the capability document of every adapter
 	@for a in $(ADAPTERS); do docker run --rm $(call image,$$a):$(VERSION) print-capabilities; done
@@ -192,10 +203,10 @@ buildx: ## Build every image for $(PLATFORMS) under emulation, without pushing (
 			--file adapters/$$a/Dockerfile . || exit 1; \
 	done
 
-publish: ## Build and push multi-arch images under emulation, from one machine (requires VERSION=vX.Y.Z; the release workflow uses publish-arch and publish-manifest instead)
+publish: ## Build and push the published multi-arch images under emulation, from one machine (requires VERSION=vX.Y.Z; the release workflow uses publish-arch and publish-manifest instead)
 	@if ! echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
 		echo "Error: VERSION must be in the form v<major>.<minor>.<patch>"; exit 1; fi
-	@for a in $(ADAPTERS); do \
+	@for a in $(PUBLISHED_ADAPTERS); do \
 		echo "Publishing $$a $(VERSION) for $(PLATFORMS)..."; \
 		$(RETRY) docker buildx build $(builder_flag) --platform $(PLATFORMS) --push \
 			--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=$(VERSION) \
@@ -204,17 +215,18 @@ publish: ## Build and push multi-arch images under emulation, from one machine (
 	done
 
 # ── Multi-arch publish from native runners ────────────────────────────────────
-# The release workflow builds on an amd64 and on an arm64 runner (no
-# emulation), self-tests there and pushes what it tested under
-# <image>:<version>-<arch>. A last job joins the two into <image>:<version>.
+# The release workflow builds every adapter on an amd64 and on an arm64 runner
+# (no emulation), self-tests there and pushes what it tested of the published
+# adapters (PUBLISHED_ADAPTERS, never stepfunc) under <image>:<version>-<arch>.
+# A last job joins the two into <image>:<version>.
 
 ARCH ?= $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')
 ARCHS ?= amd64 arm64
 
-publish-arch: ## Push the local images of this machine as <image>:$(VERSION)-$(ARCH) (build and self-test them first)
+publish-arch: ## Push the local images of the published adapters as <image>:$(VERSION)-$(ARCH) (build and self-test them first)
 	@if ! echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
 		echo "Error: VERSION must be in the form v<major>.<minor>.<patch>"; exit 1; fi
-	@for a in $(ADAPTERS); do \
+	@for a in $(PUBLISHED_ADAPTERS); do \
 		got=$$(docker image inspect --format '{{.Architecture}}' $(call image,$$a):$(VERSION)) || exit 1; \
 		if [ "$$got" != "$(ARCH)" ]; then echo "Error: $$a:$(VERSION) is $$got, not $(ARCH)"; exit 1; fi; \
 		echo "Pushing $$a $(VERSION) for linux/$(ARCH)..."; \
@@ -222,8 +234,8 @@ publish-arch: ## Push the local images of this machine as <image>:$(VERSION)-$(A
 		$(RETRY) docker push --quiet $(call image,$$a):$(VERSION)-$(ARCH) || exit 1; \
 	done
 
-publish-manifest: ## Join the per-architecture images of VERSION into the multi-arch <image>:$(VERSION)
-	@for a in $(ADAPTERS); do \
+publish-manifest: ## Join the per-architecture images of the published adapters into the multi-arch <image>:$(VERSION)
+	@for a in $(PUBLISHED_ADAPTERS); do \
 		echo "Creating $$a $(VERSION) from: $(ARCHS)"; \
 		$(RETRY) docker buildx imagetools create --tag $(call image,$$a):$(VERSION) \
 			$(foreach arch,$(ARCHS),$(call image,$$a):$(VERSION)-$(arch)) || exit 1; \
@@ -234,7 +246,7 @@ publish-manifest: ## Join the per-architecture images of VERSION into the multi-
 	done
 
 digests: ## Print "<adapter> <digest>" of the published multi-arch images of VERSION
-	@for a in $(ADAPTERS); do \
+	@for a in $(PUBLISHED_ADAPTERS); do \
 		d=$$($(RETRY) docker buildx imagetools inspect $(call image,$$a):$(VERSION) --format '{{.Manifest.Digest}}') || exit 1; \
 		echo "$$a $$d"; \
 	done
