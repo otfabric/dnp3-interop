@@ -70,6 +70,7 @@ builds yet. See [PLAN.md](PLAN.md).
   - [What this repository is, and is not](#what-this-repository-is-and-is-not)
   - [Quick start](#quick-start)
   - [Building the stepfunc image](#building-the-stepfunc-image)
+  - [The dnp3c runner](#the-dnp3c-runner)
   - [Using the images from a library's tests](#using-the-images-from-a-librarys-tests)
   - [Repository layout](#repository-layout)
   - [Development](#development)
@@ -184,6 +185,18 @@ registry, but the image stays on your machine: nothing in this repository
 pushes or pulls it. Do not push it to a registry yourself either; that would
 distribute the crate.
 
+## The dnp3c runner
+
+`make image-dnp3c` builds `dnp3-interop-dnp3c`, which runs the DNP Users
+Group's DNP3 IED Certification Procedure against an outstation. It uses Step
+Function I/O's [dnp3c](https://github.com/stepfunc/dnp3c) 0.2.0 (3.1 rev 1 at
+subset levels 1 to 3, and 2.7). The outstation under test implements a small
+control protocol for the steps dnp3c cannot do over DNP3, such as restarts,
+input changes and checks of outputs; no adapter here implements it. dnp3c and
+the runner are GPL-3.0-only. The build fetches dnp3c from Maven Central, and
+the image is not published. See [docs/CONFORMANCE.md](docs/CONFORMANCE.md).
+The results are not a certification.
+
 ## Using the images from a library's tests
 
 A consumer needs Docker, the image references and its own test code. It does
@@ -237,6 +250,9 @@ dnp3-interop/
 │   ├── dscsystems/      Go adapter: Dockerfile, go.mod, *.go
 │   ├── dnp3py/          Python adapter: Dockerfile, requirements.txt, dnp3_interop.py
 │   └── LICENSE          MIT, except adapters/dscsystems/ (GPL-3.0-or-later)
+├── conformance/
+│   ├── dnp3c/           the dnp3c runner: Dockerfile, pom.xml, src/ (GPL-3.0-only; image built locally, never published)
+│   └── LICENSE          why conformance/dnp3c/ is GPL-3.0-only
 ├── fixtures/
 │   ├── schema/          JSON Schema of the fixture format
 │   ├── baseline/        the baseline outstation

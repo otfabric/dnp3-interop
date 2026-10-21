@@ -18,6 +18,25 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.5.0
+
+**Date:** not yet released
+**Previous release:** v0.4.3
+
+## Summary
+
+A dnp3c runner: the DNP Users Group's DNP3 IED Certification Procedure, as
+Step Function I/O's dnp3c implements it, against any outstation with a small
+control port. Built locally, not published.
+
+## Changes
+
+### Tools
+
+- **`dnp3-interop-dnp3c`** (`make image-dnp3c`, [docs/CONFORMANCE.md](docs/CONFORMANCE.md)): dnp3c 0.2.0 (3.1 rev 1 at subset levels 1 to 3, 2.7 at level 2) with an integration plugin and a runner in `conformance/dnp3c/`. The plugin forwards each step dnp3c cannot do over DNP3 to the device under test's control port; the runner runs every procedure on its own and writes dnp3c's report. dnp3c is GPL-3.0-only and so are the plugin and runner ([conformance/LICENSE](conformance/LICENSE)). The image build fetches dnp3c from Maven Central with strict checksums, and the image is never published (CI checks no publishing target names it). Pinned in `versions.yaml` (`tools.dnp3c`), checked by `scripts/check-versions.sh`.
+
+---
+
 ## v0.4.3
 
 **Date:** 2026-10-21

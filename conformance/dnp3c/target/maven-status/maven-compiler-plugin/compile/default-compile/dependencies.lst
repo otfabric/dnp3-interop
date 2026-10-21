@@ -1,0 +1,10 @@
+classpath:/Users/bartvanbos/.m2/repository/io/stepfunc/dnp3c/0.2.0/dnp3c-0.2.0.jar	4621305:1792121464000
+classpath:/Users/bartvanbos/.m2/repository/org/fusesource/jansi/jansi/2.4.3/jansi-2.4.3.jar	258321:1774616752000
+classpath:/Users/bartvanbos/.m2/repository/org/pcap4j/pcap4j-core/1.8.2/pcap4j-core-1.8.2.jar	1280881:1566019087000
+classpath:/Users/bartvanbos/.m2/repository/net/java/dev/jna/jna/5.3.1/jna-5.3.1.jar	1505196:1556446378000
+classpath:/Users/bartvanbos/.m2/repository/org/slf4j/slf4j-api/1.7.26/slf4j-api-1.7.26.jar	41139:1550531761000
+classpath:/Users/bartvanbos/.m2/repository/org/pcap4j/pcap4j-packetfactory-static/1.8.2/pcap4j-packetfactory-static-1.8.2.jar	152874:1566019094000
+classpath:/Users/bartvanbos/.m2/repository/com/fazecast/jSerialComm/2.11.4/jSerialComm-2.11.4.jar	886572:1762029280000
+classpath:/Users/bartvanbos/.m2/repository/commons-cli/commons-cli/1.11.0/commons-cli-1.11.0.jar	110167:1762641626000
+classpath:/Users/bartvanbos/.m2/repository/org/scala-lang/scala3-library_3/3.9.0/scala3-library_3-3.9.0.jar	344:1787759673000
+classpath:/Users/bartvanbos/.m2/repository/org/scala-lang/scala-library/3.9.0/scala-library-3.9.0.jar	9823422:1787759673000

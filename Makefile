@@ -59,7 +59,7 @@ help: ## Show this help
 
 all: validate images ## Validate fixtures and build the local images
 
-ci: validate lint images documents ## Full local CI: validate, lint, build, smoke and cross-stack self-test, document schemas
+ci: validate lint images image-dnp3c documents ## Full local CI: validate, lint, build, smoke and cross-stack self-test, document schemas
 	@echo ""
 	@echo "All local CI checks passed."
 
@@ -107,6 +107,16 @@ image-%: FORCE ## Build one adapter image, e.g. image-opendnp3
 		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=$(VERSION) \
 		--tag $(call image,$*):$(VERSION) \
 		--file adapters/$*/Dockerfile \
+		.
+
+# The dnp3c runner (docs/CONFORMANCE.md): not an adapter, never published.
+# An explicit rule, which takes precedence over image-%.
+image-dnp3c: FORCE ## Build the dnp3c runner image (DNP3 IED Certification Procedure; not published)
+	@echo "Building dnp3c image ($(VERSION))..."
+	@$(RETRY) docker build \
+		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=$(VERSION) \
+		--tag $(call image,dnp3c):$(VERSION) \
+		--file conformance/dnp3c/Dockerfile \
 		.
 
 # ── Self-tests (images must be built) ─────────────────────────────────────────
