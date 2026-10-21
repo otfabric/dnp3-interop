@@ -85,8 +85,7 @@ jobs:
             ""|skipped) tested=$([[ "${UPDATE}" == "no" ]] && echo "same as pin" || echo "not run") ;;
             *) tested="\`${OUTCOME}\`${RESULT:+<br>${RESULT}}" ;;
           esac
-          # shellcheck disable=SC2016  # the backticks are Markdown, not command substitution
-          printf '| %s | %s | `%s` | `%s` | %s | **%s** | %s |\n' \
+          printf "| %s | %s | \`%s\` | \`%s\` | %s | **%s** | %s |\n" \
             "${{ matrix.adapter }}" "${SOURCE:-?}" "${PIN:-?}" "${LATEST:-?}" "${tested}" "${UPDATE:-?}" "${KNOWN}" \
             > "row-${{ matrix.adapter }}.md"
 

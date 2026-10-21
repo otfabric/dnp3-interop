@@ -62,9 +62,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s' "${GHCR_TOKEN}" > "${RUNNER_TEMP}/ghcr-token"
-          # shellcheck disable=SC2016  # $0 and $1 are for the inner shell
-          scripts/retry.sh sh -c 'docker login ghcr.io --username "$0" --password-stdin < "$1"' \
-            "${{ github.actor }}" "${RUNNER_TEMP}/ghcr-token"
+          scripts/retry.sh scripts/ghcr-login.sh "${{ github.actor }}" "${RUNNER_TEMP}/ghcr-token"
           rm -f "${RUNNER_TEMP}/ghcr-token"
 
       - name: Push the tested images of the published adapters as ${{ github.ref_name }}-${{ matrix.arch }}
@@ -85,9 +83,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s' "${GHCR_TOKEN}" > "${RUNNER_TEMP}/ghcr-token"
-          # shellcheck disable=SC2016  # $0 and $1 are for the inner shell
-          scripts/retry.sh sh -c 'docker login ghcr.io --username "$0" --password-stdin < "$1"' \
-            "${{ github.actor }}" "${RUNNER_TEMP}/ghcr-token"
+          scripts/retry.sh scripts/ghcr-login.sh "${{ github.actor }}" "${RUNNER_TEMP}/ghcr-token"
           rm -f "${RUNNER_TEMP}/ghcr-token"
 
       - name: Create ${{ github.ref_name }} from the amd64 and arm64 images

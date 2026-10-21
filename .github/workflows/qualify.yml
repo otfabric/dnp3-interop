@@ -106,8 +106,9 @@ jobs:
             echo ""
             echo "## Images"
             echo ""
-            # shellcheck disable=SC2016  # the backticks are Markdown
-            sed 's/^\([a-z0-9]*\) \(.*\)$/- `\1`: `\2`/' pulled.txt
+            while read -r adapter ref; do
+              printf -- "- \`%s\`: \`%s\`\n" "${adapter}" "${ref}"
+            done < pulled.txt
           } >> "compatibility-${{ matrix.arch }}.md"
           cat "compatibility-${{ matrix.arch }}.md" >> "$GITHUB_STEP_SUMMARY"
 

@@ -92,8 +92,7 @@ run_client() {
 # a response, which the standard leaves to the outstation. Objects are sorted
 # by unsolicited, group, variation and index; their order within one type is
 # kept.
-# shellcheck disable=SC2034
-NORMALIZE='del(.adapter, .elapsedMs, .error.message?)
+export NORMALIZE='del(.adapter, .elapsedMs, .error.message?)
   | (.objects[]? |= del(.time))
   | (if (.iin | type) == "array" then .iin -= ["DEVICE_RESTART"] else . end)
   | .objects = ((.objects // []) | to_entries
@@ -102,8 +101,7 @@ NORMALIZE='del(.adapter, .elapsedMs, .error.message?)
 # One line that states the outcome of an operation; the expectation format of
 # tests/cases.tsv. Objects are counted per group and variation, "u" marking
 # those that came unsolicited.
-# shellcheck disable=SC2034
-SUMMARY='"ok=\(.ok) error=\(.error.code // "-") status=\(.commandStatus // "-") delay=\(.restartDelayMs // "-") iin=\(((.iin // []) - ["DEVICE_RESTART"]) | join(",")) objects=\([(.objects // [])[] | "g\(.group)v\(.variation)\(if .unsolicited then "u" else "" end)"] | group_by(.) | map("\(.[0])x\(length)") | sort | join(","))"'
+export SUMMARY='"ok=\(.ok) error=\(.error.code // "-") status=\(.commandStatus // "-") delay=\(.restartDelayMs // "-") iin=\(((.iin // []) - ["DEVICE_RESTART"]) | join(",")) objects=\([(.objects // [])[] | "g\(.group)v\(.variation)\(if .unsolicited then "u" else "" end)"] | group_by(.) | map("\(.[0])x\(length)") | sort | join(","))"'
 
 KNOWN=0
 
