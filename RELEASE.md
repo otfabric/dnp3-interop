@@ -18,6 +18,27 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.5.1
+
+**Date:** 2026-10-21
+**Previous release:** v0.5.0
+
+## Summary
+
+The release manifest names the dnp3c runner. The images are unchanged.
+
+## Changes
+
+### Release
+
+- **`manifest.json`** lists the dnp3c runner under `localOnly`, next to stepfunc: how to build it from the tag, and its dnp3c version. The release workflow fails if `images` names either one. The release notes say how to build both.
+
+### Docs
+
+- README, THIRD_PARTY_NOTICES: the dnp3c image is pinned by building it from the tag, like the stepfunc one. PLAN: phase 8, the dnp3c runner; every release is qualified.
+
+---
+
 ## v0.5.0
 
 **Date:** 2026-10-21
