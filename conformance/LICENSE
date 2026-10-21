@@ -1,0 +1,9 @@
+The dnp3c runner in this directory (conformance/dnp3c/) is not MIT-licensed
+like the rest of the repository: its integration plugin and runner link
+Step Function I/O's dnp3c, which is licensed under the GNU General Public
+License, version 3 only, and so are licensed under the GNU General Public
+License, version 3 only, as their SPDX-License-Identifier headers say. The
+full text is in ../licenses/GPL-3.0.txt.
+
+dnp3c itself is not in this repository: the build of the runner's image
+fetches io.stepfunc:dnp3c from Maven Central. See ../THIRD_PARTY_NOTICES.md.

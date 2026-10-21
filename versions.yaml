@@ -104,12 +104,35 @@ base_images:
   golang_1_27_2_trixie: "docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
   rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d"
 
+# Test tools: not implementations, no adapter.
+tools:
+  dnp3c:
+    upstream: "Step Function I/O dnp3c"
+    repository: "https://github.com/stepfunc/dnp3c"
+    maven: "io.stepfunc:dnp3c"
+    version: "0.2.0"             # latest release (Maven Central, 2026-10-16)
+    revision: "881209943b670cc59b16301346dffa7d5523ab72"   # tag 0.2.0
+    license: "GPL-3.0-only"
+    language: "Scala"
+    published: false
+    base_images:
+      maven: "maven:3.9.12-eclipse-temurin-17-noble@sha256:a0603aab698040d9c94259f379ec0487da1678560748d6c7508483034033c53d"
+      jre: "eclipse-temurin:17.0.20_8-jre-noble@sha256:39d618b8fda3408cfe792db2b666c0e3db8ea4ae263ab4d0c3805933e5355f45"
+    note: >-
+      The DNP Users Group's DNP3 IED Certification Procedure (3.1 rev 1,
+      levels 1 to 3; 2.7, level 2). The runner in conformance/dnp3c/ is
+      GPL-3.0-only, as it links dnp3c. The image is built locally
+      (make image-dnp3c), fetching dnp3c from Maven Central; it is not
+      published. See docs/CONFORMANCE.md.
+
 images:
   # Local tag only: never pushed or pulled (see implementations.stepfunc).
   stepfunc: "ghcr.io/otfabric/dnp3-interop-stepfunc"
   opendnp3: "ghcr.io/otfabric/dnp3-interop-opendnp3"
   dscsystems: "ghcr.io/otfabric/dnp3-interop-dscsystems"
   dnp3py: "ghcr.io/otfabric/dnp3-interop-dnp3py"
+  # Local tag only: not published (see tools.dnp3c).
+  dnp3c: "ghcr.io/otfabric/dnp3-interop-dnp3c"
 
 platforms:
   - "linux/amd64"
