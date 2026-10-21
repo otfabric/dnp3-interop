@@ -21,7 +21,9 @@ framework.
   library under test, and contains no test logic or expectation specific to
   one. In particular it knows nothing about `otfabric/go-dnp3`.
 - R1.2 A consumer depends on published images and the documented contract
-  only. It does not need a checkout of this repository to run its tests.
+  only. It does not need a checkout of this repository to run its tests,
+  except to build an image whose upstream licence forbids publishing it
+  (stepfunc, R7.5).
 - R1.3 No third-party code from here is copied into a consumer, and the
   contract does not shape a consumer's public API.
 
@@ -55,7 +57,7 @@ framework.
 - R2.3 An adapter that wraps another adapter's protocol engine says so
   (`upstream.independentEngine: false`) and does not count as an additional
   independent implementation.
-- R2.4 An adapter is published only when it builds from pinned sources and
+- R2.4 An adapter is released only when it builds from pinned sources and
   passes the smoke test and the cross-stack self-test for the roles it
   declares. An upstream that cannot be made to do so is documented and left
   out; it does not block the others.
@@ -103,8 +105,9 @@ framework.
   against the build files.
 - R5.2 Releases are immutable tags; images are published with their digests.
   Nothing a release depends on floats.
-- R5.3 Images are published for linux/amd64 and linux/arm64. An adapter that
-  cannot support one documents it.
+- R5.3 Images are built and self-tested for linux/amd64 and linux/arm64, and
+  the published ones are published for both. An adapter that cannot support
+  one documents it.
 
 ## R6 - Self-tests
 
@@ -128,6 +131,13 @@ framework.
 - R7.4 The images exist for interoperability testing only. Licences that
   restrict use (non-commercial, commercial) are recorded with the image and
   in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- R7.5 An image whose upstream licence forbids distributing the library is
+  never published: no workflow, target or script pushes it. The stepfunc
+  image is one (the Step Function I/O dnp3 crate, LICENSE.txt §2.2; #19): the
+  repository holds its adapter and Dockerfile, the self-tests build it
+  locally, and each user builds it (`make image-stepfunc`), getting the crate
+  from crates.io under that licence. The Makefile's `PUBLISHED_ADAPTERS`
+  lists what is published.
 
 ## R8 - Scope discipline
 

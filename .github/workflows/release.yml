@@ -21,9 +21,11 @@ env:
   VERSION: ${{ github.ref_name }}
 
 jobs:
-  # One job per architecture on a runner of that architecture: the images are
-  # built natively, self-tested, and exactly those are pushed, as
-  # <image>:<version>-<arch>.
+  # One job per architecture on a runner of that architecture: every image is
+  # built natively and self-tested, and exactly those of the published
+  # adapters are pushed, as <image>:<version>-<arch>. The stepfunc image is
+  # built and tested here but never pushed: the licence of the Step Function
+  # I/O dnp3 crate forbids distributing it (Makefile, PUBLISHED_ADAPTERS).
   build:
     name: Build, test, push (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -65,7 +67,7 @@ jobs:
             "${{ github.actor }}" "${RUNNER_TEMP}/ghcr-token"
           rm -f "${RUNNER_TEMP}/ghcr-token"
 
-      - name: Push the tested images as ${{ github.ref_name }}-${{ matrix.arch }}
+      - name: Push the tested images of the published adapters as ${{ github.ref_name }}-${{ matrix.arch }}
         run: make publish-arch ARCH=${{ matrix.arch }}
 
   # Joins the per-architecture images into the multi-arch tag and publishes
@@ -112,7 +114,6 @@ jobs:
             --arg odnp3_sha "$(arg adapters/opendnp3/Dockerfile UPSTREAM_SHA)" \
             --arg sf_version "$(arg adapters/stepfunc/Dockerfile UPSTREAM_VERSION)" \
             --arg sf_sha "$(arg adapters/stepfunc/Dockerfile UPSTREAM_SHA)" \
-            --arg stepfunc_digest "${{ steps.digests.outputs.stepfunc }}" \
             --arg opendnp3_digest "${{ steps.digests.outputs.opendnp3 }}" \
             --arg godnp3_version "$(arg adapters/dscsystems/Dockerfile UPSTREAM_VERSION)" \
             --arg godnp3_sha "$(arg adapters/dscsystems/Dockerfile UPSTREAM_SHA)" \
@@ -127,18 +128,27 @@ jobs:
               fixtureSchema: $fixture,
               platforms: ["linux/amd64", "linux/arm64"],
               upstream: {
-                "stepfunc/dnp3": { version: $sf_version, revision: $sf_sha },
                 opendnp3: { version: $odnp3_version, revision: $odnp3_sha },
                 "dscsystems/go-dnp3": { version: $godnp3_version, revision: $godnp3_sha },
                 dnp3py: { version: $dnp3py_version, revision: $dnp3py_sha }
               },
               images: {
-                stepfunc: ("ghcr.io/otfabric/dnp3-interop-stepfunc@" + $stepfunc_digest),
                 opendnp3: ("ghcr.io/otfabric/dnp3-interop-opendnp3@" + $opendnp3_digest),
                 dscsystems: ("ghcr.io/otfabric/dnp3-interop-dscsystems@" + $dscsystems_digest),
                 dnp3py: ("ghcr.io/otfabric/dnp3-interop-dnp3py@" + $dnp3py_digest)
+              },
+              localOnly: {
+                stepfunc: {
+                  note: "Not published: the licence of the Step Function I/O dnp3 crate forbids distributing it. Build the image locally from this tag; the build fetches the crate from crates.io under that licence.",
+                  make: "make image-stepfunc VERSION=\($version)",
+                  build: "docker build --build-arg ADAPTER_VERSION=\($version) -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:\($version) .",
+                  upstream: { "stepfunc/dnp3": { version: $sf_version, revision: $sf_sha } }
+                }
               }
             }' > manifest.json
+          if jq -e '.images | has("stepfunc")' manifest.json >/dev/null; then
+            echo "::error::manifest.json lists a stepfunc image"; exit 1
+          fi
           cat manifest.json
           sha256sum manifest.json > checksums.txt
 
@@ -150,21 +160,23 @@ jobs:
 
             | Image | Digest |
             |-------|--------|
-            | `ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }}` | `${{ steps.digests.outputs.stepfunc }}` |
             | `ghcr.io/otfabric/dnp3-interop-opendnp3:${{ github.ref_name }}` | `${{ steps.digests.outputs.opendnp3 }}` |
             | `ghcr.io/otfabric/dnp3-interop-dscsystems:${{ github.ref_name }}` | `${{ steps.digests.outputs.dscsystems }}` |
             | `ghcr.io/otfabric/dnp3-interop-dnp3py:${{ github.ref_name }}` | `${{ steps.digests.outputs.dnp3py }}` |
 
+            The stepfunc image is not published, at Step Function I/O's request: the licence of their dnp3 crate forbids distributing it, and the image has the crate compiled in. Build it locally from this tag; the build fetches the crate from crates.io under that licence: `make image-stepfunc VERSION=${{ github.ref_name }}`, or `docker build --build-arg ADAPTER_VERSION=${{ github.ref_name }} -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }} .`
+
             ## Pinning in a consumer
 
             ```bash
-            DNP3_INTEROP_STEPFUNC_IMAGE=ghcr.io/otfabric/dnp3-interop-stepfunc@${{ steps.digests.outputs.stepfunc }}
             DNP3_INTEROP_OPENDNP3_IMAGE=ghcr.io/otfabric/dnp3-interop-opendnp3@${{ steps.digests.outputs.opendnp3 }}
             DNP3_INTEROP_DSCSYSTEMS_IMAGE=ghcr.io/otfabric/dnp3-interop-dscsystems@${{ steps.digests.outputs.dscsystems }}
             DNP3_INTEROP_DNP3PY_IMAGE=ghcr.io/otfabric/dnp3-interop-dnp3py@${{ steps.digests.outputs.dnp3py }}
+            # built locally (see above), not pulled:
+            DNP3_INTEROP_STEPFUNC_IMAGE=ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }}
             ```
 
-            `manifest.json` records the upstream revisions these images were built from. The images contain Apache-2.0 and GPL-3.0-or-later software and the Step Function I/O dnp3 crate, whose licence permits non-commercial, non-production use only; these images are for interoperability testing. See `THIRD_PARTY_NOTICES.md`. Notes: `RELEASE.md`.
+            `manifest.json` records the upstream revisions these images were built from, and under `localOnly` the pin of the stepfunc image you build yourself. The published images contain MIT, Apache-2.0 and GPL-3.0-or-later software and are for interoperability testing. See `THIRD_PARTY_NOTICES.md`. Notes: `RELEASE.md`.
           files: |
             manifest.json
             checksums.txt
