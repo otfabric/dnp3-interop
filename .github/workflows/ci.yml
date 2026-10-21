@@ -42,23 +42,24 @@ jobs:
         run: python3 scripts/validate-fixtures.py --require-schema
       - name: Shellcheck
         run: make lint
-      - name: The stepfunc image is never published
+      - name: The stepfunc and dnp3c images are never published
         # Its licence (Step Function I/O dnp3 crate) forbids distributing it:
         # it is built and self-tested here, but no target may push it, even
         # when asked to on the command line.
         run: |
           check() {
-            if make -n publish publish-arch publish-manifest digests qualify VERSION=v0.0.0 ARCH=amd64 "$@" | grep -n stepfunc; then
-              echo "::error::a publishing target names stepfunc ($*)"; exit 1
+            if make -n publish publish-arch publish-manifest digests qualify VERSION=v0.0.0 ARCH=amd64 "$@" | grep -nE 'stepfunc|dnp3c'; then
+              echo "::error::a publishing target names stepfunc or dnp3c ($*)"; exit 1
             fi
           }
           check
           check PUBLISHED_ADAPTERS=stepfunc
+          check PUBLISHED_ADAPTERS=dnp3c
       - name: No reference to a library under test
         # REQUIREMENTS.md R1: adapters, fixtures, scripts and schemas must not
         # know any consumer. Documentation may name consumers as examples.
         run: |
-          if grep -rInE 'otfabric/go-dnp3|otfabric/go-' adapters fixtures schemas scripts tests Makefile compose.yaml; then
+          if grep -rInE 'otfabric/go-dnp3|otfabric/go-' adapters conformance fixtures schemas scripts tests Makefile compose.yaml; then
             echo "::error::consumer-specific reference found"; exit 1
           fi
 
@@ -85,6 +86,11 @@ jobs:
 
       - name: Build images
         run: make -j4 --output-sync=target images
+
+      # The dnp3c runner: built (the plugin compiles with -Werror against
+      # dnp3c), never published.
+      - name: Build the dnp3c runner
+        run: make image-dnp3c
 
       - name: Capabilities
         run: make capabilities | tee -a "$GITHUB_STEP_SUMMARY"

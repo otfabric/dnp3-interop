@@ -15,10 +15,12 @@ published; the stepfunc image is not (see
 | `adapters/stepfunc/` (links the Step Function I/O dnp3 crate) | MIT |
 | `adapters/dscsystems/` (links DSC Systems go-dnp3) | GPL-3.0-or-later |
 | `adapters/dnp3py/` (imports dnp3py) | MIT |
+| `conformance/dnp3c/` (links Step Function I/O dnp3c) | GPL-3.0-only |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
 | Image `dnp3-interop-stepfunc` (not published; built locally by each user) | MIT and the Step Function I/O licence agreement (non-commercial, non-production) |
 | Image `dnp3-interop-dscsystems` | GPL-3.0-or-later (it contains DSC go-dnp3) |
 | Image `dnp3-interop-dnp3py` | MIT (and the Python licence) |
+| Image `dnp3-interop-dnp3c` (not published; built locally by each user) | GPL-3.0-only (it contains dnp3c), and the licences of the components below |
 
 Each adapter is a separate program in a separate image; no image contains two
 implementations. Nothing in this repository is linked into a consumer: a
@@ -27,6 +29,10 @@ output, and is not affected by their licences.
 
 The dscsystems adapter is a derivative work of the GPL-3.0-or-later DSC go-dnp3 library
 and carries `SPDX-License-Identifier: GPL-3.0-or-later`; the others are MIT.
+The dnp3c runner (`conformance/dnp3c/`) links the GPL-3.0-only dnp3c and
+carries `SPDX-License-Identifier: GPL-3.0-only`
+([conformance/LICENSE](conformance/LICENSE)). A device under test talks to it
+over TCP and is not affected by its licence.
 
 ## Image `dnp3-interop-opendnp3`
 
@@ -105,6 +111,33 @@ Licence texts in the image: `/licenses/go-dnp3/LICENSE`,
 | Base system | Debian trixie-slim (python:3.14.8-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
 
 Licence in the image: `/licenses/dnp3py/LICENSE`.
+
+## Image `dnp3-interop-dnp3c`
+
+**Not published.** This repository distributes the runner's source in
+`conformance/dnp3c/` and its Dockerfile, not dnp3c and not an image
+containing it. Whoever builds the image (`make image-dnp3c`) gets dnp3c and
+its dependencies from Maven Central during the build. dnp3c's licence,
+GPL-3.0-only, would allow publishing the image with its corresponding
+source; it is kept local like the stepfunc image until that is decided.
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| dnp3c (Step Function I/O) | 0.2.0 (Maven Central `io.stepfunc:dnp3c`), tag commit `881209943b670cc59b16301346dffa7d5523ab72` | GPL-3.0-only | https://github.com/stepfunc/dnp3c |
+| Scala 3 library, Scala library | 3.9.0 | Apache-2.0 | https://www.scala-lang.org |
+| Apache Commons CLI | 1.11.0 | Apache-2.0 | https://commons.apache.org/proper/commons-cli/ |
+| Jansi | 2.4.3 | Apache-2.0 | https://github.com/fusesource/jansi |
+| JNA | 5.3.1 | Apache-2.0 or LGPL-2.1 | https://github.com/java-native-access/jna |
+| jSerialComm | 2.11.4 | Apache-2.0 or LGPL-3.0 | https://github.com/Fazecast/jSerialComm |
+| Pcap4J (core, static packet factory) | 1.8.2 | MIT | https://github.com/kaitoy/pcap4j |
+| SLF4J API, SLF4J NOP | 1.7.26, 2.0.20 | MIT | https://www.slf4j.org |
+| Runner | this repository, `conformance/dnp3c/` | GPL-3.0-only | https://github.com/otfabric/dnp3-interop |
+| Eclipse Temurin JRE | 17.0.20+8 | GPL-2.0 with the Classpath Exception | https://adoptium.net |
+| Base system | Ubuntu noble (eclipse-temurin:17.0.20_8-jre-noble) | various; see `/usr/share/doc/*/copyright` in the image | https://ubuntu.com |
+
+Licence texts in the image: `/licenses/GPL-3.0.txt`,
+`/licenses/conformance/LICENSE`; the dependencies' own licences are in their
+jars under `/opt/dnp3c/lib/`.
 
 ## Corresponding source
 
