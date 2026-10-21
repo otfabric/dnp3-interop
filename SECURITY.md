@@ -14,8 +14,8 @@ Vulnerabilities in the bundled implementations themselves (opendnp3, Step Functi
 
 | Version | Supported |
 |---------|-----------|
-| v0.4.x (latest, v0.4.3) | Yes |
-| < v0.4 | No; pull the latest images (and build the stepfunc image locally) |
+| v0.5.x (latest, v0.5.0) | Yes |
+| < v0.5 | No; pull the latest images (and build the stepfunc and dnp3c images locally) |
 
 ## Security Considerations
 
