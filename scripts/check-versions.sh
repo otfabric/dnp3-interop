@@ -58,4 +58,12 @@ same "dnp3py in Dockerfile and requirements.txt" "${dockerfile_dnp3py}" "${requi
 need "dnp3py revision"   "$(arg adapters/dnp3py/Dockerfile UPSTREAM_SHA)"
 need "python digest"     "$(arg adapters/dnp3py/Dockerfile PYTHON_DIGEST)"
 
+# dnp3c: the Dockerfile and pom.xml name the same dnp3c version
+dockerfile_dnp3c="$(arg conformance/dnp3c/Dockerfile DNP3C_VERSION)"
+pom_dnp3c="$(sed -nE 's|^ *<dnp3c.version>([^<]+)</dnp3c.version>.*$|\1|p' conformance/dnp3c/pom.xml)"
+need "dnp3c version"     "version: \"${dockerfile_dnp3c}\""
+same "dnp3c in Dockerfile and pom.xml" "${dockerfile_dnp3c}" "${pom_dnp3c}"
+need "maven digest"      "$(arg conformance/dnp3c/Dockerfile MAVEN_DIGEST)"
+need "jre digest"        "$(arg conformance/dnp3c/Dockerfile JRE_DIGEST)"
+
 exit "${status}"
