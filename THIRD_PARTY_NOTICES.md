@@ -156,8 +156,10 @@ corresponding source is:
 `docker build -f adapters/<adapter>/Dockerfile .` at the release tag
 reproduces the image from those sources. The same command with
 `adapters/stepfunc/Dockerfile` builds the unpublished stepfunc image from the
-pins in `adapters/stepfunc/Cargo.lock`.
+pins in `adapters/stepfunc/Cargo.lock`, and with `conformance/dnp3c/Dockerfile`
+the unpublished dnp3c runner from the pins in `conformance/dnp3c/pom.xml`.
 
 Each GitHub release of this repository records the upstream revisions and
 image digests it was built from; from v0.4.3 the stepfunc pin is under
-`localOnly` in its `manifest.json`, with no image.
+`localOnly` in its `manifest.json`, with no image, and from v0.5.1 the dnp3c
+pin too.

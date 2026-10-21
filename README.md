@@ -164,19 +164,19 @@ The stepfunc image is not published, at Step Function I/O's request: the
 licence of their dnp3 crate does not permit distributing it, and the image
 has it compiled in. Interoperability testing with it is allowed, so build it
 yourself; the build fetches the crate from crates.io, under its licence, for
-you. At the release tag you test against (for example `v0.5.0`):
+you. At the release tag you test against (for example `v0.5.1`):
 
 ```sh
-git clone --branch v0.5.0 https://github.com/otfabric/dnp3-interop.git
+git clone --branch v0.5.1 https://github.com/otfabric/dnp3-interop.git
 cd dnp3-interop
-make image-stepfunc VERSION=v0.5.0     # ghcr.io/otfabric/dnp3-interop-stepfunc:v0.5.0, local only
+make image-stepfunc VERSION=v0.5.1     # ghcr.io/otfabric/dnp3-interop-stepfunc:v0.5.1, local only
 ```
 
 or without make:
 
 ```sh
-docker build --build-arg ADAPTER_VERSION=v0.5.0 \
-  -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:v0.5.0 .
+docker build --build-arg ADAPTER_VERSION=v0.5.1 \
+  -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:v0.5.1 .
 ```
 
 Without `VERSION`, `make image-stepfunc` builds the `dev` tag that
@@ -236,9 +236,10 @@ Skip, do not fail, a scenario that needs a feature an image declares false.
 
 **Pin by digest** in release qualification
 (`ghcr.io/otfabric/dnp3-interop-opendnp3@sha256:...`); the digests of the
-published images are in each release's `manifest.json`. The stepfunc image
-has no published digest: pin it by building it from the release tag, whose
-upstream pin `manifest.json` records under `localOnly`.
+published images are in each release's `manifest.json`. The stepfunc and
+dnp3c images have no published digest: pin them by building them from the
+release tag, whose upstream pins `manifest.json` records under `localOnly`
+(dnp3c from v0.5.1).
 
 ## Repository layout
 
@@ -281,7 +282,7 @@ make buildx      # check the other architecture locally, under emulation (CI bui
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
 make candidate-dnp3py CANDIDATE_VERSION=0.7.0      # self-test an adapter on another upstream release
 make documents report                              # self-tests with every document kept, then the compatibility report
-VERSION=v0.5.0 make qualify                        # Trivy scan and SBOMs of a release's published images, into qualify/
+VERSION=v0.5.1 make qualify                        # Trivy scan and SBOMs of a release's published images, into qualify/
 ```
 
 The **Upstream candidates** workflow resolves the latest release of every
