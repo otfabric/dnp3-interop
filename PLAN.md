@@ -10,7 +10,8 @@ Delivery in phases, each with an acceptance gate. Status as of 2026-10-21.
 | 4 | First published images; consumption from a library's tests | done: v0.1.0 to v0.4.2 published; a library pins the current release's digests. From v0.4.3 the stepfunc image is built locally, not published (#19) |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | DSC go-dnp3 done (both roles); dnp3py done (both roles; the outstation serves the `dnp3py` fixture); Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication, and more | done as container contract 1.1 (v0.2.0), 1.2 (v0.3.0: point types, dual end point, security statistics) and 1.3 (v0.4.0, fixed in v0.4.1) |
-| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 to v0.4.1 qualified, results attached to their releases |
+| 7 | Release qualification: image scanning, SBOMs, compatibility report | done: every release from v0.1.0 qualified, results attached to their releases |
+| 8 | The DNP3 IED Certification Procedure against any outstation: Step Function I/O's dnp3c with an integration plugin and a control protocol ([docs/CONFORMANCE.md](docs/CONFORMANCE.md)) | done: v0.5.0, image built locally (GPL-3.0-only), not published |
 
 ## Phase 1 - Foundation (done)
 
