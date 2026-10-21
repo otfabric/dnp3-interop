@@ -4,8 +4,9 @@
 #   docker build -f adapters/stepfunc/Dockerfile -t dnp3-interop-stepfunc:dev .
 #
 # The dnp3 crate is distributed by Step Function I/O under a non-commercial,
-# non-production licence; this image exists for interoperability testing
-# only. Its licence is copied into the image. The adapter itself is MIT. See
+# non-production licence that forbids distributing it: this image is built
+# locally by each user, for interoperability testing only, and is never
+# published or pushed. Its licence is copied into the image. The adapter itself is MIT. See
 # THIRD_PARTY_NOTICES.md. The pin is in Cargo.toml and Cargo.lock (with the
 # crate checksums) and mirrored in versions.yaml.
 

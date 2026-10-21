@@ -8,4 +8,6 @@ says so in its SPDX-License-Identifier headers. The full text is in
 The libraries the adapters link keep their own licences; see
 ../THIRD_PARTY_NOTICES.md. In particular the Step Function I/O dnp3 crate
 linked by adapters/stepfunc/ is distributed under a non-commercial,
-non-production licence agreement.
+non-production licence agreement that does not permit distributing it: its
+image is not published, and whoever builds it gets the crate from crates.io
+under that agreement.

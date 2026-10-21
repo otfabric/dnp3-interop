@@ -1,13 +1,13 @@
 # Plan
 
-Delivery in phases, each with an acceptance gate. Status as of 2026-10-20.
+Delivery in phases, each with an acceptance gate. Status as of 2026-10-21.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Foundation: contract, fixture format, validation, version manifest, tooling | done |
 | 2 | opendnp3 adapter, client and server | done |
 | 3 | stepfunc adapter; cross-stack self-test | done |
-| 4 | First published images; consumption from a library's tests | done: v0.1.0 to v0.4.2 published; a library pins the current release's digests |
+| 4 | First published images; consumption from a library's tests | done: v0.1.0 to v0.4.2 published; a library pins the current release's digests. From v0.4.3 the stepfunc image is built locally, not published (#19) |
 | 5 | dnp3py, DSC Systems go-dnp3, Triangle MicroWorks adapters | DSC go-dnp3 done (both roles); dnp3py done (both roles; the outstation serves the `dnp3py` fixture); Triangle MicroWorks on hold |
 | 6 | Expanded coverage: UDP, TLS, serial, file transfer, secure authentication, and more | done as container contract 1.1 (v0.2.0), 1.2 (v0.3.0: point types, dual end point, security statistics) and 1.3 (v0.4.0, fixed in v0.4.1) |
 | 7 | Release qualification: image scanning, SBOMs, compatibility report | done: v0.1.0 to v0.4.1 qualified, results attached to their releases |
@@ -46,7 +46,7 @@ Met on linux/arm64 (2026-10-19): `make smoke-stepfunc` 32 of 32; `make interop` 
 
   | Image | Digest |
   |-------|--------|
-  | `ghcr.io/otfabric/dnp3-interop-stepfunc:v0.1.0` | `sha256:3ae308559ae9ad423b3e53f5206aa5ccb16ed60c4816fcba8aeff29cb5903f9b` |
+  | `ghcr.io/otfabric/dnp3-interop-stepfunc:v0.1.0` (withdrawn, #19) | `sha256:3ae308559ae9ad423b3e53f5206aa5ccb16ed60c4816fcba8aeff29cb5903f9b` |
   | `ghcr.io/otfabric/dnp3-interop-opendnp3:v0.1.0` | `sha256:461bcec60491d6c94cf51055b75655fd6e8a142c06e73e1eb9e6eca377677ce7` |
   | `ghcr.io/otfabric/dnp3-interop-dscsystems:v0.1.0` | `sha256:bd019730340dc708d45e4e7da6514e551ac8086aace67e5988fec651614c4fe7` |
   | `ghcr.io/otfabric/dnp3-interop-dnp3py:v0.1.0` | `sha256:a8518fa9e98e54ceb82ad67af5d52bed8efb0085c185742dd14c523d7e5f7013` |
@@ -55,7 +55,7 @@ Met on linux/arm64 (2026-10-19): `make smoke-stepfunc` 32 of 32; `make interop` 
 
   | Image | Digest |
   |-------|--------|
-  | `ghcr.io/otfabric/dnp3-interop-stepfunc:v0.2.0` | `sha256:ead1ea3c9a0f48ea363f745846ff2d5df8f077f50b6bb7f20914c3207ba5667e` |
+  | `ghcr.io/otfabric/dnp3-interop-stepfunc:v0.2.0` (withdrawn, #19) | `sha256:ead1ea3c9a0f48ea363f745846ff2d5df8f077f50b6bb7f20914c3207ba5667e` |
   | `ghcr.io/otfabric/dnp3-interop-opendnp3:v0.2.0` | `sha256:a69ebb5962b334ff9813a1efbb871ccd5d296fad71bd13feb94bec52ef7ff19a` |
   | `ghcr.io/otfabric/dnp3-interop-dscsystems:v0.2.0` | `sha256:d0576cceabf24cbd072b672069226c30486aa84046dc98d813a5427a32dbae3a` |
   | `ghcr.io/otfabric/dnp3-interop-dnp3py:v0.2.0` | `sha256:14598aebcd5698d8f342d6d9beaa98b8618d724c57fbbe34222737678ceff0ef` |
@@ -64,11 +64,18 @@ Met on linux/arm64 (2026-10-19): `make smoke-stepfunc` 32 of 32; `make interop` 
 
 **Gate:** published, digest-pinned images that a library's tests use without this repository. Met.
 
-The stepfunc image is published although its upstream licence is
-non-commercial: the images exist for interoperability testing only, which the
-owner of this repository decided is the purpose they are published for. The
-licence travels with the image (`/licenses/dnp3/LICENSE.txt`) and is stated
-in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The stepfunc image was published from v0.1.0 to v0.4.2. Step Function I/O
+asked for that to stop ([#19](https://github.com/otfabric/dnp3-interop/issues/19)):
+the licence of their dnp3 crate (LICENSE.txt §2.2) does not permit
+distributing the library, and the image has it compiled in; interoperability
+testing with it is permitted. From v0.4.3 the release workflow builds and
+self-tests the stepfunc image on both architectures but pushes only the
+opendnp3, dscsystems and dnp3py images (`PUBLISHED_ADAPTERS` in the
+Makefile), and the earlier stepfunc images are withdrawn. The adapter and its
+Dockerfile stay here; each user builds the image locally (`make
+image-stepfunc`), getting the crate from crates.io under that licence. A
+library's tests that use stepfunc build it from the release tag instead of
+pulling it (see [README.md](README.md#building-the-stepfunc-image)).
 
 ## Phase 5 - Additional adapters
 
@@ -247,8 +254,8 @@ adds, all as additions to 1.0:
 ## Phase 7 - Release qualification
 
 - Every check of the smoke and cross-stack self-tests is recorded (`results-*.tsv` beside the documents when `REPORT_DIR` is set); `scripts/compat-report.py` turns them and the capability documents into a compatibility report: adapters, totals, a client × server matrix, failures, known-bug hits, skips by reason, declared features.
-- `scripts/qualify.sh` scans every image of a release from the registry with Trivy 0.76.0 (pinned by digest), for linux/amd64 and linux/arm64, and writes a CycloneDX SBOM of each and a summary (`vulnerabilities.md`).
-- The **Release qualification** workflow (`.github/workflows/qualify.yml`) runs both against a published release, natively on both architectures, and attaches the results to the GitHub release; the release workflow calls it after publishing.
+- `scripts/qualify.sh` scans every published image of a release from the registry (from v0.4.3 opendnp3, dscsystems and dnp3py; the stepfunc image is not published) with Trivy 0.76.0 (pinned by digest), for linux/amd64 and linux/arm64, and writes a CycloneDX SBOM of each and a summary (`vulnerabilities.md`).
+- The **Release qualification** workflow (`.github/workflows/qualify.yml`) runs both against a published release, natively on both architectures (the self-test builds the unpublished stepfunc image from the release tag), and attaches the results to the GitHub release; the release workflow calls it after publishing.
 
 **Gate:** a release carries its compatibility report, scan summary and SBOMs, produced from the published images.
 

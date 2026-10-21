@@ -24,6 +24,8 @@ Run `make` for all targets.
 3. `make interop`: the result documents of all pairings must stay identical. If two stacks disagree, find out which one is right by the standard before touching the expectation.
 4. If behaviour visible to consumers changed, update the contract or fixture documentation in the same change.
 
+Never push the stepfunc image, nor add a target, a variable or a workflow step that could: build it locally (`make image-stepfunc`) and keep it there.
+
 Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except `adapters/dscsystems/`, which links a GPL-3.0-or-later library and is `GPL-3.0-or-later`.
 
 ## Moving an upstream pin
@@ -49,7 +51,7 @@ Both architectures are built and self-tested natively, on an amd64 and an arm64 
 ## Adding a client operation or a server behaviour
 
 1. Specify it first: the operation, its flags, when it succeeds and its result fields in the contract; the outstation behaviour in [docs/FIXTURES.md](docs/FIXTURES.md).
-2. Implement it in every published adapter whose upstream can do it; the others declare the feature false.
+2. Implement it in every adapter whose upstream can do it; the others declare the feature false.
 3. Add cases to [tests/cases.tsv](tests/cases.tsv) with the expected outcome, and a value check in `scripts/interop.sh` if the outcome line cannot show what matters; or, for a transport or optional feature, a check in `scripts/features.sh`.
 4. Add the feature to the capability documents and to [docs/CAPABILITIES.md](docs/CAPABILITIES.md) and [COVERAGE.md](COVERAGE.md).
 5. Extend the schemas in `schemas/` if documents gained fields.
@@ -70,7 +72,7 @@ See [docs/FIXTURES.md](docs/FIXTURES.md#adding-a-fixture).
 2. Create `adapters/<name>/` with a Dockerfile built from the repository root, following the existing ones: pinned build stage, minimal runtime stage, non-root user, `/fixtures`, `/licenses`, the readiness file, the health check, `ENTRYPOINT ["/usr/local/bin/dnp3-interop"]`.
 3. Implement the contract. For a role the upstream does not support, the command exits 2 with a message and `roles` says `false`. What the upstream cannot do within a role is a feature declared `false`, and the cases that need it name it in their `needs` column: never fake a behaviour the library does not have.
 4. `scripts/smoke.sh <name>` must pass, then `scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py <name>`.
-5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml`, `scripts/check-versions.sh`, the notices and the documentation tables.
+5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml`, `scripts/check-versions.sh`, the notices and the documentation tables. Add it to `PUBLISHED_ADAPTERS` as well only if its upstream's licence permits distributing the library in an image; otherwise it is built and self-tested like the others but never pushed, as stepfunc is (the Step Function I/O dnp3 crate's licence forbids distributing it, [#19](https://github.com/otfabric/dnp3-interop/issues/19)), and the README says how to build it.
 
 Do not build a shared adapter framework. Adapters in different languages share a contract, not code.
 
