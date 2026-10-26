@@ -2,11 +2,19 @@
 
 ## How a release is made
 
-1. `make ci` on the commit to release.
-2. Update `interop_version` in `versions.yaml` and the notes below.
-3. Tag `vX.Y.Z` and push the tag. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates, builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly those of the published adapters (opendnp3, dscsystems, dnp3py: `PUBLISHED_ADAPTERS` in the Makefile) to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. The stepfunc image is built and self-tested but never pushed: the licence of the Step Function I/O dnp3 crate forbids distributing it. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins, the digests of the multi-arch images, and under `localOnly` the stepfunc pin and how to build it) and `checksums.txt`.
+1. Write the notes of the version below and set `interop_version` in `versions.yaml` to it, in the same change. `make validate` (and CI) fails when RELEASE.md has no notes for `interop_version`.
+2. `make ci` on the commit to release.
+3. Tag `vX.Y.Z` and push the tag. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates (including the notes of the tag), builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly those of the published adapters (opendnp3, dscsystems, dnp3py: `PUBLISHED_ADAPTERS` in the Makefile) to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. The stepfunc image is built and self-tested but never pushed: the licence of the Step Function I/O dnp3 crate forbids distributing it. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins, the digests of the multi-arch images, and under `localOnly` the stepfunc pin and how to build it) and `checksums.txt`.
 4. The release workflow then runs the **Release qualification** workflow on what it published: the smoke and cross-stack self-tests again, natively on both architectures, against the images in the registry, with the stepfunc image built from the tag; a compatibility report from their documents; a Trivy vulnerability scan and a CycloneDX SBOM of every published image and architecture. It attaches `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz` to the release. Run it by hand (Actions → Release qualification) to qualify an earlier release again; vulnerability findings are recorded, not gated on.
 5. Consumers pin the digests from `manifest.json`, and build the stepfunc image from the tag (`make image-stepfunc VERSION=vX.Y.Z`).
+
+The notes are the body of the GitHub release, followed by the image digests
+and how to build the stepfunc and dnp3c images: everything after the heading
+`## vX.Y.Z` up to the next line that is exactly `---`
+(`scripts/release-notes.sh vX.Y.Z` prints it). This is the format of every
+otfabric repository and the rule of the shared release workflow, so: one
+section per version, newest first, each ending with a `---` line, and no
+`---` line inside a section.
 
 Tags are immutable. A fix is a new version.
 
@@ -238,3 +246,5 @@ outstation, and a fourth as master, behind container contract 1.0.
 - dnp3py as outstation.
 - The Triangle MicroWorks adapter, which is on hold.
 - UDP, TLS and serial links, file transfer, secure authentication.
+
+---
