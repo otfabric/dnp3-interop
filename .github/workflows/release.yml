@@ -51,6 +51,8 @@ jobs:
           python3 scripts/validate-fixtures.py --require-schema
           want="interop_version: \"${VERSION#v}\""
           grep -qF "$want" versions.yaml || { echo "::error::versions.yaml does not say $want"; exit 1; }
+          # The notes of this version become the body of the GitHub release.
+          scripts/release-notes.sh "${VERSION}" > /dev/null || { echo "::error::RELEASE.md has no notes for ${VERSION}"; exit 1; }
 
       - name: Build for linux/${{ matrix.arch }} and self-test
         run: |
@@ -155,34 +157,46 @@ jobs:
           cat manifest.json
           sha256sum manifest.json > checksums.txt
 
+      - name: Write the release body
+        env:
+          OPENDNP3: ${{ steps.digests.outputs.opendnp3 }}
+          DSCSYSTEMS: ${{ steps.digests.outputs.dscsystems }}
+          DNP3PY: ${{ steps.digests.outputs.dnp3py }}
+        run: |
+          {
+            scripts/release-notes.sh "${VERSION}"
+            echo
+            echo "## Images"
+            echo
+            echo "| Image | Digest |"
+            echo "|-------|--------|"
+            echo "| \`${REGISTRY}/dnp3-interop-opendnp3:${VERSION}\` | \`${OPENDNP3}\` |"
+            echo "| \`${REGISTRY}/dnp3-interop-dscsystems:${VERSION}\` | \`${DSCSYSTEMS}\` |"
+            echo "| \`${REGISTRY}/dnp3-interop-dnp3py:${VERSION}\` | \`${DNP3PY}\` |"
+            echo
+            echo "The stepfunc image is not published, at Step Function I/O's request: the licence of their dnp3 crate forbids distributing it, and the image has the crate compiled in. Build it locally from this tag; the build fetches the crate from crates.io under that licence: \`make image-stepfunc VERSION=${VERSION}\`, or \`docker build --build-arg ADAPTER_VERSION=${VERSION} -f adapters/stepfunc/Dockerfile -t ${REGISTRY}/dnp3-interop-stepfunc:${VERSION} .\`"
+            echo
+            echo "The dnp3c runner (\`dnp3-interop-dnp3c\`, the DNP3 IED Certification Procedure as Step Function I/O's dnp3c implements it, GPL-3.0-only) is not published either: \`make image-dnp3c VERSION=${VERSION}\` builds it, fetching dnp3c from Maven Central. See \`docs/CONFORMANCE.md\`."
+            echo
+            echo "## Pinning in a consumer"
+            echo
+            echo '```bash'
+            echo "DNP3_INTEROP_OPENDNP3_IMAGE=${REGISTRY}/dnp3-interop-opendnp3@${OPENDNP3}"
+            echo "DNP3_INTEROP_DSCSYSTEMS_IMAGE=${REGISTRY}/dnp3-interop-dscsystems@${DSCSYSTEMS}"
+            echo "DNP3_INTEROP_DNP3PY_IMAGE=${REGISTRY}/dnp3-interop-dnp3py@${DNP3PY}"
+            echo "# built locally (see above), not pulled:"
+            echo "DNP3_INTEROP_STEPFUNC_IMAGE=${REGISTRY}/dnp3-interop-stepfunc:${VERSION}"
+            echo "DNP3_INTEROP_DNP3C_IMAGE=${REGISTRY}/dnp3-interop-dnp3c:${VERSION}"
+            echo '```'
+            echo
+            echo "\`manifest.json\` records the upstream revisions these images were built from, and under \`localOnly\` the pins of the stepfunc and dnp3c images you build yourself. The published images contain MIT, Apache-2.0 and GPL-3.0-or-later software and are for interoperability testing. See \`THIRD_PARTY_NOTICES.md\`."
+          } > "${RUNNER_TEMP}/release-body.md"
+          cat "${RUNNER_TEMP}/release-body.md"
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          body: |
-            ## Images
-
-            | Image | Digest |
-            |-------|--------|
-            | `ghcr.io/otfabric/dnp3-interop-opendnp3:${{ github.ref_name }}` | `${{ steps.digests.outputs.opendnp3 }}` |
-            | `ghcr.io/otfabric/dnp3-interop-dscsystems:${{ github.ref_name }}` | `${{ steps.digests.outputs.dscsystems }}` |
-            | `ghcr.io/otfabric/dnp3-interop-dnp3py:${{ github.ref_name }}` | `${{ steps.digests.outputs.dnp3py }}` |
-
-            The stepfunc image is not published, at Step Function I/O's request: the licence of their dnp3 crate forbids distributing it, and the image has the crate compiled in. Build it locally from this tag; the build fetches the crate from crates.io under that licence: `make image-stepfunc VERSION=${{ github.ref_name }}`, or `docker build --build-arg ADAPTER_VERSION=${{ github.ref_name }} -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }} .`
-
-            The dnp3c runner (`dnp3-interop-dnp3c`, the DNP3 IED Certification Procedure as Step Function I/O's dnp3c implements it, GPL-3.0-only) is not published either: `make image-dnp3c VERSION=${{ github.ref_name }}` builds it, fetching dnp3c from Maven Central. See `docs/CONFORMANCE.md`.
-
-            ## Pinning in a consumer
-
-            ```bash
-            DNP3_INTEROP_OPENDNP3_IMAGE=ghcr.io/otfabric/dnp3-interop-opendnp3@${{ steps.digests.outputs.opendnp3 }}
-            DNP3_INTEROP_DSCSYSTEMS_IMAGE=ghcr.io/otfabric/dnp3-interop-dscsystems@${{ steps.digests.outputs.dscsystems }}
-            DNP3_INTEROP_DNP3PY_IMAGE=ghcr.io/otfabric/dnp3-interop-dnp3py@${{ steps.digests.outputs.dnp3py }}
-            # built locally (see above), not pulled:
-            DNP3_INTEROP_STEPFUNC_IMAGE=ghcr.io/otfabric/dnp3-interop-stepfunc:${{ github.ref_name }}
-            DNP3_INTEROP_DNP3C_IMAGE=ghcr.io/otfabric/dnp3-interop-dnp3c:${{ github.ref_name }}
-            ```
-
-            `manifest.json` records the upstream revisions these images were built from, and under `localOnly` the pins of the stepfunc and dnp3c images you build yourself. The published images contain MIT, Apache-2.0 and GPL-3.0-or-later software and are for interoperability testing. See `THIRD_PARTY_NOTICES.md`. Notes: `RELEASE.md`.
+          body_path: ${{ runner.temp }}/release-body.md
           files: |
             manifest.json
             checksums.txt
