@@ -289,7 +289,7 @@ func serverChannel(t transport, bind string, port int64) (ch channel.Channel, ad
 	return ln, addr, now, nil
 }
 
-// udpOutstation works around DSC go-dnp3 v0.8.1: an outstation without a
+// udpOutstation works around DSC go-dnp3 v0.8.2: an outstation without a
 // configured peer fails its first unsolicited response ("no UDP peer known
 // yet"), the session takes that for a lost connection and reconnects, and
 // the readers of the abandoned sessions keep taking datagrams from the

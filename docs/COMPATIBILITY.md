@@ -14,10 +14,10 @@ self-tested as a candidate.
 
 | Adapter | Upstream | Pinned | Latest | Pin | Engine |
 |---------|----------|--------|--------|-----|--------|
-| `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.7.0 | 1.7.0 | crate `dnp3 =1.7.0` from crates.io, checksum in `Cargo.lock` (tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca`) | independent, Rust |
+| `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.8.0 | 1.8.0 | crate `dnp3 =1.8.0` from crates.io, checksum in `Cargo.lock` (tag commit `235533ae276cd8f33b669c6db395979a308ef848`) | independent, Rust |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
-| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.1 | v0.8.1 | Go module `github.com/dscsystems/go-dnp3@v0.8.1` (commit `70ff72bb09755db183d1bd69859adc72cd663aec`), checksum in `go.sum` | independent, Go |
+| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.2 | v0.8.2 | Go module `github.com/dscsystems/go-dnp3@v0.8.2` (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`), checksum in `go.sum` | independent, Go |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
 (trixie), Rust 1.99.1, Go 1.27.2, Python 3.14.8.
@@ -242,10 +242,9 @@ Both outstations serve the attributes of a private set, accept writes of the
 writable ones and refuse the others (stepfunc with NO_FUNC_CODE_SUPPORT for an
 attribute that is not writable, PARAMETER_ERROR when its application refuses);
 DSC go-dnp3 also derives the standard attributes of set 0 (point counts, fragment
-sizes) itself. Both masters read and write them, with one known bug:
-stepfunc 1.7.0's master reads a signed integer of one octet as unsigned
-(`parse_signed_int` uses `read_u8`): -42 arrives as 214. Both outstations
-encode -42 in one octet, as the standard's shortest form.
+sizes) itself. Both masters read and write them. Before 1.8.0, stepfunc's
+master read a signed integer of one octet as unsigned: -42 arrived as 214.
+Both outstations encode -42 in one octet, as the standard's shortest form.
 
 ### DSC go-dnp3: security statistics
 
@@ -310,7 +309,7 @@ not trust sees the connection close afterwards, and its error code differs
 by library; the self-test checks only that the operation fails. A master that does not trust the outstation
 fails to connect (`connect-failed`) with all three.
 
-### DSC go-dnp3 (v0.8.1): its UDP outstation loses requests without a peer
+### DSC go-dnp3 (v0.8.2): its UDP outstation loses requests without a peer
 
 Without a configured peer, the outstation's first unsolicited response fails
 with "no UDP peer known yet". The session takes that for a lost connection
@@ -379,7 +378,7 @@ request would end in a timeout. Their `directOperateNoAckClient` and
 (DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested with
 them.
 
-### The first SELECT on a fresh stepfunc outstation fails with NO_SELECT
+### Before 1.8.0, the first SELECT on a fresh stepfunc outstation failed with NO_SELECT
 
 With unsolicited responses supported, the stepfunc outstation sends a null
 unsolicited response as soon as a master connects. Both masters (stepfunc
@@ -402,12 +401,10 @@ life of the outstation, not per connection, so only the first SELECT after
 start is affected. The opendnp3 outstation checks the sequence number only
 and accepts the same exchange.
 
-No adapter can avoid it without disabling unsolicited responses. It is listed
-in [tests/known-bugs.tsv](../tests/known-bugs.tsv) for the stepfunc outstation
-at 1.7.0, and `scripts/interop.sh` checks select-before-operate on that
-outstation after the null response was confirmed, where it passes. A library
-that tests against a stepfunc image (built locally) should not make its first request
-after the container start a SELECT, or should expect this.
+No adapter could avoid it without disabling unsolicited responses. stepfunc
+1.8.0 fixes it: since dnp3-interop v0.5.2 it is no longer in
+[tests/known-bugs.tsv](../tests/known-bugs.tsv), and the first SELECT after
+start passes.
 
 ### Both outstations set PARAMETER_ERROR with NOT_SUPPORTED, and stepfunc's master drops the echo
 
@@ -503,7 +500,7 @@ call for ASSIGN CLASS. The capabilities `readAllObjectsClient`,
 
 Unlike the stepfunc and opendnp3 masters, it confirms the outstation's null
 unsolicited response before it sends its first request, so its first SELECT
-on a fresh stepfunc outstation succeeds.
+on a fresh stepfunc outstation succeeded even before stepfunc 1.8.0.
 
 ### DSC go-dnp3's outstation: one connection at a time, contiguous indexes, NEED_TIME at start
 

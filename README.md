@@ -10,9 +10,9 @@ integrating third-party protocol stacks into production applications.
 
 | Adapter | Implementation | Language | Server (outstation) | Client (master) | Image |
 |---------|----------------|----------|:------:|:------:|-------|
-| `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) 1.7.0 | Rust | yes | yes | not published: build it locally, `make image-stepfunc` ² |
+| `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) 1.8.0 | Rust | yes | yes | not published: build it locally, `make image-stepfunc` ² |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
-| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.1 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
+| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.2 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
 
 ² The stepfunc image is not published, at Step Function I/O's request: the
