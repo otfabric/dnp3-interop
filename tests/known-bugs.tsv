@@ -21,7 +21,6 @@
 # may fail and is counted as "known bug" rather than as a failure. If no
 # matching case fails any more, the run fails: the entry is stale and the pin
 # can move.
-stepfunc:server	1.8.0	--mode sbo	the first SELECT after start fails with NO_SELECT: the master's confirm of the null unsolicited response arrives between SELECT and OPERATE and the outstation counts it as an intervening request
 dscsystems:server	v0.8.2	^freeze --clear	FREEZE AND CLEAR leaves a counter that has no frozen counter of the same index uncleared
 dscsystems:server	v0.8.2	^freeze, unchanged frozen value	a freeze raises frozen counter events even for frozen values that did not change
 dscsystems:client	v0.8.2	--local-addr	the master accepts frames addressed to another master address, and the outstation processes requests from a master address other than its own master's; together, a master with a wrong address reads an IIN instead of timing out

@@ -43,7 +43,7 @@ only and never published.
 
 - **`dscsystems`**: DSC go-dnp3 v0.8.1 → v0.8.2 (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`). The release adds DSC's own interop tests against these images; the library is unchanged, so its five entries in `tests/known-bugs.tsv` move to v0.8.2 as they are.
 - **Base images**: new digests of `debian:trixie-slim`, `python:3.14.8-slim-trixie` and `rust:1.99.1-slim-trixie`.
-- **`stepfunc`**: dnp3 1.7.0 → 1.8.0 (tag commit `235533ae276cd8f33b669c6db395979a308ef848`). The adapter no longer matches the error variants 1.8.0 deprecates as never returned (`WriteError::IinError`, `TimeSyncError::IinError`, `CommandResponseError::Request`); an IIN2 rejection arrives as `TaskError::RejectedByIin2`, which it already reported as `rejected`. Its two entries in `tests/known-bugs.tsv` move to 1.8.0.
+- **`stepfunc`**: dnp3 1.7.0 → 1.8.0 (tag commit `235533ae276cd8f33b669c6db395979a308ef848`). The adapter no longer matches the error variants 1.8.0 deprecates as never returned (`WriteError::IinError`, `TimeSyncError::IinError`, `CommandResponseError::Request`); an IIN2 rejection arrives as `TaskError::RejectedByIin2`, which it already reported as `rejected`. 1.8.0 fixes the outstation's NO_SELECT on the first SELECT after start, so that entry leaves `tests/known-bugs.tsv`; the master's one-octet signed attribute bug remains, and moves to 1.8.0.
 
 ---
 
