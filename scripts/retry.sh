@@ -31,6 +31,8 @@ transient+='|net/http: request canceled|TLS handshake|could not resolve host|Cou
 transient+='|Temporary failure resolving|Could not connect to|Connection timed out|Connection reset'
 transient+='|Failed to fetch http|Could not transfer artifact|Transfer failed|proxy\.golang\.org.*(timeout|5[0-9][0-9])'
 transient+='|The requested URL returned error: (429|5[0-9][0-9])|RPC failed|early EOF'
+# An HTTP/2 stream the server reset, as Go reports it (seen on proxy.golang.org).
+transient+='|stream error: stream ID [0-9]+; [A-Z_]+; received from peer'
 
 log=$(mktemp)
 trap 'rm -f "${log}"' EXIT

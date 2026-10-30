@@ -259,7 +259,7 @@ dnp3-interop/
 │   ├── baseline/        the baseline outstation
 │   ├── dnp3py/          what dnp3py's outstation can serve
 │   └── extended/, files/, attributes/, controls/, events/   fixtures of contract 1.1..1.3 features
-├── schemas/             JSON Schemas of the capability and client result documents
+├── schemas/             JSON Schemas of the capability and client result documents, interop-result-v1
 ├── tests/cases.tsv      self-test cases: operation, expected outcome, features needed
 ├── tests/cases-dnp3py.tsv the cases against the dnp3py fixture
 ├── tests/known-bugs.tsv known bugs of upstream versions
@@ -291,6 +291,11 @@ proxy, dnp3py on PyPI) and the digest of every pinned base image, builds and
 self-tests the adapters whose pin is behind, reports pin versus latest in one
 table in its job summary and keeps a tracking issue open while a pin is
 behind.
+
+`make documents` also writes `reports/results.json`, the organisation's
+[interop-result-v1](schemas/interop-result-v1.schema.json), of `make interop` and
+`make features`. A run with no pass, or with a known bug that no longer
+reproduces, fails.
 
 `make smoke ADAPTERS=opendnp3` and `VERBOSE=1 make interop` narrow and
 expand what is run and shown; `DNP3_INTEROP_DEBUG=1` in a container's
