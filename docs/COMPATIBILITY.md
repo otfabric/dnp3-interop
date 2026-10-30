@@ -368,15 +368,18 @@ outstation that does not set NEED_TIME it fails with `failed`; the capability
 `timeSyncOnDemand` is false. The baseline fixture sets NEED_TIME at start for
 this reason.
 
-### Neither opendnp3's nor stepfunc's master sends DIRECT OPERATE NO ACK or the `_NR` freezes
+### opendnp3's master sends no `_NR` function; stepfunc's only DIRECT OPERATE NO ACK
 
-Neither opendnp3's master nor stepfunc's has a direct-operate-no-ack mode,
-and both send any other function code through a task that waits for a
-response (`PerformFunction`, `send_and_expect_empty_response`), so a `_NR`
-request would end in a timeout. Their `directOperateNoAckClient` and
-`freezeNoAckClient` are false. The DSC go-dnp3 and dnp3py masters send them
-(DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested with
-them.
+opendnp3's master has no direct-operate-no-ack mode and sends any other
+function code through a task that waits for a response (`PerformFunction`),
+so a `_NR` request would end in a timeout: its `directOperateNoAckClient` and
+`freezeNoAckClient` are false. stepfunc's master sends DIRECT OPERATE NO ACK
+since 1.8.0 (`operate_no_ack`), so its `directOperateNoAckClient` is true
+since dnp3-interop v0.6.0; its freezes still go through
+`send_and_expect_empty_response`, which waits for a response, so
+`freezeNoAckClient` stays false. The DSC go-dnp3 and dnp3py masters send them
+too (DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested
+with them.
 
 ### Before 1.8.0, the first SELECT on a fresh stepfunc outstation failed with NO_SELECT
 
@@ -437,11 +440,13 @@ The 2022 sources use the fixed-width integer types without including
 `<cstdint>`, which GCC 14 no longer provides through other headers. The
 Dockerfile passes `-include cstdint`.
 
-### stepfunc's outstation does not implement ASSIGN CLASS
+### stepfunc's outstation implements ASSIGN CLASS since 1.8.0
 
-It answers function code 22 with NO_FUNC_CODE_SUPPORT; `assignClassServer`
-is false. Its master sends ASSIGN CLASS, and the self-test exercises that
-against the opendnp3 outstation.
+Up to 1.7.0 it answered function code 22 with NO_FUNC_CODE_SUPPORT. 1.8.0
+applies it to its database and reports each point header to the application,
+so the adapter emits `assign-class` server events, and `assignClassServer` is
+true since dnp3-interop v0.6.0. A header that names all points of a type is
+reported with the lowest and highest index of that type in the fixture.
 
 ### stepfunc keeps octet strings out of class 0 by default
 

@@ -26,6 +26,30 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.6.0
+
+**Date:** 2026-10-30
+**Previous release:** v0.5.2
+
+## Summary
+
+The stepfunc adapter offers what dnp3 1.8.0 added: its master sends DIRECT
+OPERATE NO ACK and its outstation applies ASSIGN CLASS. Container contract
+1.3 unchanged; the other images are rebuilt unchanged.
+
+## Changes
+
+### Adapters
+
+- **`stepfunc`**: `operate --mode direct-no-ack` sends DIRECT OPERATE NO ACK with the library's `operate_no_ack`; it succeeds when the request was sent and `commandStatus` is null. `directOperateNoAckClient` is true.
+- **`stepfunc`**: the outstation applies ASSIGN CLASS (1.8.0 does by default) and reports each accepted point header as an `assign-class` server event; a header that names all points of a type reports the lowest and highest index of that type in the fixture. `assignClassServer` is true.
+
+### Docs
+
+- CAPABILITIES, COMPATIBILITY, COVERAGE, CONTAINER_CONTRACT and README describe the two capabilities. stepfunc's master still has no freeze without a response, no broadcast, no TLS listener and no group 90; its master still drops g50v4.
+
+---
+
 ## v0.5.2
 
 **Date:** 2026-10-30

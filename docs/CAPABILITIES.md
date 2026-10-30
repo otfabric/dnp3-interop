@@ -75,14 +75,14 @@ serves it and the master sends it.
 | `selectBeforeOperate` | SELECT, then OPERATE, and `selectRequired` points | yes | yes | yes | yes |
 | `parameterErrorWithNotSupported` | Server: the outstation sets IIN2.2 PARAMETER_ERROR with every NOT_SUPPORTED command status, not only for a point that does not exist. A behaviour, not a capability: cases name it either way | yes | yes | no | no |
 | `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | yes | yes | yes | yes |
-| `directOperateNoAckClient` | `operate --mode direct-no-ack` | no ³ | no ³ | yes | yes |
+| `directOperateNoAckClient` | `operate --mode direct-no-ack` | yes | no ³ | yes | yes |
 | `timeSyncLan` | RECORD CURRENT TIME and WRITE g50v3 | yes | yes | yes | yes |
 | `timeSyncNonLan` | DELAY MEASURE and WRITE g50v1 | yes | yes | yes | yes |
 | `timeSyncOnDemand` | The master synchronizes whether or not the outstation sets NEED_TIME | yes | no ⁴ | yes | yes |
 | `restart` | COLD RESTART and WARM RESTART with the delay | yes | yes | yes | yes |
 | `restartDelayClient` | `restart` reports the announced delay in `restartDelayMs` | yes | yes | no ⁵ | yes |
 | `unsolicited` | ENABLE and DISABLE UNSOLICITED, and events in unsolicited responses | yes | yes | yes | yes |
-| `assignClassServer` | The outstation applies ASSIGN CLASS | no ⁶ | yes | yes | no |
+| `assignClassServer` | The outstation applies ASSIGN CLASS | yes ⁶ | yes | yes | no |
 | `assignClassClient` | `assign-class` | yes | yes | no ⁷ | yes |
 | `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes | yes ⁸ | yes |
 | `freezeNoAckServer` | The outstation applies the `_NR` freezes | yes | yes | yes | yes |
@@ -146,9 +146,10 @@ with its decoders.
 group; `read --group 60 --variation 1..4` works, as a class read.
 
 ³ The library's master has no way to send it: opendnp3's `PerformFunction`
-and stepfunc's `send_and_expect_empty_response` always wait for a response,
-and neither has a direct-operate-no-ack mode. The flag is a usage error
-(exit 2).
+and stepfunc's `send_and_expect_empty_response` always wait for a response.
+opendnp3 has no direct-operate-no-ack mode; stepfunc has one since 1.8.0
+(`operate_no_ack`), but no freeze without a response. The flag is a usage
+error (exit 2).
 
 ⁴ opendnp3's master synchronizes only on NEED_TIME and offers no call to do
 it on request. The adapter reads the IIN first and fails with `failed` when
@@ -158,7 +159,8 @@ written, so the operation works against it.
 ⁵ DSC go-dnp3's master returns no delay from `Restart`; `restartDelayMs` is
 null.
 
-⁶ stepfunc's outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT.
+⁶ stepfunc's outstation applies ASSIGN CLASS since 1.8.0; before, it answered
+NO_FUNC_CODE_SUPPORT.
 
 ⁷ DSC go-dnp3's master has no call for ASSIGN CLASS.
 
