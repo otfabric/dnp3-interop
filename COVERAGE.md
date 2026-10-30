@@ -12,13 +12,13 @@ What a consumer can exercise against the published adapters today.
 | Static data | Groups 1, 3, 10, 20, 21, 30, 40, 110 in the static variations of the fixture format, including the variations without flags and the 16-bit ones; all objects, ranges, and a specific variation | yes |
 | Event data | Groups 2, 4, 11, 22, 23, 32, 42 with and without time, caused by controls and freezes, in classes 1..3; confirmed events are not sent again | yes |
 | Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED (with PARAMETER_ERROR) and OUT_OF_RANGE; select-required points | yes |
-| DIRECT OPERATE NO ACK | Served by every outstation; sent by the DSC go-dnp3 and dnp3py masters | yes |
+| DIRECT OPERATE NO ACK | Served by every outstation; sent by the stepfunc, DSC go-dnp3 and dnp3py masters | yes |
 | Freeze without acknowledgement | Served by every outstation; sent by the dnp3py master | yes |
 | Time synchronization | LAN (RECORD CURRENT TIME, g50v3) and non-LAN (DELAY MEASURE, g50v1); NEED_TIME until the time is written; the written time in the server's event stream | yes |
 | Restart | Cold and warm restart with the delay in g52v2; the outstation does not actually restart | yes |
 | Unsolicited responses | Null unsolicited response at connection; ENABLE and DISABLE UNSOLICITED per class; buffered and new events sent unsolicited and confirmed | yes |
 | Freeze | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0; frozen counter and counter events | yes |
-| Assign class | Served by the opendnp3 and DSC go-dnp3 outstations; sent by the stepfunc, opendnp3 and dnp3py masters | yes, where declared |
+| Assign class | Served by the stepfunc, opendnp3 and DSC go-dnp3 outstations; sent by the stepfunc, opendnp3 and dnp3py masters | yes, where declared |
 | IIN | DEVICE_RESTART until cleared, NEED_TIME, class event bits, request errors | yes, without DEVICE_RESTART |
 | UDP, TLS, serial (1.1) | stepfunc, opendnp3 and DSC go-dnp3, both roles | yes |
 | File transfer, g70 (1.1) | Served by the DSC go-dnp3 outstation; sent by the stepfunc (no delete) and DSC go-dnp3 masters | yes |
@@ -49,10 +49,10 @@ injector; a library tests these with scripted peers of its own.
 |---|:---:|:---:|:---:|:---:|
 | Outstation (server role) | yes | yes | yes | yes (`dnp3py` fixture only) |
 | Everything above except the rows below, as master | yes | yes | yes | yes |
-| Assign class, outstation | no | yes | yes | no |
+| Assign class, outstation | yes | yes | yes | no |
 | Assign class, master | yes | yes | no | yes |
 | All-objects read and restart delay, master | yes | yes | no | yes |
-| DIRECT OPERATE NO ACK, master | no | no | yes | yes |
+| DIRECT OPERATE NO ACK, master | yes | no | yes | yes |
 | Freeze without acknowledgement, master | no | no | no | yes |
 | SELECT as the first request after the outstation started | no | yes | yes | — |
 | Time synchronization when the outstation does not ask for it | yes | no | yes | yes |
