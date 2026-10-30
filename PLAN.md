@@ -82,7 +82,7 @@ pulling it (see [README.md](README.md#building-the-stepfunc-image)).
 
 ### DSC Systems go-dnp3 (done)
 
-Evaluation: both roles, v0.8.1 (GPL-3.0-or-later), an engine of its own; pure Go, so
+Evaluation: both roles, v0.8.2 (GPL-3.0-or-later), an engine of its own; pure Go, so
 both architectures build natively. The adapter is GPL-3.0-or-later.
 
 - Go adapter, both roles, the ten client operations of contract 1.0 but
@@ -99,7 +99,7 @@ both architectures build natively. The adapter is GPL-3.0-or-later.
 **Gate:** smoke test and cross-stack self-test for the roles it declares. Met
 on linux/arm64 (2026-10-20): 32 of 32 smoke checks; the three-adapter run has
 789 checks passed, none failed, 14 known-bug hits, 81 skipped. Three upstream
-bugs of DSC go-dnp3 v0.8.1 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
+bugs of DSC go-dnp3 v0.8.2 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
 of a counter without frozen counter, freeze events for unchanged values, link
 address filtering). Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 

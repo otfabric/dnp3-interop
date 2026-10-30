@@ -26,6 +26,26 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.5.2
+
+**Date:** 2026-10-30
+**Previous release:** v0.5.1
+
+## Summary
+
+DSC go-dnp3 v0.8.2 and current base images. Container contract 1.3
+unchanged; no adapter code changed.
+
+## Changes
+
+### Upstream pins
+
+- **`dscsystems`**: DSC go-dnp3 v0.8.1 → v0.8.2 (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`). The release adds DSC's own interop tests against these images; the library is unchanged, so its five entries in `tests/known-bugs.tsv` move to v0.8.2 as they are.
+- **Base images**: new digests of `debian:trixie-slim`, `python:3.14.8-slim-trixie` and `rust:1.99.1-slim-trixie`.
+- **`stepfunc`** stays at 1.7.0. The licence of 1.8.0 (§2.6) forbids running it as a test peer for another DNP3 implementation, so it is not taken.
+
+---
+
 ## v0.5.1
 
 **Date:** 2026-10-21
