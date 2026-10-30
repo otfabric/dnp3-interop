@@ -214,8 +214,8 @@ wire, from responses that hold only them (CONTAINER_CONTRACT.md).
 ²² opendnp3 3.x knows no group 0: its outstation answers OBJECT_UNKNOWN and its
 master cannot parse it.
 
-²³ stepfunc 1.7.0's master decodes a signed integer attribute of one octet
-without its sign (tests/known-bugs.tsv).
+²³ Before 1.8.0, stepfunc's master decoded a signed integer attribute of
+one octet without its sign.
 
 ²⁴ stepfunc's master reports only the first refused control of a request:
 `commandStatuses` is null.

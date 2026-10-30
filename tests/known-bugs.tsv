@@ -27,7 +27,6 @@ dscsystems:client	v0.8.2	--local-addr	the master accepts frames addressed to ano
 dscsystems:server	v0.8.2	--local-addr	with unsolicited responses off, the outstation answers requests from any master address, to that address	dnp3py
 dnp3py:server	0.6.0	^read .*--start	a read of a range returns every point of the type: ranges and specific variations are ignored	dnp3py
 dnp3py:server	0.6.0	^operate --type g(12v1|41v2) --index (9|5) 	a control of a point that does not exist is answered NOT_SUPPORTED without IIN2.2 PARAMETER_ERROR	dnp3py
-stepfunc:client	1.8.0	\[attributes\] signed	the master decodes a signed integer attribute of one octet without its sign (-42 as 214)	features
 dscsystems:server	v0.8.2	\[freeze\] at time 0	FREEZE AT TIME with time 0 and interval 0 is refused (PARAMETER_ERROR) instead of freezing at once	features
 dnp3py:server	0.6.0	\[events\] IIN2.3 clears	IIN2.3 EVENT_BUFFER_OVERFLOW stays set after the master has confirmed the events	features
 dnp3py:client	0.6.0	\[link\] a poll of an outstation that confirms	the master does not acknowledge CONFIRMED_USER_DATA, so an outstation that asks for link-layer confirms never gets an answer	features
