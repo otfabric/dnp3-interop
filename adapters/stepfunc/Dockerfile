@@ -43,7 +43,7 @@ RUN if grep -q "^dnp3 = { version = \"=${UPSTREAM_VERSION}\"" Cargo.toml; then \
          cargo fetch --locked; \
        else \
          sed -i "s/^dnp3 = { version = \"=[^\"]*\"/dnp3 = { version = \"=${UPSTREAM_VERSION}\"/" Cargo.toml \
-         && cargo update -p dnp3; \
+         && cargo update -p dnp3 && cargo fetch; \
        fi
 
 RUN cargo fmt --check \
