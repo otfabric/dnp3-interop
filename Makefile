@@ -134,13 +134,13 @@ interop: ## Cross-stack self-test: every client against every server, on the bas
 features: ## Cross-stack self-test of contract 1.1: TLS, UDP, serial, file transfer, secure authentication
 	@scripts/features.sh $(ADAPTERS)
 
-# ── Upstream candidates ───────────────────────────────────────────────────────
+# ── Candidates ────────────────────────────────────────────────────────────────
 # Builds an adapter on another upstream version than the release pin and runs
 # the self-tests on it against the other adapters at their pins. Bugs of that
 # version listed in tests/known-bugs.tsv are reported as known, so the run
 # shows whether everything else still works. scripts/latest-upstream.py prints
-# the latest release of an adapter's upstream; the Upstream candidates
-# workflow runs this for every adapter whose pin is behind.
+# the latest release of an adapter's upstream; the Upstream workflow runs
+# this for every adapter whose pin is behind.
 
 CANDIDATE_VERSION ?=
 # opendnp3 is pinned by commit: give the commit of CANDIDATE_VERSION.

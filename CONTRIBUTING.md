@@ -38,7 +38,7 @@ The rule is the latest upstream release. A newer release that fails the self-tes
 
 An entry may also cover a pinned version, when no adapter can avoid the bug and another check covers the behaviour it breaks. An entry that no longer reproduces is stale and fails the run. The columns are described in the header of [tests/known-bugs.tsv](tests/known-bugs.tsv).
 
-Every Dockerfile names its pin `ARG UPSTREAM_VERSION` and `ARG UPSTREAM_SHA`. The **Upstream candidates** workflow resolves the latest release of every stack every week with `scripts/latest-upstream.py`, builds and self-tests each adapter whose pin is behind, writes one decision table and keeps a tracking issue open while a pin is behind. `make candidate-<adapter> CANDIDATE_VERSION=<version>` (opendnp3: also `CANDIDATE_SHA=<commit>`, since it is pinned by commit) runs the same locally. opendnp3 is archived: a commit after its last tag is not a release and is never a candidate.
+Every Dockerfile names its pin `ARG UPSTREAM_VERSION` and `ARG UPSTREAM_SHA`. The **Upstream** workflow (`.github/workflows/upstream.yml`) resolves the latest release of every stack every day with `scripts/latest-upstream.py` and checks whether the tag of every digest-pinned base image has moved. It builds and self-tests each adapter whose pin is behind (once per pin and latest version; later runs reuse that result), writes one pin-vs-latest table and keeps a tracking issue open while a pin is behind. `make candidate-<adapter> CANDIDATE_VERSION=<version>` (opendnp3: also `CANDIDATE_SHA=<commit>`, since it is pinned by commit) runs the same locally. opendnp3 is archived: a commit after its last tag is not a release and is never a candidate.
 
 ## Registries and retries
 

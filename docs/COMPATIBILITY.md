@@ -24,14 +24,15 @@ Everything else is on its latest release as of 2026-10-19: Debian 13
 
 The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
 `Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
-`scripts/check-versions.sh` keeps them in step. The **Upstream candidates**
-workflow (`.github/workflows/candidate.yml`, weekly and on demand) resolves
+`scripts/check-versions.sh` keeps them in step. The **Upstream**
+workflow (`.github/workflows/upstream.yml`, daily and on demand) resolves
 the latest stable release of every stack with `scripts/latest-upstream.py`:
 the dnp3 crate on crates.io, opendnp3's tags on GitHub, DSC go-dnp3 on the Go
-module proxy and dnp3py on PyPI. It builds the adapter on each that differs
-from its pin, runs the smoke and cross-stack self-tests, writes one
-pin-vs-latest decision table, a row per stack, to its job summary, and keeps
-an issue open while a pin is behind. It never changes a pin. opendnp3's
+module proxy and dnp3py on PyPI, and checks the digest of every pinned base
+image. It builds the adapter on each release that differs from its pin (once
+per pin and latest version), runs the smoke and cross-stack self-tests,
+writes one pin-vs-latest table, a row per stack and per base image, to its
+job summary, and keeps an issue open while a pin is behind. It never changes a pin. opendnp3's
 repository is archived: commits after its last tag were never released and
 are not candidates.
 
