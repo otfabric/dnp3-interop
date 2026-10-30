@@ -23,8 +23,8 @@ image has the crate compiled in. Build it yourself from this repository
 the build fetches the crate from crates.io, under its licence, for you. See
 [Building the stepfunc image](#building-the-stepfunc-image).
 
-The stacks do not all do the same: the stepfunc outstation refuses ASSIGN
-CLASS, opendnp3's master synchronizes time only when the outstation asks for
+The stacks do not all do the same: the opendnp3 master sends no `_NR`
+function, opendnp3's master synchronizes time only when the outstation asks for
 it, DSC go-dnp3's master reads only ranges and classes, and dnp3py's
 outstation (¹) serves only the `dnp3py` fixture, the baseline within its
 limits. Each image says what it supports (`print-capabilities`); see

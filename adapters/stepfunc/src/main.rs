@@ -118,7 +118,7 @@ fn print_capabilities() -> i32 {
             "parameterErrorWithNotSupported": true,
             "directOperateNoAckServer": true,
             // The master never sends it.
-            "directOperateNoAckClient": false,
+            "directOperateNoAckClient": true,
             "timeSyncLan": true,
             "timeSyncNonLan": true,
             "timeSyncOnDemand": true,
@@ -126,7 +126,7 @@ fn print_capabilities() -> i32 {
             "restartDelayClient": true,
             "unsolicited": true,
             // The outstation answers ASSIGN CLASS with NO_FUNC_CODE_SUPPORT.
-            "assignClassServer": false,
+            "assignClassServer": true,
             "assignClassClient": true,
             "freeze": true,
             "freezeNoAckServer": true,

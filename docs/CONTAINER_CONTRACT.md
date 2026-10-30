@@ -144,7 +144,7 @@ One JSON object per line on stdout.
 | `command` | `function`, `type`, `index`, `code` or `value`, `status` | A select or operate reached the outstation's control handler |
 | `time-sync` | `time` | The master wrote the outstation's time (either procedure) |
 | `restart` | `type` (`cold` or `warm`) | A restart request was accepted |
-| `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only where the library tells the application (opendnp3) |
+| `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only where the library tells the application (opendnp3, stepfunc since 1.8.0) |
 | `file` | `action`, `name`, `status` (1.1) | See [file transfer](#file-transfer) |
 | `auth` | `user`, `function` (1.1) | See [secure authentication](#secure-authentication) |
 | `auth-error` | `user`, `code` (1.1) | See [secure authentication](#secure-authentication) |
