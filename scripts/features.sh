@@ -232,7 +232,7 @@ basics() {
 }
 
 # ready_transport <container>: the transport of the ready event.
-ready_transport() { docker logs "$1" 2>/dev/null | head -1 | jq -r '.transport' 2>/dev/null; }
+ready_transport() { docker logs "$1" 2>&1 | jq -Rr 'fromjson? | select(.event? == "ready") | .transport' 2>/dev/null | head -1; }
 
 # Fixture values the file checks expect.
 README_HEX=$(jq -r '.files[] | select(.name == "/readme.txt") | .content' "${FILES_FIXTURE}")
@@ -614,13 +614,13 @@ suite() {
             stop_server "${name}"
             start "${server}" "${name}" --
             if wait_ready "${name}"; then
-                doc=$(client "${client}" -- freeze --at +1500 --host "${name}")
-                at_pair "freeze.freeze-in-1-5-s-is-accepted-not-done-yet" "${pair}"
-                check "${pair}: [freeze] a freeze in 1.5 s is accepted, not done yet" "ok=true error=- g21v1:0=0 g21v2:1=0" \
+                doc=$(client "${client}" -- freeze --at +6000 --host "${name}")
+                at_pair "freeze.freeze-in-6-s-is-accepted-not-done-yet" "${pair}"
+                check "${pair}: [freeze] a freeze in 6 s is accepted, not done yet" "ok=true error=- g21v1:0=0 g21v2:1=0" \
                     "$(outcome "${doc}") $(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
                 # A master stays connected meanwhile: DSC go-dnp3 runs scheduled
                 # freezes only while one is (COMPATIBILITY.md).
-                client "${client}" -- monitor --duration-ms 2500 --host "${name}" >/dev/null
+                client "${client}" -- monitor --duration-ms 7000 --host "${name}" >/dev/null
                 at_pair "freeze.and-done-at-its-time" "${pair}"
                 check "${pair}: [freeze] and done at its time" "g21v1:0=123456 g21v2:1=65535" \
                     "$(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
