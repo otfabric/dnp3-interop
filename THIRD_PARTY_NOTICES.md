@@ -68,7 +68,7 @@ What a local build contains:
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| dnp3 (Step Function I/O LLC) | 1.7.0 (crates.io), tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
+| dnp3 (Step Function I/O LLC) | 1.8.0 (crates.io), tag commit `235533ae276cd8f33b669c6db395979a308ef848` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
 | Rust crates the adapter and dnp3 depend on (tokio, serde_json, tracing, chrono, rustls, tokio-serial, ...) | the versions in `adapters/stepfunc/Cargo.lock` | MIT and/or Apache-2.0 | https://crates.io |
 | ring (cryptography of rustls) | the version in `adapters/stepfunc/Cargo.lock` | Apache-2.0 AND ISC | https://github.com/briansmith/ring |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |

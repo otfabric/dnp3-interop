@@ -20,8 +20,8 @@ implementations:
     upstream: "Step Function I/O dnp3"
     repository: "https://github.com/stepfunc/dnp3"
     crate: "dnp3"
-    version: "1.7.0"             # crates.io, 2026-09-21; 1.8.0 not taken (its licence, §2.6)
-    revision: "d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca"   # tag 1.7.0
+    version: "1.8.0"             # latest release (crates.io, 2026-10-29)
+    revision: "235533ae276cd8f33b669c6db395979a308ef848"   # tag 1.8.0
     license: "Step Function I/O non-commercial licence (LICENSE.txt of the crate)"
     language: "Rust"
     independent_engine: true

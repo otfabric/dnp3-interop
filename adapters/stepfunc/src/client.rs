@@ -1306,10 +1306,7 @@ async fn execute(
                         format!("the outstation answered {}", command_status_name(s.as_u8())),
                     ))
                 }
-                Err(CommandError::Task(e))
-                | Err(CommandError::Response(CommandResponseError::Request(e))) => {
-                    Some(task_failure(&e, &mut iin_from_error))
-                }
+                Err(CommandError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
                 Err(e) => Some(fail(
                     "failed",
                     format!("the outstation's echo did not match the request: {e}"),
@@ -1318,10 +1315,6 @@ async fn execute(
             Op::TimeSync(procedure) => match association.synchronize_time(procedure).await {
                 Ok(()) => None,
                 Err(TimeSyncError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
-                Err(TimeSyncError::IinError(_)) => Some(fail(
-                    "rejected",
-                    "the outstation refused the request (IIN2)",
-                )),
                 Err(e) => Some(fail("failed", format!("{e}"))),
             },
             Op::Restart(cold) => {
@@ -1344,10 +1337,7 @@ async fn execute(
             {
                 Ok(()) => None,
                 Err(WriteError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
-                Err(WriteError::IinError(_)) => Some(fail(
-                    "rejected",
-                    "the outstation refused the request (IIN2)",
-                )),
+                Err(e) => Some(fail("failed", format!("{e}"))),
             },
             Op::Deadbands(list) => match association
                 .write_dead_bands(vec![DeadBandHeader::group34_var3_u16(list)])
@@ -1355,10 +1345,7 @@ async fn execute(
             {
                 Ok(()) => None,
                 Err(WriteError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
-                Err(WriteError::IinError(_)) => Some(fail(
-                    "rejected",
-                    "the outstation refused the request (IIN2)",
-                )),
+                Err(e) => Some(fail("failed", format!("{e}"))),
             },
             Op::AttributeRead(set, variation) => association
                 .read(ReadRequest::device_attribute(variation, AttrSet::new(set)))
@@ -1374,10 +1361,7 @@ async fn execute(
             {
                 Ok(()) => None,
                 Err(WriteError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
-                Err(WriteError::IinError(_)) => Some(fail(
-                    "rejected",
-                    "the outstation refused the request (IIN2)",
-                )),
+                Err(e) => Some(fail("failed", format!("{e}"))),
             },
             Op::File(op) => files::run(&mut association, op, file_result)
                 .await
