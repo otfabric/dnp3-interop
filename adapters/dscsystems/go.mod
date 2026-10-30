@@ -4,7 +4,7 @@ module github.com/otfabric/dnp3-interop/adapters/dscsystems
 
 go 1.27
 
-require github.com/dscsystems/go-dnp3 v0.8.1
+require github.com/dscsystems/go-dnp3 v0.8.2
 
 require (
 	go.bug.st/serial v1.8.0 // indirect

@@ -11,7 +11,7 @@ What a consumer can exercise against the published adapters today.
 | Integrity poll | Class 1, 2, 3 and 0 in one READ | yes, values and flags against the fixture |
 | Static data | Groups 1, 3, 10, 20, 21, 30, 40, 110 in the static variations of the fixture format, including the variations without flags and the 16-bit ones; all objects, ranges, and a specific variation | yes |
 | Event data | Groups 2, 4, 11, 22, 23, 32, 42 with and without time, caused by controls and freezes, in classes 1..3; confirmed events are not sent again | yes |
-| Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED (with PARAMETER_ERROR) and OUT_OF_RANGE; select-required points | yes; on the stepfunc outstation the first SELECT after start fails (see COMPATIBILITY.md) |
+| Controls | g12v1 (LATCH_ON, LATCH_OFF, CLOSE, TRIP) and g41v1..v4; DIRECT OPERATE and SELECT/OPERATE; refusals NOT_SUPPORTED (with PARAMETER_ERROR) and OUT_OF_RANGE; select-required points | yes |
 | DIRECT OPERATE NO ACK | Served by every outstation; sent by the DSC go-dnp3 and dnp3py masters | yes |
 | Freeze without acknowledgement | Served by every outstation; sent by the dnp3py master | yes |
 | Time synchronization | LAN (RECORD CURRENT TIME, g50v3) and non-LAN (DELAY MEASURE, g50v1); NEED_TIME until the time is written; the written time in the server's event stream | yes |

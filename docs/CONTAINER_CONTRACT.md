@@ -689,7 +689,7 @@ ACTIVATE_CONFIG (31, g70v8 file specifications answered with g91v1) is not in
 the contract: no reference master sends it, and an outstation refuses it
 without a `manage` event. The one difference is how: the dscsystems
 outstation answers PARAMETER_ERROR, not NO_FUNC_CODE_SUPPORT, because DSC
-go-dnp3 v0.8.1 routes 31 to the same handler as 15..19 and answers
+go-dnp3 v0.8.2 routes 31 to the same handler as 15..19 and answers
 NO_FUNC_CODE_SUPPORT only to an outstation without any management handler.
 
 ## Broadcast

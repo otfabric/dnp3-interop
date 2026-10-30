@@ -68,7 +68,7 @@ What a local build contains:
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| dnp3 (Step Function I/O LLC) | 1.7.0 (crates.io), tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
+| dnp3 (Step Function I/O LLC) | 1.8.0 (crates.io), tag commit `235533ae276cd8f33b669c6db395979a308ef848` | Step Function I/O licence agreement: non-commercial, non-production use | https://github.com/stepfunc/dnp3 |
 | Rust crates the adapter and dnp3 depend on (tokio, serde_json, tracing, chrono, rustls, tokio-serial, ...) | the versions in `adapters/stepfunc/Cargo.lock` | MIT and/or Apache-2.0 | https://crates.io |
 | ring (cryptography of rustls) | the version in `adapters/stepfunc/Cargo.lock` | Apache-2.0 AND ISC | https://github.com/briansmith/ring |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
@@ -91,7 +91,7 @@ other use, obtain a commercial licence from Step Function I/O
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| DSC go-dnp3 (DSC Systems) | v0.8.1, commit `70ff72bb09755db183d1bd69859adc72cd663aec` | GPL-3.0-or-later | https://github.com/dscsystems/go-dnp3 |
+| DSC go-dnp3 (DSC Systems) | v0.8.2, commit `1fcec1d7881541d794fe257d2ede3ba46587b500` | GPL-3.0-or-later | https://github.com/dscsystems/go-dnp3 |
 | go.bug.st/serial, golang.org/x/sys (linked by DSC go-dnp3's channel package) | the versions in `adapters/dscsystems/go.sum` | BSD-3-Clause | https://github.com/bugst/go-serial, https://go.googlesource.com/sys |
 | Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |

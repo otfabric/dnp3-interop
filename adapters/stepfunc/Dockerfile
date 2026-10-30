@@ -14,8 +14,8 @@
 # Docker Hub serves exactly the same images; CI uses one to stay clear of
 # Docker Hub's pull rate limit (see the Makefile).
 ARG BASE_REGISTRY=docker.io/library
-ARG RUST_DIGEST=sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d
-ARG DEBIAN_DIGEST=sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+ARG RUST_DIGEST=sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbfeb2fccd5f982247
+ARG DEBIAN_DIGEST=sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the adapter (the dnp3 crate linked in)
@@ -24,10 +24,10 @@ FROM ${BASE_REGISTRY}/rust:1.99.1-slim-trixie@${RUST_DIGEST} AS build
 
 # The release pin. "make candidate-stepfunc CANDIDATE_VERSION=<version>" overrides it to try another
 # crate version without touching the pin.
-ARG UPSTREAM_VERSION=1.7.0
+ARG UPSTREAM_VERSION=1.8.0
 # The commit of the release tag in https://github.com/stepfunc/dnp3, for
 # print-capabilities (crates.io has no commit; Cargo.lock has the checksum).
-ARG UPSTREAM_SHA=d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca
+ARG UPSTREAM_SHA=235533ae276cd8f33b669c6db395979a308ef848
 ARG ADAPTER_VERSION=dev
 
 RUN rustup component add rustfmt clippy

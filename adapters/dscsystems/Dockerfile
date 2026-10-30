@@ -13,7 +13,7 @@
 # Docker Hub's pull rate limit (see the Makefile).
 ARG BASE_REGISTRY=docker.io/library
 ARG GOLANG_DIGEST=sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e
-ARG DEBIAN_DIGEST=sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+ARG DEBIAN_DIGEST=sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the adapter (the upstream module linked in)
@@ -22,10 +22,10 @@ FROM ${BASE_REGISTRY}/golang:1.27.2-trixie@${GOLANG_DIGEST} AS build
 
 # The release pin. "make candidate-dscsystems CANDIDATE_VERSION=<version>" overrides it to try another
 # upstream version (a tag or a commit) without touching the pin.
-ARG UPSTREAM_VERSION=v0.8.1
+ARG UPSTREAM_VERSION=v0.8.2
 # The commit of the release tag, for print-capabilities (the module proxy
 # serves the tag; go.sum has the checksum).
-ARG UPSTREAM_SHA=70ff72bb09755db183d1bd69859adc72cd663aec
+ARG UPSTREAM_SHA=1fcec1d7881541d794fe257d2ede3ba46587b500
 ARG ADAPTER_VERSION=dev
 
 ENV CGO_ENABLED=0 GOFLAGS=-mod=mod
