@@ -65,7 +65,7 @@ separately and passes.
 DSC go-dnp3 master cannot send or report; with direct operate no ack, which it
 can send.
 ⁴ with two known bugs of the DSC go-dnp3 outstation's freeze, below.
-⁵ with the known address-filtering bug below.
+⁵ with the known master-address bug below.
 ⁶ with direct operate no ack and the freezes without acknowledgement, which
 the dnp3py master sends. dnp3py has no server column: it cannot serve the
 baseline. How the four outstations compare on the `dnp3py` fixture is below
@@ -467,16 +467,15 @@ A second freeze of a counter that has not changed raises a frozen counter
 event again (the frozen value is the same; only its time differs).
 opendnp3 raises none. Listed in the known bugs.
 
-### DSC go-dnp3: link addresses are not filtered
+### DSC go-dnp3: the outstation does not filter the master address
 
-Its master accepts frames addressed to another master address: configured
-as master 7, it received the outstation's null unsolicited response meant for
-master 1 and acted on its DEVICE_RESTART bit. Its outstation processes
-requests from a master address other than its configured master's: it
-accepted that master's WRITE clearing the restart bit, and answered it, to
-master 1. Against the other stacks each half is harmless (they filter); DSC go-dnp3
-against itself reads an IIN where every other pairing times out. Listed in
-the known bugs.
+Its outstation processes requests from a master address other than its
+configured master's and answers them, to that address. Its master drops
+frames addressed to another master address (v0.8.2: `Stack.addressedToUs`),
+but the answer is addressed to the address it asked from, so it takes it.
+Against the other stacks this is harmless (they filter); DSC go-dnp3 against
+itself reads an IIN where every other pairing times out. Listed in the known
+bugs.
 
 ### DSC go-dnp3 sets PARAMETER_ERROR only for a control of a point that does not exist
 
