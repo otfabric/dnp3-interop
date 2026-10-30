@@ -285,11 +285,12 @@ make documents report                              # self-tests with every docum
 VERSION=v0.5.1 make qualify                        # Trivy scan and SBOMs of a release's published images, into qualify/
 ```
 
-The **Upstream candidates** workflow resolves the latest release of every
-stack weekly (the dnp3 crate on crates.io, opendnp3's tags, DSC go-dnp3 on the
-Go module proxy, dnp3py on PyPI), builds and self-tests the adapters whose
-pin is behind, reports pin versus latest in one table in its job summary and
-keeps a tracking issue open while a pin is behind.
+The **Upstream** workflow resolves the latest release of every stack daily
+(the dnp3 crate on crates.io, opendnp3's tags, DSC go-dnp3 on the Go module
+proxy, dnp3py on PyPI) and the digest of every pinned base image, builds and
+self-tests the adapters whose pin is behind, reports pin versus latest in one
+table in its job summary and keeps a tracking issue open while a pin is
+behind.
 
 `make smoke ADAPTERS=opendnp3` and `VERBOSE=1 make interop` narrow and
 expand what is run and shown; `DNP3_INTEROP_DEBUG=1` in a container's
