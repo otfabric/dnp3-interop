@@ -288,6 +288,51 @@ impl OutstationApplication for Application {
         Ok(())
     }
 
+    // ASSIGN CLASS (dnp3 1.8.0): the library applies it to its database and
+    // reports each point header, as opendnp3 does; the event names the
+    // fixture's indexes of the type when the header names all of them.
+    fn assign_class(
+        &mut self,
+        point_type: dnp3::outstation::PointType,
+        indices: PointIndices,
+        class: Option<EventClass>,
+    ) {
+        use dnp3::outstation::PointType as T;
+        let name = match point_type {
+            T::BinaryInput => "binaryInputs",
+            T::DoubleBitBinaryInput => "doubleBitInputs",
+            T::BinaryOutputStatus => "binaryOutputs",
+            T::Counter => "counters",
+            T::FrozenCounter => "frozenCounters",
+            T::AnalogInput => "analogInputs",
+            T::AnalogOutputStatus => "analogOutputs",
+            T::OctetString => "octetStrings",
+        };
+        let (start, stop) = match indices {
+            PointIndices::Range(start, stop) => (start, stop),
+            PointIndices::All => {
+                let idx: Vec<u16> = self
+                    .fx
+                    .points
+                    .get(name)
+                    .map(|p| p.iter().map(|p| p.index).collect())
+                    .unwrap_or_default();
+                let lo = idx.iter().min().copied().unwrap_or(0);
+                (lo, idx.iter().max().copied().unwrap_or(0))
+            }
+        };
+        let class = match class {
+            None => 0,
+            Some(EventClass::Class1) => 1,
+            Some(EventClass::Class2) => 2,
+            Some(EventClass::Class3) => 3,
+        };
+        emit(&json!({
+            "event": "assign-class", "pointType": name, "class": class,
+            "start": start, "stop": stop,
+        }));
+    }
+
     fn get_application_iin(&self) -> ApplicationIin {
         ApplicationIin {
             need_time: self.need_time.load(Ordering::SeqCst),

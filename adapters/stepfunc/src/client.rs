@@ -548,6 +548,7 @@ fn class_variation(class: u8) -> Variation {
 enum Op {
     Read(ReadRequest),
     Operate(CommandMode, CommandHeaders),
+    OperateNoAck(CommandHeaders),
     TimeSync(TimeSyncProcedure),
     Restart(bool),
     Empty(FunctionCode, Headers),
@@ -654,12 +655,11 @@ fn parse_op(op: &str, args: &Args) -> Result<Op, UsageError> {
         "operate" => {
             let kind = args.required("type")?;
             let index = args.required_integer("index", 0, 65535)? as u16;
+            // None is DIRECT OPERATE NO ACK, which has no CommandMode.
             let mode = match args.str("mode", "direct").as_str() {
-                "direct" => CommandMode::DirectOperate,
-                "sbo" => CommandMode::SelectBeforeOperate,
-                "direct-no-ack" => return usage(
-                    "--mode direct-no-ack: the library's master cannot send DIRECT OPERATE NO ACK",
-                ),
+                "direct" => Some(CommandMode::DirectOperate),
+                "sbo" => Some(CommandMode::SelectBeforeOperate),
+                "direct-no-ack" => None,
                 _ => return usage("--mode must be direct, sbo or direct-no-ack"),
             };
             let headers = if kind == "g12v1" {
@@ -721,7 +721,10 @@ fn parse_op(op: &str, args: &Args) -> Result<Op, UsageError> {
                     _ => return usage("--type must be g12v1, g41v1, g41v2, g41v3 or g41v4"),
                 }
             };
-            Op::Operate(mode, headers)
+            match mode {
+                Some(mode) => Op::Operate(mode, headers),
+                None => Op::OperateNoAck(headers),
+            }
         }
         "time-sync" => match args.str("procedure", "lan").as_str() {
             "lan" => Op::TimeSync(TimeSyncProcedure::Lan),
@@ -1312,6 +1315,12 @@ async fn execute(
                     format!("the outstation's echo did not match the request: {e}"),
                 )),
             },
+            // Success means the request was sent; commandStatus stays null.
+            Op::OperateNoAck(headers) => association
+                .operate_no_ack(headers)
+                .await
+                .err()
+                .map(|e| task_failure(&e, &mut iin_from_error)),
             Op::TimeSync(procedure) => match association.synchronize_time(procedure).await {
                 Ok(()) => None,
                 Err(TimeSyncError::Task(e)) => Some(task_failure(&e, &mut iin_from_error)),
