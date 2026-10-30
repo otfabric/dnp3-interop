@@ -379,7 +379,7 @@ request would end in a timeout. Their `directOperateNoAckClient` and
 (DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested with
 them.
 
-### The first SELECT on a fresh stepfunc outstation fails with NO_SELECT
+### Before 1.8.0, the first SELECT on a fresh stepfunc outstation failed with NO_SELECT
 
 With unsolicited responses supported, the stepfunc outstation sends a null
 unsolicited response as soon as a master connects. Both masters (stepfunc
@@ -402,12 +402,10 @@ life of the outstation, not per connection, so only the first SELECT after
 start is affected. The opendnp3 outstation checks the sequence number only
 and accepts the same exchange.
 
-No adapter can avoid it without disabling unsolicited responses. It is listed
-in [tests/known-bugs.tsv](../tests/known-bugs.tsv) for the stepfunc outstation
-at 1.7.0, and `scripts/interop.sh` checks select-before-operate on that
-outstation after the null response was confirmed, where it passes. A library
-that tests against a stepfunc image (built locally) should not make its first request
-after the container start a SELECT, or should expect this.
+No adapter could avoid it without disabling unsolicited responses. stepfunc
+1.8.0 fixes it: since dnp3-interop v0.5.2 it is no longer in
+[tests/known-bugs.tsv](../tests/known-bugs.tsv), and the first SELECT after
+start passes.
 
 ### Both outstations set PARAMETER_ERROR with NOT_SUPPORTED, and stepfunc's master drops the echo
 
@@ -503,7 +501,7 @@ call for ASSIGN CLASS. The capabilities `readAllObjectsClient`,
 
 Unlike the stepfunc and opendnp3 masters, it confirms the outstation's null
 unsolicited response before it sends its first request, so its first SELECT
-on a fresh stepfunc outstation succeeds.
+on a fresh stepfunc outstation succeeded even before stepfunc 1.8.0.
 
 ### DSC go-dnp3's outstation: one connection at a time, contiguous indexes, NEED_TIME at start
 
