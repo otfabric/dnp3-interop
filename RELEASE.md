@@ -33,8 +33,9 @@ Tags are immutable. A fix is a new version.
 
 ## Summary
 
-DSC go-dnp3 v0.8.2 and current base images. Container contract 1.3
-unchanged; no adapter code changed.
+Step Function I/O dnp3 1.8.0, DSC go-dnp3 v0.8.2 and current base images.
+Container contract 1.3 unchanged. The stepfunc image is still built locally
+only and never published.
 
 ## Changes
 
@@ -42,7 +43,7 @@ unchanged; no adapter code changed.
 
 - **`dscsystems`**: DSC go-dnp3 v0.8.1 → v0.8.2 (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`). The release adds DSC's own interop tests against these images; the library is unchanged, so its five entries in `tests/known-bugs.tsv` move to v0.8.2 as they are.
 - **Base images**: new digests of `debian:trixie-slim`, `python:3.14.8-slim-trixie` and `rust:1.99.1-slim-trixie`.
-- **`stepfunc`** stays at 1.7.0. The licence of 1.8.0 (§2.6) forbids running it as a test peer for another DNP3 implementation, so it is not taken.
+- **`stepfunc`**: dnp3 1.7.0 → 1.8.0 (tag commit `235533ae276cd8f33b669c6db395979a308ef848`). The adapter no longer matches the error variants 1.8.0 deprecates as never returned (`WriteError::IinError`, `TimeSyncError::IinError`, `CommandResponseError::Request`); an IIN2 rejection arrives as `TaskError::RejectedByIin2`, which it already reported as `rejected`. Its two entries in `tests/known-bugs.tsv` move to 1.8.0.
 
 ---
 

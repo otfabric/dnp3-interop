@@ -24,10 +24,10 @@ FROM ${BASE_REGISTRY}/rust:1.99.1-slim-trixie@${RUST_DIGEST} AS build
 
 # The release pin. "make candidate-stepfunc CANDIDATE_VERSION=<version>" overrides it to try another
 # crate version without touching the pin.
-ARG UPSTREAM_VERSION=1.7.0
+ARG UPSTREAM_VERSION=1.8.0
 # The commit of the release tag in https://github.com/stepfunc/dnp3, for
 # print-capabilities (crates.io has no commit; Cargo.lock has the checksum).
-ARG UPSTREAM_SHA=d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca
+ARG UPSTREAM_SHA=235533ae276cd8f33b669c6db395979a308ef848
 ARG ADAPTER_VERSION=dev
 
 RUN rustup component add rustfmt clippy
