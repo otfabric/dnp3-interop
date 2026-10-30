@@ -11,7 +11,7 @@
 # Docker Hub serves exactly the same images; CI uses one to stay clear of
 # Docker Hub's pull rate limit (see the Makefile).
 ARG BASE_REGISTRY=docker.io/library
-ARG PYTHON_DIGEST=sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+ARG PYTHON_DIGEST=sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da3aec724f50eed4a
 
 FROM ${BASE_REGISTRY}/python:3.14.8-slim-trixie@${PYTHON_DIGEST}
 

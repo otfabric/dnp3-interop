@@ -91,7 +91,7 @@ other use, obtain a commercial licence from Step Function I/O
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| DSC go-dnp3 (DSC Systems) | v0.8.1, commit `70ff72bb09755db183d1bd69859adc72cd663aec` | GPL-3.0-or-later | https://github.com/dscsystems/go-dnp3 |
+| DSC go-dnp3 (DSC Systems) | v0.8.2, commit `1fcec1d7881541d794fe257d2ede3ba46587b500` | GPL-3.0-or-later | https://github.com/dscsystems/go-dnp3 |
 | go.bug.st/serial, golang.org/x/sys (linked by DSC go-dnp3's channel package) | the versions in `adapters/dscsystems/go.sum` | BSD-3-Clause | https://github.com/bugst/go-serial, https://go.googlesource.com/sys |
 | Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |

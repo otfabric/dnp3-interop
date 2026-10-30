@@ -17,7 +17,7 @@ self-tested as a candidate.
 | `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.7.0 | 1.7.0 | crate `dnp3 =1.7.0` from crates.io, checksum in `Cargo.lock` (tag commit `d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca`) | independent, Rust |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
-| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.1 | v0.8.1 | Go module `github.com/dscsystems/go-dnp3@v0.8.1` (commit `70ff72bb09755db183d1bd69859adc72cd663aec`), checksum in `go.sum` | independent, Go |
+| `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.2 | v0.8.2 | Go module `github.com/dscsystems/go-dnp3@v0.8.2` (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`), checksum in `go.sum` | independent, Go |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
 (trixie), Rust 1.99.1, Go 1.27.2, Python 3.14.8.
@@ -310,7 +310,7 @@ not trust sees the connection close afterwards, and its error code differs
 by library; the self-test checks only that the operation fails. A master that does not trust the outstation
 fails to connect (`connect-failed`) with all three.
 
-### DSC go-dnp3 (v0.8.1): its UDP outstation loses requests without a peer
+### DSC go-dnp3 (v0.8.2): its UDP outstation loses requests without a peer
 
 Without a configured peer, the outstation's first unsolicited response fails
 with "no UDP peer known yet". The session takes that for a lost connection

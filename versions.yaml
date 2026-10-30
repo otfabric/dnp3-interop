@@ -5,7 +5,7 @@
 # source of truth for a build: scripts/check-versions.sh fails when this file
 # disagrees with them.
 
-interop_version: "0.5.1"
+interop_version: "0.5.2"
 contract_version: "1.3"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -20,7 +20,7 @@ implementations:
     upstream: "Step Function I/O dnp3"
     repository: "https://github.com/stepfunc/dnp3"
     crate: "dnp3"
-    version: "1.7.0"             # latest release (crates.io, 2026-09-21)
+    version: "1.7.0"             # crates.io, 2026-09-21; 1.8.0 not taken (its licence, §2.6)
     revision: "d7ccb9f6c0a8dc2900e90ca8d0a9a9d5336bb8ca"   # tag 1.7.0
     license: "Step Function I/O non-commercial licence (LICENSE.txt of the crate)"
     language: "Rust"
@@ -75,8 +75,8 @@ implementations:
     upstream: "DSC Systems go-dnp3"
     repository: "https://github.com/dscsystems/go-dnp3"
     module: "github.com/dscsystems/go-dnp3"
-    version: "v0.8.1"            # latest release
-    revision: "70ff72bb09755db183d1bd69859adc72cd663aec"
+    version: "v0.8.2"            # latest release
+    revision: "1fcec1d7881541d794fe257d2ede3ba46587b500"
     license: "GPL-3.0-or-later"
     language: "Go"
     independent_engine: true
@@ -98,11 +98,11 @@ dependencies:
   # adapters/stepfunc/Cargo.lock
 
 base_images:
-  # Digests recorded 2026-10-19; the Dockerfiles pin these by digest.
-  debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
-  python_3_14_8_slim_trixie: "docker.io/library/python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170"
+  # Digests recorded 2026-10-30; the Dockerfiles pin these by digest.
+  debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4"
+  python_3_14_8_slim_trixie: "docker.io/library/python:3.14.8-slim-trixie@sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da3aec724f50eed4a"
   golang_1_27_2_trixie: "docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
-  rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d"
+  rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbfeb2fccd5f982247"
 
 # Test tools: not implementations, no adapter.
 tools:
