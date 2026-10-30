@@ -19,8 +19,14 @@ log()  { echo "[$(basename "$0" .sh)] $*" >&2; }
 # record <outcome> <label>: one line per check in RESULTS_FILE, when set, for
 # scripts/compat-report.py. Outcomes: ok, fail, skip, known.
 record() { [[ -n "${RESULTS_FILE:-}" ]] && printf '%s\t%s\n' "$1" "$2" >> "${RESULTS_FILE}"; return 0; }
-ok()   { PASS=$((PASS + 1)); record ok "$*"; [[ -n "${VERBOSE:-}" ]] && log "ok: $*"; return 0; }
-fail() { FAIL=$((FAIL + 1)); record fail "$*"; log "FAIL: $*"; return 0; }
+# shellcheck source=scripts/results.sh
+source "$(dirname "${BASH_SOURCE[0]}")/results.sh"
+# at_pair <scenario id> <client->server>
+at_pair() { at "$1" "${2%%->*}" "${2#*->}"; }
+# waiver_id <description of a known bug>: its id, from ${WORK}/active.
+waiver_id() { awk -F'\t' -v t="$1" '$3 == t {print $4; exit}' "${WORK}/active"; }
+ok()   { PASS=$((PASS + 1)); record ok "$*"; result pass; [[ -n "${VERBOSE:-}" ]] && log "ok: $*"; return 0; }
+fail() { FAIL=$((FAIL + 1)); record fail "$*"; result fail "$*"; log "FAIL: $*"; return 0; }
 
 image_of() { echo "${REGISTRY}/dnp3-interop-$1:${VERSION}"; }
 
@@ -111,5 +117,6 @@ finish() {
     [[ "${KNOWN}" -gt 0 ]] && extra="${extra}, ${KNOWN} known upstream bugs"
     [[ "${SKIPPED:-0}" -gt 0 ]] && extra="${extra}, ${SKIPPED} skipped (capability not declared)"
     log "${PASS} passed, ${FAIL} failed${extra}"
-    [[ "${FAIL}" -eq 0 ]]
+    results_close || FAIL=$((FAIL + 1))
+    [[ "${FAIL}" -eq 0 && "${PASS}" -gt 0 ]]
 }

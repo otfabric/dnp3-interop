@@ -58,7 +58,8 @@
 # any library that consumes the images.
 #
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
-#              REPORT_DIR (keeps the outcome of every check when set).
+#              REPORT_DIR (keeps the outcome of every check when set, and adds
+#              them to results.json, interop-result-v1).
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -72,7 +73,8 @@ FILES_FIXTURE="${ROOT}/fixtures/files/fixture.json"
 require_tools
 command -v openssl >/dev/null || { log "missing required tool: openssl"; exit 2; }
 WORK=$(mktemp -d)
-trap 'rm -rf "${WORK}"; cleanup' EXIT
+trap 'results_abort; rm -rf "${WORK}"; cleanup' EXIT
+results_open features "${REPORT_DIR:-${WORK}}" "VERSION=${VERSION} scripts/features.sh $*"
 
 # UDP endpoints are fixed addresses, so the network needs a subnet of its own.
 for _ in 1 2 3 4 5 6 7 8; do
@@ -98,10 +100,10 @@ SA=(--sa-update-key "${SA_KEY}" --sa-user 3)
 for adapter in "${ADAPTERS[@]}"; do
     docker run --rm "$(image_of "${adapter}")" print-capabilities > "${WORK}/caps-${adapter}.json" 2>/dev/null
     version=$(jq -r '.upstream.version' "${WORK}/caps-${adapter}.json")
-    while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text bug_fixture; do
+    while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text bug_fixture bug_id bug_url; do
         [[ -z "${bug_adapter}" || "${bug_adapter}" == \#* || "${bug_fixture:-}" != features ]] && continue
         if [[ "${bug_adapter%%:*}" == "${adapter}" && "${bug_version}" == "${version}" ]]; then
-            printf '%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" >> "${WORK}/active"
+            printf '%s\t%s\t%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" "${bug_id}" "${bug_url}" >> "${WORK}/active"
             log "known bug in ${adapter} ${version}: ${bug_text}"
         fi
     done < "${ROOT}/tests/known-bugs.tsv"
@@ -120,14 +122,14 @@ detail() {
 }
 
 SKIPPED=0
-skip() { SKIPPED=$((SKIPPED + 1)); record skip "$*"; [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; return 0; }
+skip() { SKIPPED=$((SKIPPED + 1)); record skip "$*"; result unsupported "$*"; [[ -n "${VERBOSE:-}" ]] && log "skip: $*"; return 0; }
 
 # check <label> <want> <got>
 # known_bug <pair> <label>: the description of a known bug of the pairing
 # whose regular expression matches the label, if there is one.
 known_bug() {
     local client="${1%%->*}" server="${1#*->}" bug_adapter bug_regex bug_text
-    while IFS=$'\t' read -r bug_adapter bug_regex bug_text; do
+    while IFS=$'\t' read -r bug_adapter bug_regex bug_text _; do
         if [[ "${bug_adapter}" == "${client}" || "${bug_adapter}" == "${server}" || "${bug_adapter}" == "${client}:client" \
               || "${bug_adapter}" == "${server}:server" ]] && [[ "$2" =~ ${bug_regex} ]]; then
             echo "${bug_text}"
@@ -143,6 +145,7 @@ check() {
     if [[ "$3" == "$2" ]]; then ok "$1"; return 0; fi
     if bug=$(known_bug "${1%%: *}" "${1#*: }"); then
         KNOWN=$((KNOWN + 1)); record known "$1 -- ${bug}"; echo "${bug}" >> "${WORK}/reproduced"
+        result known-difference "$1: ${bug}" "$(waiver_id "${bug}")"
         return 1
     fi
     fail "$1"; log "    want ${2:-<nothing>}"; log "    got  ${3:-<nothing>}"
@@ -159,7 +162,7 @@ objects() {
 outcome() { jq -r '"ok=\(.ok) error=\(.error.code // "-")"' <<<"$1" 2>/dev/null; }
 
 # The integrity poll of the baseline fixture, as tests/cases.tsv states it.
-WANT_POLL=$(awk -F'\t' '$5 == "integrity-poll" { print $3; exit }' "${ROOT}/tests/cases.tsv")
+WANT_POLL=$(awk -F'\t' '$6 == "integrity-poll" { print $4; exit }' "${ROOT}/tests/cases.tsv")
 
 # start <adapter> <container name> [docker args] -- [server args]: a server
 # container, not waited for.
@@ -216,11 +219,15 @@ exec dnp3-interop client \"\$@\" --transport serial --serial-device /tmp/ttyDNP3
 basics() {
     local pair="$1" tag="$2" run="$3" doc
     doc=$(${run} integrity-poll)
+    at_pair "${tag}.integrity-poll" "${pair}"
     check "${pair}: [${tag}] integrity-poll" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
     doc=$(${run} operate --type g12v1 --index 0 --code LATCH_ON)
+    at_pair "${tag}.operate" "${pair}"
     check "${pair}: [${tag}] operate" "SUCCESS" "$(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+    at_pair "${tag}.control-produces-class-1-events" "${pair}"
     check "${pair}: [${tag}] the control produces class 1 events" "g11v2:0=true g2v2:1=true" \
         "$(objects "$(${run} event-poll --classes 1)")"
+    at_pair "${tag}.confirmed-events-are-gone" "${pair}"
     check "${pair}: [${tag}] confirmed events are gone" "" "$(objects "$(${run} event-poll)")"
 }
 
@@ -261,11 +268,14 @@ reverse_op() {
 reverse() {
     local server="$1" client="$2" pair="$3" tag="$4" doc
     doc=$(reverse_op "${server}" "${client}" "${tag}" integrity-poll)
+    at_pair "reverse.${tag}.integrity-poll" "${pair}"
     check "${pair}: [reverse ${tag}] integrity-poll" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
+    at_pair "reverse.${tag}.outstation-dialled" "${pair}"
     check "${pair}: [reverse ${tag}] the outstation dialled" "true ${tag} true" \
         "$(jq -rs '(map(select(.event == "ready")) | .[0]) as $r | "\($r.dial) \($r.transport) \(any(.[]; .event == "connection-opened"))"' \
             "${WORK}/events-fo-${server}-${client}-${RUN_ID}" 2>/dev/null)"
     doc=$(reverse_op "${server}" "${client}" "${tag}" operate --type g12v1 --index 0 --code LATCH_ON)
+    at_pair "reverse.${tag}.operate" "${pair}"
     check "${pair}: [reverse ${tag}] operate" "SUCCESS" "$(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
 }
 
@@ -289,23 +299,32 @@ multi() {
     # not report them (stepfunc).
     statuses() { jq -c '.commandStatuses' <<<"${out%%$'\n'*}" | grep -qx "null" && echo null || echo "$1"; }
     out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g41v1:0:5)
+    at_pair "controls.two-controls" "${pair}"
     check "${pair}: [controls] two controls" \
         "{\"error\":null,\"commandStatus\":\"SUCCESS\",\"commandStatuses\":$(statuses '["SUCCESS","SUCCESS"]')}" "${out%%$'\n'*}"
+    at_pair "controls.both-carried-out" "${pair}"
     check "${pair}: [controls] both carried out" "bo=[true,false,false] ao=[5,0]" "${out#*$'\n'}"
     out=$(multi_op "${server}" "${client}" --controls g41v1:0:5,g41v1:1:500)
+    at_pair "controls.refused-control-among-them" "${pair}"
     check "${pair}: [controls] a refused control among them" \
         "{\"error\":\"command-failed\",\"commandStatus\":\"OUT_OF_RANGE\",\"commandStatuses\":$(statuses '["SUCCESS","OUT_OF_RANGE"]')}" "${out%%$'\n'*}"
+    at_pair "controls.other-is-carried-out" "${pair}"
     check "${pair}: [controls] the other is carried out" "bo=[false,false,false] ao=[5,0]" "${out#*$'\n'}"
     out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g41v1:1:7 --mode sbo)
+    at_pair "controls.select-before-operate-of-two" "${pair}"
     check "${pair}: [controls] select-before-operate of two" \
         "{\"error\":null,\"commandStatus\":\"SUCCESS\",\"commandStatuses\":$(statuses '["SUCCESS","SUCCESS"]')}" "${out%%$'\n'*}"
+    at_pair "controls.both-operated" "${pair}"
     check "${pair}: [controls] both operated" "bo=[true,false,false] ao=[0,7]" "${out#*$'\n'}"
     if has "${server}" maxControlsServer; then
         out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g12v1:1:LATCH_ON,g12v1:2:LATCH_ON)
+        at_pair "controls.third-of-three-is-one-too-many" "${pair}"
         check "${pair}: [controls] the third of three is one too many" \
             "{\"error\":\"command-failed\",\"commandStatus\":\"TOO_MANY_OPS\",\"commandStatuses\":$(statuses '["SUCCESS","SUCCESS","TOO_MANY_OPS"]')}" "${out%%$'\n'*}"
+        at_pair "controls.two-within-the-limit-are-carried-out" "${pair}"
         check "${pair}: [controls] the two within the limit are carried out" "bo=[true,true,false] ao=[0,0]" "${out#*$'\n'}"
     else
+        at_pair "skipped.control-limit" "${pair}"
         skip "${pair}: control limit (needs server:maxControlsServer)"
     fi
 }
@@ -327,6 +346,7 @@ suite() {
             name="ft-${server}-${RUN_ID}"
             start "${server}" "${name}" -- "${SERVER_TLS[@]}"
             if wait_ready "${name}"; then
+                at_pair "tls.ready-event" "${pair}"
                 check "${pair}: [tls] ready event" "tls" "$(ready_transport "${name}")"
                 host="${name}"
                 run="tls_run ${client} ${host}"
@@ -334,17 +354,21 @@ suite() {
                 basics "${pair}" tls "${run}"
                 doc=$(client "${client}" -- integrity-poll --host "${host}" --connect-timeout-ms 2000 --tls \
                     --tls-ca /pki/other-ca.pem --tls-cert /pki/client.pem --tls-key /pki/client.key --tls-server-name dnp3-interop-server)
+                at_pair "tls.master-that-does-not-trust-the-outstation-cannot-connect" "${pair}"
                 check "${pair}: [tls] a master that does not trust the outstation cannot connect" \
                     "ok=false error=connect-failed" "$(outcome "${doc}")"
                 doc=$(client "${client}" -- integrity-poll --host "${host}" --connect-timeout-ms 2000 --timeout-ms 2000 --tls \
                     --tls-ca /pki/ca.pem --tls-cert /pki/other-server.pem --tls-key /pki/other-server.key --tls-server-name dnp3-interop-server)
+                at_pair "tls.outstation-does-not-serve-a-master-it-does-not-trust" "${pair}"
                 check "${pair}: [tls] an outstation does not serve a master it does not trust" \
                     "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
             else
+                at_pair "tls.server-start" "${pair}"
                 fail "${pair}: [tls] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.tls" "${pair}"
             skip "${pair}: tls (needs server:tls,client:tls)"
         fi
 
@@ -353,14 +377,17 @@ suite() {
             name="fu-${server}-${RUN_ID}"
             start "${server}" "${name}" --ip "${ip_server}" -- --transport udp --udp-peer "${ip_client}:20000"
             if wait_ready "${name}"; then
+                at_pair "udp.ready-event" "${pair}"
                 check "${pair}: [udp] ready event" "udp" "$(ready_transport "${name}")"
                 udp_run() { local a="$1" ipc="$2" ips="$3"; shift 3; client "${a}" --ip "${ipc}" -- "$@" --host "${ips}" --transport udp; }
                 basics "${pair}" udp "udp_run ${client} ${ip_client} ${ip_server}"
             else
+                at_pair "udp.server-start" "${pair}"
                 fail "${pair}: [udp] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.udp" "${pair}"
             skip "${pair}: udp (needs server:udp,client:udp)"
         fi
 
@@ -372,13 +399,16 @@ suite() {
                 -e "DNP3_INTEROP_DEBUG=${SERVER_DEBUG:-1}" --entrypoint /bin/sh \
                 "$(image_of "${server}")" -c "${SERIAL_SERVER}" >/dev/null
             if wait_ready "${name}"; then
+                at_pair "serial.ready-event" "${pair}"
                 check "${pair}: [serial] ready event" "serial" "$(ready_transport "${name}")"
                 basics "${pair}" serial "serial_client ${client} ${name}"
             else
+                at_pair "serial.server-start" "${pair}"
                 fail "${pair}: [serial] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.serial" "${pair}"
             skip "${pair}: serial (needs server:serial,client:serial)"
         fi
 
@@ -388,40 +418,54 @@ suite() {
             start "${server}" "${name}" -- --fixture /fixtures/files/fixture.json
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- file-get --name /readme.txt --host "${name}")
+                at_pair "files.file-get-of-a-short-file" "${pair}"
                 check "${pair}: [files] file-get of a short file" "${README_HEX}" "$(jq -r '.file.content' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- file-get --name /data/blocks.bin --host "${name}")
+                at_pair "files.file-get-of-a-file-of-several-blocks" "${pair}"
                 check "${pair}: [files] file-get of a file of several blocks" "${BLOCKS_HEX}" "$(jq -r '.file.content' <<<"${doc}" 2>/dev/null)"
+                at_pair "files.file-get-reports-the-size" "${pair}"
                 check "${pair}: [files] file-get reports the size" "3000" "$(jq -r '.file.size' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- file-ls --name / --host "${name}")
+                at_pair "files.file-ls-of-the-root" "${pair}"
                 check "${pair}: [files] file-ls of the root" "data:directory logs:directory readme.txt:file" \
                     "$(jq -r '[.files[]? | "\(.name):\(.type)"] | sort | join(" ")' <<<"${doc}" 2>/dev/null)"
                 jq -cS "${NORMALIZE_FILES}" <<<"${doc}" > "${WORK}/agree-${server}/ls-${client}" 2>/dev/null
                 doc=$(client "${client}" -- file-info --name /readme.txt --host "${name}")
+                at_pair "files.file-info" "${pair}"
                 check "${pair}: [files] file-info" "readme.txt file 43 rw-r--r--" \
                     "$(jq -r '"\(.file.name) \(.file.type) \(.file.size) \(.file.permissions)"' <<<"${doc}" 2>/dev/null)"
                 jq -cS "${NORMALIZE_FILES}" <<<"${doc}" > "${WORK}/agree-${server}/info-${client}" 2>/dev/null
                 doc=$(client "${client}" -- file-put --name /logs/new.txt --content 0001fe --host "${name}")
+                at_pair "files.file-put" "${pair}"
                 check "${pair}: [files] file-put" "ok=true error=- SUCCESS" "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
+                at_pair "files.written-file-reads-back" "${pair}"
                 check "${pair}: [files] the written file reads back" "0001fe" \
                     "$(client "${client}" -- file-get --name /logs/new.txt --host "${name}" | jq -r '.file.content')"
+                at_pair "files.written-file-is-listed" "${pair}"
                 check "${pair}: [files] the written file is listed" "new.txt:3" \
                     "$(client "${client}" -- file-ls --name /logs --host "${name}" | jq -r '[.files[]? | "\(.name):\(.size)"] | join(" ")')"
                 doc=$(client "${client}" -- file-get --name /no-such-file --host "${name}")
+                at_pair "files.file-that-does-not-exist" "${pair}"
                 check "${pair}: [files] a file that does not exist" "ok=false error=file-error FILE_NOT_FOUND" \
                     "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
                 if has "${client}" fileDeleteClient; then
                     doc=$(client "${client}" -- file-delete --name /logs/new.txt --host "${name}")
+                    at_pair "files.file-delete" "${pair}"
                     check "${pair}: [files] file-delete" "ok=true error=-" "$(outcome "${doc}")"
+                    at_pair "files.deleted-file-is-gone" "${pair}"
                     check "${pair}: [files] a deleted file is gone" "FILE_NOT_FOUND" \
                         "$(client "${client}" -- file-get --name /logs/new.txt --host "${name}" | jq -r '.fileStatus')"
                 else
+                    at_pair "skipped.file-delete" "${pair}"
                     skip "${pair}: file-delete (needs client:fileDeleteClient)"
                 fi
                 sleep 0.3
+                at_pair "files.server-file-events" "${pair}"
                 check "${pair}: [files] server file events" \
                     "read:/readme.txt:SUCCESS read:/data/blocks.bin:SUCCESS list:/:SUCCESS info:/readme.txt:SUCCESS write:/logs/new.txt:SUCCESS" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file") | "\(.action):\(.name):\(.status)"' | head -5 | paste -sd' ' -)"
             else
+                at_pair "files.server-start" "${pair}"
                 fail "${pair}: [files] server did not start"
             fi
             stop_server "${name}"
@@ -431,10 +475,12 @@ suite() {
             start "${server}" "${name}" --
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- file-get --name /readme.txt --host "${name}")
+                at_pair "files.outstation-without-file-transfer-refuses-it" "${pair}"
                 check "${pair}: [files] an outstation without file transfer refuses it" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.files" "${pair}"
             skip "${pair}: files (needs server:fileServer,client:fileClient)"
         fi
 
@@ -445,14 +491,18 @@ suite() {
             if wait_ready "${name}"; then
                 client "${client}" -- file-put --name /logs/a.txt --content 6162 --host "${name}" >/dev/null
                 doc=$(client "${client}" -- file-put --name /logs/a.txt --content 6364 --append --host "${name}")
+                at_pair "files.file-put-append" "${pair}"
                 check "${pair}: [files] file-put --append" "ok=true error=-" "$(outcome "${doc}")"
+                at_pair "files.adds-to-the-end-of-the-file" "${pair}"
                 check "${pair}: [files] adds to the end of the file" "61626364" \
                     "$(client "${client}" -- file-get --name /logs/a.txt --host "${name}" | jq -r '.file.content')"
             else
+                at_pair "files.server-start" "${pair}"
                 fail "${pair}: [files] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.file-append" "${pair}"
             skip "${pair}: file append (needs server:fileAppendServer,client:fileAppendClient)"
         fi
         if has "${server}" fileAuthServer && has "${client}" fileAuthClient; then
@@ -461,26 +511,34 @@ suite() {
             start "${server}" "${name}" -- --fixture /fixtures/files/fixture.json "${creds[@]}"
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- file-authenticate "${creds[@]}" --host "${name}")
+                at_pair "files.file-authenticate" "${pair}"
                 check "${pair}: [files] file-authenticate" "ok=true error=- SUCCESS" "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- file-authenticate --file-user operator --file-password wrong --host "${name}")
+                at_pair "files.wrong-password-is-refused" "${pair}"
                 check "${pair}: [files] a wrong password is refused" "ok=false error=file-error PERMISSION_DENIED" \
                     "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- file-get --name /readme.txt --host "${name}")
+                at_pair "files.open-without-authentication-is-refused" "${pair}"
                 check "${pair}: [files] an open without authentication is refused" "ok=false error=file-error PERMISSION_DENIED" \
                     "$(outcome "${doc}") $(jq -r '.fileStatus' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- file-get --name /readme.txt "${creds[@]}" --host "${name}")
+                at_pair "files.file-get-with-credentials" "${pair}"
                 check "${pair}: [files] file-get with credentials" "${README_HEX}" "$(jq -r '.file.content' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- file-put --name /logs/auth.txt --content 00 "${creds[@]}" --host "${name}")
+                at_pair "files.file-put-with-credentials" "${pair}"
                 check "${pair}: [files] file-put with credentials" "ok=true error=-" "$(outcome "${doc}")"
                 sleep 0.3
+                at_pair "files.server-authenticate-events" "${pair}"
                 check "${pair}: [files] server authenticate events" \
                     "authenticate:operator:SUCCESS authenticate:operator:PERMISSION_DENIED" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file" and .action == "authenticate") | "\(.action):\(.name):\(.status)"' | head -2 | paste -sd' ' -)"
             else
+                at_pair "files.server-start" "${pair}"
                 fail "${pair}: [files] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.file-authentication" "${pair}"
             skip "${pair}: file authentication (needs server:fileAuthServer,client:fileAuthClient)"
         fi
 
@@ -490,9 +548,11 @@ suite() {
             if has "${server}" tls && has "${client}" dualEndpointClientTls; then
                 reverse "${server}" "${client}" "${pair}" tls
             else
+                at_pair "skipped.dual-end-point-over-tls" "${pair}"
                 skip "${pair}: dual end point over TLS (needs server:tls,client:dualEndpointClientTls)"
             fi
         else
+            at_pair "skipped.dual-end-point" "${pair}"
             skip "${pair}: dual end point (needs server:dualEndpointServer,client:dualEndpointClient)"
         fi
 
@@ -505,25 +565,31 @@ suite() {
                 client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" \
                     --sa-update-key 0f0e0d0c0b0a09080706050403020100 --sa-user 3 >/dev/null
                 doc=$(client "${client}" -- read --group 121 --variation 1 --start 0 --stop 17 --host "${name}" "${SA[@]}")
+                at_pair "stats.g121-has-the-18-statistics-association-0" "${pair}"
                 check "${pair}: [stats] g121 has the 18 statistics, association 0" "18 0-17 [0]" \
                     "$(jq -r '"\(.objects | length) \(.objects[0].index)-\(.objects[-1].index) \([.objects[].association] | unique | tostring)"' <<<"${doc}" 2>/dev/null)"
+                at_pair "stats.refused-key-change-is-counted-statistics-10-and-14" "${pair}"
                 check "${pair}: [stats] a refused key change is counted (statistics 10 and 14)" "true true" \
                     "$(jq -r '"\(.objects[] | select(.index == 10) | .value > 0) \(.objects[] | select(.index == 14) | .value > 0)"' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- event-poll --classes 2 --host "${name}" "${SA[@]}")
+                at_pair "stats.g122-events-in-the-configured-class" "${pair}"
                 check "${pair}: [stats] g122 events in the configured class" "true true" \
                     "$(jq -r '"\((.objects | length) > 0 and all(.objects[]; .group == 122 and .variation == 2)) \(any(.objects[]; .index == 14))"' <<<"${doc}" 2>/dev/null)"
             else
+                at_pair "stats.server-start" "${pair}"
                 fail "${pair}: [stats] server did not start"
             fi
             stop_server "${name}"
             name="fy-${server}-${RUN_ID}"
             start "${server}" "${name}" --
             if wait_ready "${name}"; then
+                at_pair "stats.without-secure-authentication-g121-is-refused" "${pair}"
                 check "${pair}: [stats] without secure authentication g121 is refused" "ok=false error=rejected" \
                     "$(outcome "$(client "${client}" -- read --group 121 --variation 1 --start 0 --stop 17 --host "${name}")")"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.security-statistics" "${pair}"
             skip "${pair}: security statistics (needs server:securityStatisticsServer,client:securityStatisticsClient)"
         fi
 
@@ -531,6 +597,7 @@ suite() {
         if has_role "${server}" server && has "${client}" multipleControlsClient; then
             multi "${server}" "${client}" "${pair}"
         else
+            at_pair "skipped.several-controls" "${pair}"
             skip "${pair}: several controls (needs client:multipleControlsClient)"
         fi
 
@@ -540,6 +607,7 @@ suite() {
             start "${server}" "${name}" --
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- freeze --at immediately --host "${name}")
+                at_pair "freeze.at-time-0-freezes-at-once" "${pair}"
                 check "${pair}: [freeze] at time 0 freezes at once" "ok=true error=- g21v1:0=123456 g21v2:1=65535" \
                     "$(outcome "${doc}") $(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
             fi
@@ -547,18 +615,22 @@ suite() {
             start "${server}" "${name}" --
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- freeze --at +1500 --host "${name}")
+                at_pair "freeze.freeze-in-1-5-s-is-accepted-not-done-yet" "${pair}"
                 check "${pair}: [freeze] a freeze in 1.5 s is accepted, not done yet" "ok=true error=- g21v1:0=0 g21v2:1=0" \
                     "$(outcome "${doc}") $(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
                 # A master stays connected meanwhile: DSC go-dnp3 runs scheduled
                 # freezes only while one is (COMPATIBILITY.md).
                 client "${client}" -- monitor --duration-ms 2500 --host "${name}" >/dev/null
+                at_pair "freeze.and-done-at-its-time" "${pair}"
                 check "${pair}: [freeze] and done at its time" "g21v1:0=123456 g21v2:1=65535" \
                     "$(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
             else
+                at_pair "freeze.server-start" "${pair}"
                 fail "${pair}: [freeze] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.freeze-at-time" "${pair}"
             skip "${pair}: freeze at time (needs server:freezeAtTimeServer,client:freezeAtTimeClient)"
         fi
         if has "${server}" analogFreezeServer && has "${client}" analogFreezeClient && serves_extended "${server}"; then
@@ -566,14 +638,18 @@ suite() {
             start "${server}" "${name}" -- --fixture /fixtures/extended/fixture.json
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- freeze --group 30 --host "${name}")
+                at_pair "freeze.freeze-of-analog-inputs" "${pair}"
                 check "${pair}: [freeze] a freeze of analog inputs" "ok=true error=-" "$(outcome "${doc}")"
+                at_pair "freeze.copies-them-into-the-frozen-analog-inputs-of-the-same-index" "${pair}"
                 check "${pair}: [freeze] copies them into the frozen analog inputs of the same index" "0 49.5" \
                     "$(client dscsystems -- read --group 31 --variation 0 --start 0 --stop 1 --host "${name}" | jq -r '[.objects[].value] | join(" ")')"
             else
+                at_pair "freeze.server-start" "${pair}"
                 fail "${pair}: [freeze] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.analog-freeze" "${pair}"
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
         fi
 
@@ -584,18 +660,24 @@ suite() {
             if wait_ready "${name}"; then
                 local ao='[.objects[]? | select(.group == 40) | .value] | join(" ")'
                 doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 9 --remote-addr 1025 --host "${name}")
+                at_pair "outstations.control-of-the-second" "${pair}"
                 check "${pair}: [outstations] a control of the second" "ok=true error=-" "$(outcome "${doc}")"
+                at_pair "outstations.second-has-it" "${pair}"
                 check "${pair}: [outstations] the second has it" "9" \
                     "$(client "${client}" -- read --group 40 --variation 0 --start 0 --stop 0 --remote-addr 1025 --host "${name}" | jq -r "${ao}")"
+                at_pair "outstations.first-does-not" "${pair}"
                 check "${pair}: [outstations] the first does not" "0" \
                     "$(client "${client}" -- read --group 40 --variation 0 --start 0 --stop 0 --remote-addr 1024 --host "${name}" | jq -r "${ao}")"
                 doc=$(client "${client}" -- integrity-poll --remote-addr 1026 --timeout-ms 1500 --host "${name}")
+                at_pair "outstations.no-third" "${pair}"
                 check "${pair}: [outstations] no third" "ok=false error=timeout" "$(outcome "${doc}")"
             else
+                at_pair "outstations.server-start" "${pair}"
                 fail "${pair}: [outstations] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.several-outstations" "${pair}"
             skip "${pair}: several outstations (needs server:multipleOutstationsServer)"
         fi
 
@@ -609,19 +691,24 @@ suite() {
                     for f in initialize-data initialize-application start-application stop-application save-configuration; do
                         got+="$(outcome "$(client "${client}" -- manage --function "${f}" --host "${name}")") "
                     done
+                    at_pair "manage.five-functions" "${pair}"
                     check "${pair}: [manage] the five functions" "$(printf 'ok=true error=- %.0s' 1 2 3 4 5)" "${got}"
                     sleep 0.3
+                    at_pair "manage.servers-events" "${pair}"
                     check "${pair}: [manage] the server's events" "15 16 17 18 19" \
                         "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "manage") | .function' | paste -sd' ' -)"
                 else
                     doc=$(client "${client}" -- manage --function save-configuration --host "${name}")
+                    at_pair "manage.outstation-without-them-refuses" "${pair}"
                     check "${pair}: [manage] an outstation without them refuses" "ok=false error=rejected" "$(outcome "${doc}")"
                 fi
             else
+                at_pair "manage.server-start" "${pair}"
                 fail "${pair}: [manage] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.management-functions" "${pair}"
             skip "${pair}: management functions (needs client:manageClient)"
         fi
 
@@ -631,23 +718,29 @@ suite() {
             start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
             if wait_ready "${name}"; then
                 doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 77 --mode direct-no-ack --broadcast --host "${name}")
+                at_pair "broadcast.control-to-0xffff" "${pair}"
                 check "${pair}: [broadcast] a control to 0xFFFF" "ok=true error=-" "$(outcome "${doc}")"
                 sleep 0.3
                 # Read by stepfunc's master, which sends nothing first: DSC go-dnp3's
                 # writes IIN at start, and that response carries IIN1.0.
                 doc=$(client stepfunc -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")
+                at_pair "broadcast.is-carried-out" "${pair}"
                 check "${pair}: [broadcast] is carried out" "77" "$(jq -r '[.objects[]?.value] | join(" ")' <<<"${doc}" 2>/dev/null)"
+                at_pair "broadcast.iin1-0-in-the-next-response" "${pair}"
                 check "${pair}: [broadcast] IIN1.0 in the next response" "true" \
                     "$(jq -r '.iin | index("BROADCAST") != null' <<<"${doc}" 2>/dev/null)"
                 if has "${server}" broadcastEventServer; then
+                    at_pair "broadcast.servers-event" "${pair}"
                     check "${pair}: [broadcast] the server's event" "true" \
                         "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "broadcast" and .function == 6)')"
                 fi
             else
+                at_pair "broadcast.server-start" "${pair}"
                 fail "${pair}: [broadcast] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.broadcast" "${pair}"
             skip "${pair}: broadcast (needs server:broadcastServer,client:broadcastClient)"
         fi
 
@@ -659,8 +752,10 @@ suite() {
                 start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
                 if wait_ready "${name}"; then
                     doc=$(client "${client}" -- integrity-poll --link-confirms --host "${name}")
+                    at_pair "link.poll-with-link-layer-confirms" "${pair}"
                     check "${pair}: [link] a poll with link-layer confirms" "ok=true error=-" "$(outcome "${doc}")"
                     doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --link-confirms --host "${name}")
+                    at_pair "link.control-with-link-layer-confirms" "${pair}"
                     check "${pair}: [link] a control with link-layer confirms" "ok=true error=-" "$(outcome "${doc}")"
                 fi
                 stop_server "${name}"
@@ -669,6 +764,7 @@ suite() {
                 start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json --link-confirms
                 if wait_ready "${name}"; then
                     doc=$(client "${client}" -- integrity-poll --host "${name}")
+                    at_pair "link.poll-of-an-outstation-that-confirms" "${pair}"
                     check "${pair}: [link] a poll of an outstation that confirms" "ok=true error=-" "$(outcome "${doc}")"
                 fi
                 stop_server "${name}"
@@ -677,8 +773,10 @@ suite() {
                 start "${server}" "${name}" -- --fixture /fixtures/controls/fixture.json
                 if wait_ready "${name}"; then
                     doc=$(client "${client}" -- monitor --duration-ms 3500 --keep-alive-ms 1000 --host "${name}")
+                    at_pair "link.keep-alives-on-an-idle-link" "${pair}"
                     check "${pair}: [link] keep-alives on an idle link" "ok=true error=-" "$(outcome "${doc}")"
                     if has "${server}" linkStatusEventServer; then
+                        at_pair "link.server-sees-them" "${pair}"
                         check "${pair}: [link] the server sees them" "true" \
                             "$(docker logs "${name}" 2>/dev/null | jq -s '[.[] | select(.event == "link-status")] | length >= 2')"
                     fi
@@ -686,6 +784,7 @@ suite() {
                 stop_server "${name}"
             fi
         else
+            at_pair "skipped.link-layer" "${pair}"
             skip "${pair}: link layer (needs client:linkConfirmsClient|server:linkConfirmsServer|client:keepAliveClient)"
         fi
 
@@ -700,18 +799,23 @@ suite() {
                     client dscsystems -- operate --type g41v1 --index 0 --value "${v}" --host "${name}" >/dev/null
                 done
                 doc=$(client "${client}" -- event-poll --classes 1,2,3 --host "${name}")
+                at_pair "events.overflowing-buffer-sets-iin2-3" "${pair}"
                 check "${pair}: [events] an overflowing buffer sets IIN2.3" "true" \
                     "$(jq -r '.iin | index("EVENT_BUFFER_OVERFLOW") != null' <<<"${doc}" 2>/dev/null)"
+                at_pair "events.loses-what-did-not-fit-keeps-the-latest" "${pair}"
                 check "${pair}: [events] loses what did not fit, keeps the latest" "true" \
                     "$(jq -r '[.objects[]? | select(.group == 32) | .value] | length < 10 and .[-1] == 100' <<<"${doc}" 2>/dev/null)"
                 doc=$(client "${client}" -- event-poll --classes 1,2,3 --host "${name}")
+                at_pair "events.iin2-3-clears-once-the-events-are-confirmed" "${pair}"
                 check "${pair}: [events] IIN2.3 clears once the events are confirmed" "false" \
                     "$(jq -r '.iin | index("EVENT_BUFFER_OVERFLOW") != null' <<<"${doc}" 2>/dev/null)"
             else
+                at_pair "events.server-start" "${pair}"
                 fail "${pair}: [events] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.event-buffer-overflow" "${pair}"
             skip "${pair}: event buffer overflow (needs server:eventBufferServer)"
         fi
 
@@ -725,23 +829,29 @@ suite() {
                 client dscsystems -- operate --type g41v1 --index 0 --value 1000 --host "${name}" >/dev/null
                 client dscsystems -- event-poll --classes 1,2,3 --host "${name}" >/dev/null
                 doc=$(client "${client}" -- deadband-write --deadbands 4:100 --host "${name}")
+                at_pair "deadbands.write-a-deadband" "${pair}"
                 check "${pair}: [deadbands] write a deadband" "ok=true error=-" "$(outcome "${doc}")"
                 local ai4='[.objects[]? | select(.group == 32 and .index == 4) | .value] | join(" ")'
                 client dscsystems -- operate --type g41v1 --index 0 --value 1050 --host "${name}" >/dev/null
+                at_pair "deadbands.change-within-it-reports-no-event" "${pair}"
                 check "${pair}: [deadbands] a change within it reports no event" "" \
                     "$(client dscsystems -- event-poll --classes 2 --host "${name}" | jq -r "${ai4}")"
                 client dscsystems -- operate --type g41v1 --index 0 --value 1200 --host "${name}" >/dev/null
+                at_pair "deadbands.change-beyond-it-does" "${pair}"
                 check "${pair}: [deadbands] a change beyond it does" "1200" \
                     "$(client dscsystems -- event-poll --classes 2 --host "${name}" | jq -r "${ai4}")"
                 if has "${server}" deadbandReadServer && has "${client}" deadbandReadClient; then
+                    at_pair "deadbands.and-reads-back" "${pair}"
                     check "${pair}: [deadbands] and reads back" "g34v3:4=100" \
                         "$(objects "$(client "${client}" -- read --group 34 --variation 3 --start 4 --stop 4 --host "${name}")")"
                 fi
             else
+                at_pair "deadbands.server-start" "${pair}"
                 fail "${pair}: [deadbands] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.analog-deadbands" "${pair}"
             skip "${pair}: analog deadbands (needs server:deadbandWriteServer,client:deadbandWriteClient)"
         fi
 
@@ -752,29 +862,39 @@ suite() {
             if wait_ready "${name}"; then
                 local attrs='[.attributes[]? | select(.variation != 3) | "\(.variation):\(.type):\(.value)"] | join(" ")'
                 doc=$(client "${client}" -- attribute-read --set 1 --host "${name}")
+                at_pair "attributes.read-a-set" "${pair}"
                 check "${pair}: [attributes] read a set" \
                     "1:visibleString:dnp3-interop reference outstation 2:unsignedInt:4000000000 10:visibleString:writable text 11:unsignedInt:7" \
                     "$(jq -r "${attrs}" <<<"${doc}" 2>/dev/null)"
+                at_pair "attributes.signed-integer" "${pair}"
                 check "${pair}: [attributes] signed integer" "signedInt:-42" \
                     "$(jq -r '.attributes[]? | select(.variation == 3) | "\(.type):\(.value)"' <<<"${doc}" 2>/dev/null)"
+                at_pair "attributes.read-one" "${pair}"
                 check "${pair}: [attributes] read one" "2:unsignedInt:4000000000" \
                     "$(client "${client}" -- attribute-read --set 1 --variation 2 --host "${name}" | jq -r "${attrs}")"
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 10 --text changed --host "${name}")
+                at_pair "attributes.write-a-string" "${pair}"
                 check "${pair}: [attributes] write a string" "ok=true error=-" "$(outcome "${doc}")"
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 11 --uint 99 --host "${name}")
+                at_pair "attributes.write-an-unsigned-integer" "${pair}"
                 check "${pair}: [attributes] write an unsigned integer" "ok=true error=-" "$(outcome "${doc}")"
+                at_pair "attributes.written-values-read-back" "${pair}"
                 check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99" \
                     "$(client "${client}" -- attribute-read --set 1 --host "${name}" | jq -r '[.attributes[]? | select(.variation >= 10) | "\(.variation):\(.type):\(.value)"] | join(" ")')"
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 1 --text no --host "${name}")
+                at_pair "attributes.read-only-attribute-refuses-a-write" "${pair}"
                 check "${pair}: [attributes] a read-only attribute refuses a write" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
                 sleep 0.3
+                at_pair "attributes.server-events" "${pair}"
                 check "${pair}: [attributes] server events" "10:changed 11:99" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "attribute-write") | "\(.variation):\(.value)"' | paste -sd' ' -)"
             else
+                at_pair "attributes.server-start" "${pair}"
                 fail "${pair}: [attributes] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.device-attributes" "${pair}"
             skip "${pair}: device attributes (needs server:deviceAttributesServer,client:deviceAttributesClient)"
         fi
 
@@ -785,36 +905,46 @@ suite() {
             if wait_ready "${name}"; then
                 if has "${client}" frozenAnalogInputsClient; then
                     doc=$(client "${client}" -- read --group 31 --variation 0 --start 0 --stop 1 --host "${name}")
+                    at_pair "points.frozen-analog-inputs" "${pair}"
                     check "${pair}: [points] frozen analog inputs" "g31v1:0=1500 g31v7:1=49.5" "$(detail "${doc}")"
+                    at_pair "points.frozen-analog-flags" "${pair}"
                     check "${pair}: [points] frozen analog flags" '[["ONLINE"],["ONLINE","OVER_RANGE"]]' \
                         "$(jq -cS '[.objects[]? | .flags] | sort' <<<"${doc}" 2>/dev/null)"
                 else
+                    at_pair "skipped.frozen-analog-inputs" "${pair}"
                     skip "${pair}: frozen analog inputs (needs client:frozenAnalogInputsClient)"
                 fi
                 if has "${client}" timeAndIntervalClient; then
+                    at_pair "points.time-and-interval" "${pair}"
                     check "${pair}: [points] time and interval" "g50v4:0=15/2026-01-01T00:00:00.000Z/3" \
                         "$(detail "$(client "${client}" -- read --group 50 --variation 4 --start 0 --stop 0 --host "${name}")")"
                 else
+                    at_pair "skipped.time-and-interval" "${pair}"
                     skip "${pair}: time and interval (needs client:timeAndIntervalClient)"
                 fi
                 if has "${client}" commandEventsClient; then
                     client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
                     client "${client}" -- operate --type g41v1 --index 0 --value 42 --host "${name}" >/dev/null
                     client "${client}" -- operate --type g41v1 --index 0 --value 5000000 --host "${name}" >/dev/null
+                    at_pair "points.command-events-with-the-status-of-each-control" "${pair}"
                     check "${pair}: [points] command events with the status of each control" \
                         "g13v2:0=true/SUCCESS g43v3:0=42/SUCCESS g43v3:0=5000000/OUT_OF_RANGE" \
                         "$(detail "$(client "${client}" -- event-poll --classes 2 --host "${name}")")"
+                    at_pair "points.outputs-own-events-are-unchanged" "${pair}"
                     check "${pair}: [points] the outputs' own events are unchanged" \
                         "g11v2:0=true g2v2:1=true g32v1:0=42 g42v1:0=42" \
                         "$(objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")")"
                 else
+                    at_pair "skipped.command-events" "${pair}"
                     skip "${pair}: command events (needs client:commandEventsClient)"
                 fi
             else
+                at_pair "points.server-start" "${pair}"
                 fail "${pair}: [points] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.extended-point-types" "${pair}"
             skip "${pair}: extended point types (needs a server that serves the extended fixture)"
         fi
 
@@ -831,26 +961,34 @@ suite() {
                 sa_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" "${SA[@]}"; }
                 basics "${pair}" sa "sa_run ${client} ${name}"
                 sleep 0.3
+                at_pair "sa.outstation-authenticated-the-control" "${pair}"
                 check "${pair}: [sa] the outstation authenticated the control" "true" \
                     "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "auth" and .user == 3 and .function == 5)')"
                 doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" \
                     --sa-update-key 0f0e0d0c0b0a09080706050403020100 --sa-user 3)
+                at_pair "sa.wrong-update-key-is-refused" "${pair}"
                 check "${pair}: [sa] a wrong update key is refused" "ok=false error=auth-failed" "$(outcome "${doc}")"
                 doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" \
                     --sa-update-key "${SA_KEY}" --sa-user 4)
+                at_pair "sa.unknown-user-is-refused" "${pair}"
                 check "${pair}: [sa] an unknown user is refused" "ok=false error=auth-failed" "$(outcome "${doc}")"
                 doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" --timeout-ms 2000)
+                at_pair "sa.master-without-authentication-cannot-operate" "${pair}"
                 check "${pair}: [sa] a master without authentication cannot operate" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
                 sleep 0.3
+                at_pair "sa.outstation-reported-the-refusals" "${pair}"
                 check "${pair}: [sa] the outstation reported the refusals" "1 11" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "auth-error") | .code' | sort -un | paste -sd' ' -)"
+                at_pair "sa.refused-controls-did-not-operate" "${pair}"
                 check "${pair}: [sa] the refused controls did not operate" "g10v2:0=true" \
                     "$(sa_run "${client}" "${name}" read --group 10 --variation 2 --start 0 --stop 0 | jq -r '[.objects[] | "g\(.group)v\(.variation):\(.index)=\(.value)"] | join(" ")')"
             else
+                at_pair "sa.server-start" "${pair}"
                 fail "${pair}: [sa] server did not start"
             fi
             stop_server "${name}"
         else
+            at_pair "skipped.secure-authentication" "${pair}"
             skip "${pair}: secure authentication (needs server:secureAuthentication,client:secureAuthentication)"
         fi
     done
@@ -862,6 +1000,7 @@ suite() {
         for f in "${WORK}/agree-${server}/${kind}-"*; do
             [[ -f "${f}" ]] || continue
             client="${f##*/${kind}-}"
+            at "files.agrees-${kind}" "${client}" "${server}"
             if [[ -z "${reference}" ]]; then reference=$(cat "${f}"); ref_client="${client}"
             elif [[ "$(cat "${f}")" == "${reference}" ]]; then ok "${client}->${server} agrees with ${ref_client}->${server}: file-${kind}"
             else fail "${client}->${server} and ${ref_client}->${server} disagree on: file-${kind}"
@@ -895,7 +1034,13 @@ for server in "${servers[@]}"; do
     PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
 # A known bug that no longer shows is a stale entry.
-while IFS=$'\t' read -r bug_adapter _ bug_text; do
-    grep -qxF "${bug_text}" "${WORK}/reproduced" || fail "known bug of ${bug_adapter} did not reproduce: ${bug_text}"
+while IFS=$'\t' read -r bug_adapter _ bug_text bug_id bug_url; do
+    if grep -qxF "${bug_text}" "${WORK}/reproduced"; then
+        waiver "${bug_id}" "${bug_adapter}" "${bug_url}" true
+    else
+        waiver "${bug_id}" "${bug_adapter}" "${bug_url}" false
+        at waiver.stale
+        fail "known bug of ${bug_adapter} did not reproduce: ${bug_text}"
+    fi
 done < "${WORK}/active"
 finish
