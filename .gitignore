@@ -1,6 +1,7 @@
 # Local build artifacts
 adapters/opendnp3/build/
 adapters/stepfunc/target/
+conformance/dnp3c/target/
 adapters/dscsystems/dnp3-interop
 adapters/tmw/vendor/
 reports/
