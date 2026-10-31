@@ -221,9 +221,12 @@ The `_NR` forms do the same without a response.
 ### Events
 
 A point with `class` 1..3 produces an event when a request changes its value
-(a control, a freeze, a clear). An unchanged value produces no event. The
-event carries the point's flags, the new value and the current time when its
-`eventVariation` has a time stamp.
+(a control, a freeze, a clear). An unchanged value produces no event, with
+one exception: whether a freeze raises a frozen counter event for a frozen
+value that stayed the same is the outstation's own policy, and the libraries
+differ ([docs/COMPATIBILITY.md](COMPATIBILITY.md#frozen-counter-events-a-freeze-semantic-and-an-event-policy)).
+The event carries the point's flags, the new value and the current time when
+its `eventVariation` has a time stamp.
 
 Nothing else produces events: the outstation never changes a value on its
 own.

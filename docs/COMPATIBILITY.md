@@ -40,7 +40,17 @@ opendnp3's configure step downloads its own dependencies (asio 1.16.0 and two
 Automatak helper libraries at fixed commits) and checks them against the SHA-1
 hashes in its `deps/*.cmake`; they are recorded in `versions.yaml`.
 
-## Cross-stack matrix
+## Protocol violations and implementation choices
+
+Interoperability tests must distinguish protocol violations from
+implementation choices permitted by the specification. A difference in
+behavior is not automatically a defect.
+
+So a check here is hard where the behaviour is required, and states the
+accepted alternatives where stacks may legitimately differ. Only a violation
+belongs in [tests/known-bugs.tsv](../tests/known-bugs.tsv). The freeze below is
+the worked example.
+
 
 `make interop` runs every case of [tests/cases.tsv](../tests/cases.tsv) in
 all pairings and requires, besides the expected outcome, that the result
@@ -64,7 +74,7 @@ separately and passes.
 ³ without all-objects reads, restart delays and class assignment, which the
 DSC go-dnp3 master cannot send or report; with direct operate no ack, which it
 can send.
-⁴ with two known bugs of the DSC go-dnp3 outstation's freeze, below.
+⁴ with a known bug of the DSC go-dnp3 outstation's FREEZE AND CLEAR, below.
 ⁵ with the known master-address bug below.
 ⁶ with direct operate no ack and the freezes without acknowledgement, which
 the dnp3py master sends. dnp3py has no server column: it cannot serve the
@@ -461,11 +471,58 @@ counter 2 has no frozen counter and keeps its value after FREEZE AND CLEAR;
 opendnp3 and the stepfunc adapter clear it. Listed in
 [tests/known-bugs.tsv](../tests/known-bugs.tsv).
 
-### DSC go-dnp3: a freeze raises events for unchanged frozen values
+### Frozen counter events: a freeze semantic and an event policy
 
-A second freeze of a counter that has not changed raises a frozen counter
-event again (the frozen value is the same; only its time differs).
-opendnp3 raises none. Listed in the known bugs.
+A frozen counter event represents a snapshot taken at a freeze, not
+necessarily a change in value. For periodic energy metering that matters: a
+meter that recorded nothing in an interval still took its reading.
+
+**Mandatory freeze semantics, hard checks in `make interop`, for every
+pairing:**
+
+- a freeze copies the counters into the frozen counters, and an event reports
+  a frozen value that changed;
+- a second freeze of unchanged counters keeps the frozen values correct and
+  leaves the counters;
+- a freeze after the counters changed updates the frozen values;
+- FREEZE AND CLEAR freezes the value before it clears, clears the counters
+  and produces their counter events;
+- every event that is raised has the right index, value and flags, and a time
+  stamp if its variation has one;
+- a confirmed event is not sent again.
+
+**Implementation-specific event policy, either accepted:** whether a freeze
+that leaves a frozen value as it was raises a frozen counter event. The check
+accepts an event for every frozen value (exactly the expected index and value)
+or no event at all, and nothing in between. An event is not an invalid
+duplicate merely because its value matches an earlier one; a duplicate is an
+event sent again after it was confirmed. The adapters offer no setting for
+this, so no policy is configured: the check requires that one outstation
+follows the same policy across freezes and for every master.
+
+| Outstation | A freeze that changes no frozen value |
+|------------|---------------------------------------|
+| DSC go-dnp3 v0.8.2 | Raises a frozen counter event: `setFrozen` is told a freeze produced the value ([outstation/database.go](https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/database.go#L399-L403), where a comment gives this as the design) |
+| opendnp3 3.1.2 | Raises none |
+| stepfunc dnp3 1.8.0 | Raises none (the adapter does the freeze; the library detects the event, `UpdateOptions::detect_event`) |
+
+The dnp3py outstation does not serve the baseline: its frozen counters are in
+class 0 and this check does not run on it.
+
+Unconditional generation is established implementation behaviour and is
+treated here as legitimate. That is a decision about what these tests accept,
+not a finding about the standard: the normative clause of IEEE 1815-2012 has
+not been verified, so nothing here says the standard mandates or explicitly
+permits it. Check the clause before publishing a definitive
+standards-conformance claim about this behaviour.
+
+Up to v0.7.0 this was listed as a known bug of DSC go-dnp3
+(`dscsystems-freeze-unchanged-events`).
+
+The baseline's frozen counter events are g23v1 and g23v2, which have no time
+stamp, so the time stamp of a frozen counter event is checked only for being
+absent. A counter changes in these runs only by a clear, because the fixture
+behaviour has no increment ([docs/FIXTURES.md](FIXTURES.md)).
 
 ### DSC go-dnp3: the outstation does not filter the master address
 

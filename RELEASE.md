@@ -26,6 +26,32 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.7.1
+
+**Date:** 2026-10-31
+**Previous release:** v0.7.0
+
+## Summary
+
+Reclassifies the frozen counter events of DSC go-dnp3 as valid implementation
+behaviour and tests the freeze more closely. The images are rebuilt unchanged;
+container contract 1.3 and the fixtures are unchanged.
+
+## Changes
+
+### Self-test
+
+- **Removed** the waiver `dscsystems-freeze-unchanged-events`: a freeze that raises frozen counter events for values that did not change is an implementation choice, not a bug. The maintainer's decision; the normative clause of IEEE 1815-2012 has not been verified, see `docs/COMPATIBILITY.md`.
+- **`scripts/interop.sh`**: a freeze that changes no frozen value may raise an event for every frozen value or none, but the same across freezes and masters.
+- **More hard checks of the freeze**, in every pairing: a second freeze keeps the frozen values and leaves the counters; FREEZE AND CLEAR freezes before it clears; a freeze after the clear updates the frozen values and raises their events; the flags and time stamps of the events; confirmed frozen counter events are not sent again.
+- The clear's counter events on the DSC go-dnp3 outstation are now checked: the waiver covered that whole check, so it did not run there before.
+
+### Docs
+
+- **`docs/COMPATIBILITY.md`**: the principle that a difference in behaviour is not automatically a defect, and mandatory freeze semantics against the frozen event policy. `docs/FIXTURES.md` and `COVERAGE.md` follow.
+
+---
+
 ## v0.7.0
 
 **Date:** 2026-10-31
