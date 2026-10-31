@@ -15,3 +15,9 @@ qualify/
 # Python
 __pycache__/
 /adapters/dscsystems/dscsystems
+
+# Build artefacts live in /bin/ and /release/ (otfabric/engineering REPO-005)
+/bin/
+/release/
+*.test
+coverage.out
