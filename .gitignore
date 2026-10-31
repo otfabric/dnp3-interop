@@ -13,3 +13,4 @@ qualify/
 
 # Python
 __pycache__/
+/adapters/dscsystems/dscsystems
