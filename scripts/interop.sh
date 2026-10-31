@@ -11,7 +11,10 @@
 #   - an integrity poll returns exactly the points of the fixture,
 #   - controls change the outputs and their targets and produce the events
 #     of their classes, once,
-#   - a freeze copies the counters, a freeze-and-clear clears them,
+#   - a freeze copies the counters, a freeze-and-clear also clears them, and
+#     a freeze of unchanged counters keeps the frozen values; whether it
+#     raises frozen counter events is the outstation's policy (either is
+#     accepted, the events it does raise are checked, docs/COMPATIBILITY.md),
 #   - enabling unsolicited responses delivers buffered events unsolicited,
 #   - a class assignment moves the events of a point to another class,
 #   - a time synchronization clears NEED_TIME.
@@ -172,6 +175,38 @@ objects() {
     jq -r '[.objects[]? | "g\(.group)v\(.variation)\(if .unsolicited then "u" else "" end):\(.index)=\(.value|tostring)"] | sort | join(" ")' <<<"$1" 2>/dev/null
 }
 
+# only_group <document> <group>, without_group <document> <group>: the
+# document with the objects of that group alone, or with all the others.
+only_group() { jq -c --argjson g "$2" '.objects = [(.objects // [])[] | select(.group == $g)]' <<<"$1" 2>/dev/null; }
+without_group() { jq -c --argjson g "$2" '.objects = [(.objects // [])[] | select(.group != $g)]' <<<"$1" 2>/dev/null; }
+
+# freeze_event_faults <document>: the counter and frozen counter events whose
+# flags or time stamp are wrong. The baseline's points are ONLINE, and only
+# variations 5 and 6 of groups 22 and 23 carry a time.
+freeze_event_faults() {
+    jq -r '[.objects[]? | select(.group == 22 or .group == 23)
+        | select(.flags != ["ONLINE"] or
+            (if .variation == 5 or .variation == 6
+             then (.time // "" | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$") | not)
+             else has("time") end))
+        | "g\(.group)v\(.variation):\(.index) flags=\(.flags) time=\(.time)"] | join(" ")' <<<"$1" 2>/dev/null
+}
+
+# frozen_event_policy <pair> <label> <events of every frozen counter> <got>:
+# a freeze that left the frozen values as they were. Raising an event for each
+# of them and raising none are both accepted, and only those; the policy goes
+# to FROZEN_POLICY for the checks that it holds. Nothing here treats an event
+# as a duplicate for repeating the value of an earlier one.
+frozen_event_policy() {
+    if [[ -z "$4" ]]; then
+        ok "$1: $2 (no events)"
+        FROZEN_POLICY="on change"
+    else
+        check "$1" "$2" "$3" "$4"
+        FROZEN_POLICY="every freeze"
+    fi
+}
+
 # check <pair> <label> <want> <got> [<operation a known bug may affect>]
 check() {
     local client="${1%%->*}" server="${1#*->}" bug
@@ -210,7 +245,7 @@ want_flags=$(jq -cS '
 # normalized document of every pairing that met its expectation, for the
 # agreement check across pairings, and leaves its counts in ${WORK}.
 suite() {
-    local server="$1" n=0 state want_exit want_summary needs operation client pair name doc summary bug got got_flags procedure
+    local server="$1" n=0 state want_exit want_summary needs operation client pair name doc summary bug got got_flags procedure frozen_events first_policy server_policy=""
     PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
     if [[ -n "${REPORT_DIR:-}" ]]; then RESULTS_FILE="${REPORT_DIR}/results-interop${SUFFIX}-${server}.tsv"; : > "${RESULTS_FILE}"; fi
     while IFS=$'\t' read -r case_id state want_exit want_summary needs operation; do
@@ -346,22 +381,70 @@ suite() {
             "$(run_client "${client}" restart --type cold --host "${name}" | jq -r '.ok')"
         stop_server "${name}"
 
-        # Freeze, then freeze and clear.
+        # Freeze, the same freeze again, freeze and clear, and a freeze of the
+        # counters that changed. What a freeze does to the values is checked
+        # hard; only whether a freeze that changes no frozen value raises
+        # events is left to the outstation (docs/COMPATIBILITY.md).
+        frozen_events="g23v1:0=123456 g23v2:1=65535"
         name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
         run_client "${client}" freeze --host "${name}" >/dev/null
         at_pair "values.freeze-copies-the-counters" "${pair}"
         check "${pair}" "a freeze copies the counters" "g21v1:0=123456 g21v2:1=65535" \
             "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+        doc=$(run_client "${client}" event-poll --classes 3 --host "${name}")
         at_pair "values.freeze-produces-frozen-counter-events" "${pair}"
-        check "${pair}" "a freeze produces frozen counter events" "g23v1:0=123456 g23v2:1=65535" \
+        check "${pair}" "a freeze produces frozen counter events" "${frozen_events}" "$(objects "${doc}")"
+        at_pair "values.frozen-counter-events-have-the-right-flags-and-time" "${pair}"
+        check "${pair}" "frozen counter events have the right flags and time" "" "$(freeze_event_faults "${doc}")"
+
+        run_client "${client}" freeze --host "${name}" >/dev/null
+        at_pair "values.second-freeze-keeps-the-frozen-values" "${pair}"
+        check "${pair}" "a second freeze keeps the frozen values" "g21v1:0=123456 g21v2:1=65535" \
+            "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+        at_pair "values.freeze-leaves-the-counters" "${pair}"
+        check "${pair}" "a freeze leaves the counters" "g20v1:0=123456 g20v2:1=65535 g20v5:2=4294967295" \
+            "$(objects "$(run_client "${client}" read --group 20 --variation 0 --start 0 --stop 2 --host "${name}")")"
+        doc=$(run_client "${client}" event-poll --classes 3 --host "${name}")
+        at_pair "values.second-freeze-event-policy" "${pair}"
+        frozen_event_policy "${pair}" "a second freeze raises events for every frozen value or none" "${frozen_events}" "$(objects "${doc}")"
+        first_policy="${FROZEN_POLICY}"
+        at_pair "values.second-freeze-events-have-the-right-flags-and-time" "${pair}"
+        check "${pair}" "second freeze events have the right flags and time" "" "$(freeze_event_faults "${doc}")"
+        at_pair "values.confirmed-frozen-counter-events-are-gone" "${pair}"
+        check "${pair}" "confirmed frozen counter events are gone" "" \
             "$(objects "$(run_client "${client}" event-poll --classes 3 --host "${name}")")"
+
         run_client "${client}" freeze --clear --host "${name}" >/dev/null
         at_pair "values.freeze-and-clear-clears-the-counters" "${pair}"
         check "${pair}" "a freeze and clear clears the counters" "g20v1:0=0 g20v2:1=0 g20v5:2=0" \
             "$(objects "$(run_client "${client}" read --group 20 --variation 0 --start 0 --stop 2 --host "${name}")")" "freeze --clear"
+        at_pair "values.freeze-and-clear-freezes-before-it-clears" "${pair}"
+        check "${pair}" "a freeze and clear freezes before it clears" "g21v1:0=123456 g21v2:1=65535" \
+            "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+        doc=$(run_client "${client}" event-poll --classes 3 --host "${name}")
         at_pair "values.clear-produces-counter-events" "${pair}"
-        check "${pair}" "a clear produces counter events" "g22v1:0=0 g22v2:1=0" \
-            "$(objects "$(run_client "${client}" event-poll --classes 3 --host "${name}")")" "freeze, unchanged frozen value"
+        check "${pair}" "a clear produces counter events" "g22v1:0=0 g22v2:1=0" "$(objects "$(without_group "${doc}" 23)")"
+        at_pair "values.freeze-and-clear-event-policy" "${pair}"
+        frozen_event_policy "${pair}" "a freeze and clear raises events for every frozen value or none" "${frozen_events}" "$(objects "$(only_group "${doc}" 23)")"
+        at_pair "values.one-frozen-event-policy-across-freezes" "${pair}"
+        check "${pair}" "one frozen event policy across freezes" "${first_policy}" "${FROZEN_POLICY}"
+        at_pair "values.one-frozen-event-policy-across-masters" "${pair}"
+        check "${pair}" "one frozen event policy across masters" "${server_policy:-${first_policy}}" "${first_policy}"
+        server_policy="${first_policy}"
+        at_pair "values.clear-events-have-the-right-flags-and-time" "${pair}"
+        check "${pair}" "clear events have the right flags and time" "" "$(freeze_event_faults "${doc}")"
+
+        # The clear changed the counters: the next freeze must carry that over,
+        # and an event is due whatever the policy, the frozen values changed.
+        run_client "${client}" freeze --host "${name}" >/dev/null
+        at_pair "values.freeze-after-a-counter-change-updates-the-frozen-values" "${pair}"
+        check "${pair}" "a freeze after a counter change updates the frozen values" "g21v1:0=0 g21v2:1=0" \
+            "$(objects "$(run_client "${client}" read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+        doc=$(run_client "${client}" event-poll --classes 3 --host "${name}")
+        at_pair "values.freeze-after-a-counter-change-produces-frozen-counter-events" "${pair}"
+        check "${pair}" "a freeze after a counter change produces frozen counter events" "g23v1:0=0 g23v2:1=0" "$(objects "${doc}")"
+        at_pair "values.changed-frozen-counter-events-have-the-right-flags-and-time" "${pair}"
+        check "${pair}" "changed frozen counter events have the right flags and time" "" "$(freeze_event_faults "${doc}")"
         stop_server "${name}"
 
         # Unsolicited responses: buffered events arrive once a class is enabled.

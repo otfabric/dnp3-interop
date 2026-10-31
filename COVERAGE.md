@@ -57,6 +57,7 @@ injector; a library tests these with scripted peers of its own.
 | SELECT as the first request after the outstation started | no | yes | yes | — |
 | Time synchronization when the outstation does not ask for it | yes | no | yes | yes |
 | FREEZE AND CLEAR of a counter without frozen counter | yes | yes | no | — |
+| Frozen counter event for a freeze that changes no frozen value (a policy, not a requirement) | no | no | yes | — |
 | Fixtures with gaps in indexes, or without NEED_TIME at start | yes | yes | no | no |
 
 — : not tested.

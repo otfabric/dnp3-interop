@@ -102,6 +102,8 @@ on linux/arm64 (2026-10-20): 32 of 32 smoke checks; the three-adapter run has
 bugs of DSC go-dnp3 v0.8.2 are listed in `tests/known-bugs.tsv` (FREEZE AND CLEAR
 of a counter without frozen counter, freeze events for unchanged values, link
 address filtering). Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+The freeze events were reclassified as valid implementation behaviour in
+v0.7.1, and the waiver is gone.
 
 ### dnp3py (done, both roles)
 
