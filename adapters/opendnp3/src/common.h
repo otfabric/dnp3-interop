@@ -7,10 +7,12 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace adapter
@@ -22,6 +24,7 @@ constexpr const char* kAdapter = "opendnp3";
 constexpr const char* kSchemaVersion = "1.0";
 constexpr const char* kDefaultFixture = "/fixtures/baseline/fixture.json";
 constexpr const char* kDefaultReadyFile = "/run/dnp3-interop/ready";
+constexpr const char* kDefaultControlSocket = "/run/dnp3-interop/control.sock";
 
 enum Exit : int
 {
@@ -109,5 +112,25 @@ std::string load_fixture(const std::string& path, Fixture& out);
 
 int run_server(const std::vector<std::string>& args);
 int run_client(const std::vector<std::string>& args);
+int run_counter_increment(const std::vector<std::string>& args);
+
+// The control socket of a running server (contract 1.4): adds to a counter,
+// sets the counter's new value, or returns an error message.
+using CounterIncrement = std::function<std::string(uint16_t index, uint32_t by, uint32_t& value)>;
+class ControlSocket
+{
+public:
+    ControlSocket(std::string path, CounterIncrement increment);
+    ~ControlSocket();
+    // An error message, empty on success.
+    std::string open();
+
+private:
+    void serve();
+    std::string path;
+    CounterIncrement increment;
+    int listener = -1;
+    std::thread thread;
+};
 
 } // namespace adapter

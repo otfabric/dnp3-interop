@@ -25,6 +25,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::watch;
 
 fn now() -> Time {
@@ -421,6 +422,63 @@ fn next_freeze(at: u64, now: u64, period: Option<u64>) -> u64 {
     }
 }
 
+/// `--frozen-event-policy always` (contract 1.4).
+static FROZEN_EVENT_ALWAYS: AtomicBool = AtomicBool::new(false);
+
+/// How a freeze updates a frozen counter: the event is the library's event
+/// detection (a value or flags that changed), or forced.
+fn frozen_event_options() -> UpdateOptions {
+    if FROZEN_EVENT_ALWAYS.load(Ordering::SeqCst) {
+        UpdateOptions::new(true, EventMode::Force)
+    } else {
+        UpdateOptions::detect_event()
+    }
+}
+
+/// Adds `by` to a counter, modulo 2^32, with the library's event detection.
+fn increment(outstation: &OutstationHandle, index: u16, by: u32) -> Result<u32, String> {
+    outstation.transaction(|db| {
+        let current: Option<Counter> = db.get(index);
+        let Some(counter) = current else {
+            return Err(format!("no counter at index {index}"));
+        };
+        let value = counter.value.wrapping_add(by);
+        db.update(
+            index,
+            &Counter::new(value, counter.flags, now()),
+            UpdateOptions::detect_event(),
+        );
+        Ok(value)
+    })
+}
+
+/// One exchange on the control socket (contract 1.4): a line of JSON each way.
+async fn serve_control(stream: tokio::net::UnixStream, outstation: OutstationHandle) {
+    let (read, mut write) = stream.into_split();
+    let mut line = String::new();
+    if BufReader::new(read).read_line(&mut line).await.is_err() {
+        return;
+    }
+    let request: serde_json::Value = serde_json::from_str(&line).unwrap_or_default();
+    let target = (
+        request["operation"].as_str(),
+        request["index"]
+            .as_u64()
+            .and_then(|i| u16::try_from(i).ok()),
+        request["by"].as_u64().and_then(|b| u32::try_from(b).ok()),
+    );
+    let reply = match target {
+        (Some("counter-increment"), Some(index), Some(by)) => {
+            match increment(&outstation, index, by) {
+                Ok(value) => json!({"ok": true, "value": value}),
+                Err(message) => json!({"ok": false, "message": message}),
+            }
+        }
+        _ => json!({"ok": false, "message": "unknown control operation"}),
+    };
+    let _ = write.write_all(format!("{reply}\n").as_bytes()).await;
+}
+
 /// Freezes the selected counters: every frozen counter of the same index
 /// takes the counter's value; FREEZE AND CLEAR then clears the counter.
 fn freeze(fx: &Fixture, database: &mut DatabaseHandle, indices: FreezeIndices, clear: bool) {
@@ -440,7 +498,7 @@ fn freeze(fx: &Fixture, database: &mut DatabaseHandle, indices: FreezeIndices, c
                 db.update(
                     p.index,
                     &FrozenCounter::new(counter.value, counter.flags, t),
-                    UpdateOptions::detect_event(),
+                    frozen_event_options(),
                 );
             }
             if clear {
@@ -704,10 +762,17 @@ pub fn run(argv: &[String]) -> i32 {
             "confirm-timeout-ms",
             "local-addr",
             "remote-addr",
+            "control-socket",
+            "frozen-event-policy",
         ];
         flags.extend(transport::SERVER_FLAGS);
         let args = Args::parse(argv, &flags, &[])?;
         let transport = transport::parse(&args, true)?;
+        match args.str("frozen-event-policy", "on-change").as_str() {
+            "on-change" => {}
+            "always" => FROZEN_EVENT_ALWAYS.store(true, Ordering::SeqCst),
+            _ => return usage("--frozen-event-policy must be on-change or always"),
+        }
         let bind: IpAddr = match args.str("bind-address", "0.0.0.0").parse() {
             Ok(a) => a,
             Err(_) => return usage("--bind-address must be an IP address"),
@@ -718,6 +783,7 @@ pub fn run(argv: &[String]) -> i32 {
             bind,
             args.integer("port", 20000, 1, 65535)? as u16,
             args.str("ready-file", DEFAULT_READY_FILE),
+            args.str("control-socket", DEFAULT_CONTROL_SOCKET),
             args.integer("select-timeout-ms", 5000, 1, 3_600_000)? as u64,
             args.integer("confirm-timeout-ms", 5000, 1, 3_600_000)? as u64,
             if args.has("local-addr") {
@@ -738,6 +804,7 @@ pub fn run(argv: &[String]) -> i32 {
         bind,
         port,
         ready_file,
+        control_socket,
         select_timeout,
         confirm_timeout,
         local,
@@ -777,6 +844,7 @@ pub fn run(argv: &[String]) -> i32 {
             bind,
             port,
             ready_file,
+            control_socket,
             select_timeout,
             confirm_timeout,
             local,
@@ -791,6 +859,8 @@ struct Settings {
     bind: IpAddr,
     port: u16,
     ready_file: String,
+    /// --control-socket.
+    control_socket: String,
     /// --select-timeout-ms.
     select_timeout: u64,
     /// --confirm-timeout-ms.
@@ -806,6 +876,7 @@ async fn serve(transport: Transport, fx: Arc<Fixture>, settings: Settings) -> i3
         bind,
         port,
         ready_file,
+        control_socket,
         select_timeout,
         confirm_timeout,
         local,
@@ -1032,6 +1103,22 @@ async fn serve(transport: Transport, fx: Arc<Fixture>, settings: Settings) -> i3
         return EXIT_FIXTURE_INVALID;
     }
 
+    // The control socket (contract 1.4).
+    let _ = std::fs::remove_file(&control_socket);
+    let control = match tokio::net::UnixListener::bind(&control_socket) {
+        Ok(l) => l,
+        Err(e) => {
+            logf!("server: cannot open the control socket {control_socket}: {e}");
+            return EXIT_FAILED;
+        }
+    };
+    let control_outstation = outstation.clone();
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = control.accept().await {
+            tokio::spawn(serve_control(stream, control_outstation.clone()));
+        }
+    });
+
     if let Err(e) = std::fs::write(&ready_file, b"") {
         logf!("server: cannot write the readiness file {ready_file}: {e}");
         return EXIT_FAILED;
@@ -1054,6 +1141,7 @@ async fn serve(transport: Transport, fx: Arc<Fixture>, settings: Settings) -> i3
         _ = tokio::signal::ctrl_c() => logf!("server: SIGINT, stopping"),
     }
     let _ = std::fs::remove_file(&ready_file);
+    let _ = std::fs::remove_file(&control_socket);
     drop(server_handle); // shuts down the server and the outstation
     drop(outstation);
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;

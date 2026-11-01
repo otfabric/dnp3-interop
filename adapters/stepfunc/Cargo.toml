@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 # The crate's default features: TLS (rustls with ring) and serial ports.
 dnp3 = { version = "=1.8.0", default-features = false, features = ["tls", "serial"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "net", "io-util"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 

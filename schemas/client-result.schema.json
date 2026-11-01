@@ -8,11 +8,14 @@
   "properties": {
     "schemaVersion": { "const": "1.0" },
     "adapter": { "type": "string" },
+    "index": { "description": "Contract 1.4. counter-increment only: the counter.", "type": "integer", "minimum": 0, "maximum": 65535 },
+    "value": { "description": "Contract 1.4. counter-increment only: its new value, null on failure.", "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
     "operation": {
       "enum": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
                "disable-unsolicited", "assign-class", "freeze", "monitor",
                "file-get", "file-put", "file-ls", "file-info", "file-delete", "attribute-read", "attribute-write",
-               "operate-multi", "deadband-write", "file-authenticate", "manage"]
+               "operate-multi", "deadband-write", "file-authenticate", "manage",
+               "counter-increment"]
     },
     "ok": { "type": "boolean" },
     "error": {

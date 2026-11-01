@@ -39,6 +39,8 @@ const usage = `usage: dnp3-interop <command>
          [--select-timeout-ms N] [--confirm-timeout-ms N] [--outstations N] [LINK] [TRANSPORT] [SA]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
          [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P] [--link-confirms]
+         [--control-socket PATH] [--frozen-event-policy always]
+  counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [--broadcast] [LINK] [TRANSPORT] [SA] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
@@ -202,7 +204,15 @@ func printCapabilities() int {
 			{"deadbandWriteClient", true},
 			{"deadbandReadServer", false},
 			{"deadbandReadClient", false},
+			// Contract 1.4.
+			{"counterIncrementServer", true},
+			{"frozenCounterEventsServer", true},
+			{"frozenCounterEventTimeClient", true},
 		}},
+		// A freeze always raises its event, by the library's design.
+		{"frozenEventPolicies", []string{"always"}},
+		// Every event stays buffered until confirmed.
+		{"frozenEventRetention", "all"},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},
 		{"commandTypes", []string{"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
 		{"clientOperations", []string{"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
@@ -251,6 +261,8 @@ func main() {
 		code = runServer(args)
 	case command == "client":
 		code = runClient(args)
+	case command == "counter-increment":
+		code = runCounterIncrement(args)
 	case command == "print-capabilities" && len(args) == 0:
 		code = printCapabilities()
 	case command == "print-fixture" && len(args) <= 1:

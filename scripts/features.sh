@@ -51,6 +51,13 @@
 #   points  (contract 1.2) the extended fixture: frozen analog inputs (g31),
 #           command events of the outputs (g13, g43) with the status of the
 #           control, and a time and interval object (g50v4)
+#   counters (contract 1.4) the counters fixture: counters that really change
+#           (counter-increment), their events, the frozen values, frozen
+#           counter events with their real time (g23v5, g23v6), and, for each
+#           frozen event policy of the outstation (--frozen-event-policy where
+#           it can be set), what a freeze of an unchanged counter does, the
+#           static time of freeze (g21v5) whether or not an event was raised,
+#           and what the outstation keeps of events not yet polled
 #
 # One suite per server adapter, all at the same time, as in interop.sh.
 #
@@ -59,7 +66,9 @@
 #
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
 #              REPORT_DIR (keeps the outcome of every check when set, and adds
-#              them to results.json, interop-result-v1).
+#              them to results.json, interop-result-v1),
+#              ONLY=counters (runs the counters checks alone, for working on
+#              them; a release runs everything).
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -198,6 +207,227 @@ keep() {
     file=$(mktemp "${REPORT_DIR}/feature-XXXXXXXXXX") || { cat; return; }
     tee "${file}"
     mv "${file}" "${file}.json"
+}
+
+# ---- counters that really change (contract 1.4) ----
+# increment <container> <index> <by>: counter-increment in the server's
+# container; the result document.
+increment() {
+    docker exec "$1" dnp3-interop counter-increment --index "$2" --by "$3" 2>/dev/null | keep
+}
+# clock_ms <container>: its clock, the one its outstation stamps events with.
+clock_ms() { docker exec "$1" date +%s%3N; }
+# event_time_faults <document> <from> <to> [<group>]: the frozen counter events
+# (or the objects of another group) whose time is missing or outside from..to,
+# ms since the epoch, a second of slack either way. Nothing here takes a time
+# stamp for granted: the time must be the time of the freeze.
+event_time_faults() {
+    jq -r --argjson from "$2" --argjson to "$3" --argjson g "${4:-23}" '
+        def ms: (.[0:19] + "Z" | fromdate) * 1000 + (.[20:23] | tonumber);
+        [.objects[]? | select(.group == $g)
+         | select(if (.time // "" | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+[.][0-9]{3}Z$") | not) then true
+                  else (.time | ms) as $t | ($t < $from - 1000 or $t > $to + 1000) end)
+         | "g\(.group)v\(.variation):\(.index) time=\(.time)"] | join(" ")' <<<"$1" 2>/dev/null
+}
+# event_time <document> <index>: the time of the frozen counter event of a point, ms.
+event_time() {
+    jq -r --argjson i "$2" '
+        def ms: (.[0:19] + "Z" | fromdate) * 1000 + (.[20:23] | tonumber);
+        [.objects[]? | select(.group == 23 and .index == $i) | .time | ms] | last // 0' <<<"$1" 2>/dev/null
+}
+# frozen_time_read <client> <container>: the frozen counters with their time
+# of freeze (g21v5), whatever the fixture's own static variation.
+frozen_time_read() { client "$1" -- read --group 21 --variation 5 --start 0 --stop 1 --host "$2"; }
+# frozen_read, counter_read <client> <container>: the static values.
+frozen_read() { objects "$(client "$1" -- read --group 21 --variation 0 --start 0 --stop 1 --host "$2")"; }
+counter_read() { objects "$(client "$1" -- read --group 20 --variation 0 --start 0 --stop 1 --host "$2")"; }
+
+# counter_policy <client> <server> <pair> <policy>: on a fresh outstation with
+# the frozen event policy, real changes of a counter, and freezes with and
+# without one. The values are hard checks under either policy; the events
+# differ only for a frozen value that stayed the same. Every g23 here is a
+# variation with a time stamp, which must be the time of that freeze.
+counter_policy() {
+    local client="$1" server="$2" pair="$3" policy="$4" label="[counters ${4}]" id="counters.${4}" name doc from to first second
+    local args=(--fixture /fixtures/counters/fixture.json)
+    # A policy the outstation cannot be set to is not asked for; the one it
+    # has is its default, and is checked as declared.
+    [[ $(jq '.frozenEventPolicies | length' "${WORK}/caps-${server}.json") -gt 1 ]] && args+=(--frozen-event-policy "${policy}")
+    name="fc-${server}-${RUN_ID}"
+    start "${server}" "${name}" -- "${args[@]}"
+    if ! wait_ready "${name}"; then
+        at_pair "${id}.server-start" "${pair}"
+        fail "${pair}: ${label} server did not start"
+        stop_server "${name}"
+        return
+    fi
+
+    # The first freeze changes the frozen values: an event under any policy.
+    from=$(clock_ms "${name}")
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    to=$(clock_ms "${name}")
+    at_pair "${id}.first-freeze-copies-the-counters" "${pair}"
+    check "${pair}: ${label} a first freeze copies the counters" "g21v1:0=100 g21v2:1=200" "$(frozen_read "${client}" "${name}")"
+    doc=$(client "${client}" -- event-poll --classes 3 --host "${name}")
+    at_pair "${id}.first-freeze-g23v5-g23v6" "${pair}"
+    check "${pair}: ${label} a first freeze raises g23v5 and g23v6" "g23v5:0=100 g23v6:1=200" "$(objects "${doc}")"
+    at_pair "${id}.first-freeze-event-times" "${pair}"
+    check "${pair}: ${label} their time is the time of the freeze" "" "$(event_time_faults "${doc}" "${from}" "${to}")"
+    first=$(event_time "${doc}" 1)
+
+    # A freeze with no change in between.
+    from=$(clock_ms "${name}")
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    to=$(clock_ms "${name}")
+    at_pair "${id}.unchanged-freeze-keeps-the-values" "${pair}"
+    check "${pair}: ${label} a freeze of unchanged counters keeps the frozen values" "g21v1:0=100 g21v2:1=200" "$(frozen_read "${client}" "${name}")"
+    # The snapshot is new whatever the policy: an event that is held back
+    # does not hold back the time of freeze of the static object.
+    doc=$(frozen_time_read "${client}" "${name}")
+    at_pair "${id}.unchanged-freeze-static-values" "${pair}"
+    check "${pair}: ${label} g21v5 reports the frozen values" "g21v5:0=100 g21v5:1=200" "$(objects "${doc}")"
+    at_pair "${id}.unchanged-freeze-static-time" "${pair}"
+    check "${pair}: ${label} with the time of the newer freeze" "" "$(event_time_faults "${doc}" "${from}" "${to}" 21)"
+    doc=$(client "${client}" -- event-poll --classes 3 --host "${name}")
+    at_pair "${id}.unchanged-freeze-events" "${pair}"
+    if [[ "${policy}" == always ]]; then
+        check "${pair}: ${label} a freeze of unchanged counters raises their events" "g23v5:0=100 g23v6:1=200" "$(objects "${doc}")"
+        at_pair "${id}.unchanged-freeze-event-times" "${pair}"
+        check "${pair}: ${label} with the time of this freeze" "" "$(event_time_faults "${doc}" "${from}" "${to}")"
+        second=$(event_time "${doc}" 1)
+        at_pair "${id}.unchanged-freeze-later-time" "${pair}"
+        check "${pair}: ${label} later than the first freeze" "later" "$([[ "${second}" -gt "${first}" ]] && echo later || echo "${second} after ${first}")"
+    else
+        check "${pair}: ${label} a freeze of unchanged counters raises no event" "" "$(objects "${doc}")"
+    fi
+
+    # A real change of one counter: it counts, it raises its event, and the
+    # frozen value holds until a freeze.
+    doc=$(increment "${name}" 0 5)
+    at_pair "${id}.increment-answers-the-value" "${pair}"
+    check "${pair}: ${label} counter-increment answers the new value" "true 105" "$(jq -r '"\(.ok) \(.value)"' <<<"${doc}" 2>/dev/null)"
+    at_pair "${id}.increment-changes-the-counter" "${pair}"
+    check "${pair}: ${label} the counter changed, the other did not" "g20v1:0=105 g20v2:1=200" "$(counter_read "${client}" "${name}")"
+    at_pair "${id}.increment-keeps-the-frozen-value" "${pair}"
+    check "${pair}: ${label} the frozen value holds until a freeze" "g21v1:0=100 g21v2:1=200" "$(frozen_read "${client}" "${name}")"
+    at_pair "${id}.increment-raises-a-counter-event" "${pair}"
+    check "${pair}: ${label} the change raises a counter event" "g22v1:0=105" "$(objects "$(client "${client}" -- event-poll --classes 2 --host "${name}")")"
+    at_pair "${id}.increment-raises-no-frozen-event" "${pair}"
+    check "${pair}: ${label} and no frozen counter event" "" "$(objects "$(client "${client}" -- event-poll --classes 3 --host "${name}")")"
+
+    # The freeze after the change: only the changed point differs by policy.
+    from=$(clock_ms "${name}")
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    to=$(clock_ms "${name}")
+    at_pair "${id}.freeze-after-change-updates" "${pair}"
+    check "${pair}: ${label} a freeze after the change updates the frozen value" "g21v1:0=105 g21v2:1=200" "$(frozen_read "${client}" "${name}")"
+    doc=$(client "${client}" -- event-poll --classes 3 --host "${name}")
+    at_pair "${id}.freeze-after-change-events" "${pair}"
+    if [[ "${policy}" == always ]]; then
+        check "${pair}: ${label} a freeze after the change raises every event" "g23v5:0=105 g23v6:1=200" "$(objects "${doc}")"
+    else
+        check "${pair}: ${label} a freeze after the change raises the changed point's event" "g23v5:0=105" "$(objects "${doc}")"
+    fi
+    at_pair "${id}.freeze-after-change-event-times" "${pair}"
+    check "${pair}: ${label} with the time of this freeze" "" "$(event_time_faults "${doc}" "${from}" "${to}")"
+
+    # A change after FREEZE AND CLEAR counts from zero.
+    client "${client}" -- freeze --clear --host "${name}" >/dev/null
+    at_pair "${id}.clear-freezes-before-it-clears" "${pair}"
+    check "${pair}: ${label} freeze and clear freezes, then clears" "g20v1:0=0 g20v2:1=0 g21v1:0=105 g21v2:1=200" \
+        "$(counter_read "${client}" "${name}") $(frozen_read "${client}" "${name}")"
+    client "${client}" -- event-poll --host "${name}" >/dev/null
+    doc=$(increment "${name}" 0 3)
+    at_pair "${id}.increment-after-clear" "${pair}"
+    check "${pair}: ${label} an increment after a clear counts from zero" "true 3 g20v1:0=3 g20v2:1=0" \
+        "$(jq -r '"\(.ok) \(.value)"' <<<"${doc}" 2>/dev/null) $(counter_read "${client}" "${name}")"
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    at_pair "${id}.freeze-after-clear-and-change" "${pair}"
+    check "${pair}: ${label} the next freeze reports it" "g23v5:0=3 g23v6:1=0" \
+        "$(objects "$(client "${client}" -- event-poll --classes 3 --host "${name}")")"
+
+    # An index the fixture does not have changes nothing.
+    doc=$(increment "${name}" 9 1)
+    at_pair "${id}.increment-of-no-counter" "${pair}"
+    check "${pair}: ${label} an increment of no counter fails" "false failed null" "$(jq -r '"\(.ok) \(.error.code) \(.value)"' <<<"${doc}" 2>/dev/null)"
+    stop_server "${name}"
+
+    # Retention, apart from the policy: two freezes that change a point, and
+    # no poll between them.
+    start "${server}" "${name}" -- "${args[@]}"
+    if ! wait_ready "${name}"; then
+        at_pair "${id}.retention-server-start" "${pair}"
+        fail "${pair}: ${label} server did not start"
+        stop_server "${name}"
+        return
+    fi
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    increment "${name}" 0 5 >/dev/null
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    local want="g23v5:0=100 g23v5:0=105 g23v6:1=200"
+    [[ "${policy}" == always ]] && want="${want} g23v6:1=200"
+    if [[ $(jq -r .frozenEventRetention "${WORK}/caps-${server}.json") == most-recent ]]; then
+        want="g23v5:0=105 g23v6:1=200"
+    fi
+    at_pair "${id}.retention-as-declared" "${pair}"
+    check "${pair}: ${label} unpolled frozen counter events are kept as declared" "${want}" \
+        "$(objects "$(client "${client}" -- event-poll --classes 3 --host "${name}")")"
+    stop_server "${name}"
+}
+
+# counter_plain <client> <server> <pair>: an outstation without frozen counter
+# events (the dnp3py fixture): the change, its event and the frozen values.
+counter_plain() {
+    local client="$1" server="$2" pair="$3" label="[counters]" id="counters.plain" name doc
+    name="fc-${server}-${RUN_ID}"
+    start "${server}" "${name}" -- --fixture /fixtures/dnp3py/fixture.json
+    if ! wait_ready "${name}"; then
+        at_pair "${id}.server-start" "${pair}"
+        fail "${pair}: ${label} server did not start"
+        stop_server "${name}"
+        return
+    fi
+    doc=$(increment "${name}" 0 5)
+    at_pair "${id}.increment-answers-the-value" "${pair}"
+    check "${pair}: ${label} counter-increment answers the new value" "true 123461" "$(jq -r '"\(.ok) \(.value)"' <<<"${doc}" 2>/dev/null)"
+    at_pair "${id}.increment-raises-a-counter-event" "${pair}"
+    check "${pair}: ${label} the change raises a counter event" "g22v5:0=123461" "$(objects "$(client "${client}" -- event-poll --classes 3 --host "${name}")")"
+    client "${client}" -- freeze --host "${name}" >/dev/null
+    at_pair "${id}.freeze-copies-the-change" "${pair}"
+    check "${pair}: ${label} a freeze copies the change" "g21v1:0=123461 g21v1:1=65535" "$(frozen_read "${client}" "${name}")"
+    at_pair "${id}.freeze-raises-no-event" "${pair}"
+    check "${pair}: ${label} and raises no event: the outstation has no frozen counter events" "" \
+        "$(objects "$(client "${client}" -- event-poll --classes 3 --host "${name}")")"
+    doc=$(increment "${name}" 9 1)
+    at_pair "${id}.increment-of-no-counter" "${pair}"
+    check "${pair}: ${label} an increment of no counter fails" "false failed null" "$(jq -r '"\(.ok) \(.error.code) \(.value)"' <<<"${doc}" 2>/dev/null)"
+    stop_server "${name}"
+}
+
+# counter_checks <client> <server> <pair>
+counter_checks() {
+    local client="$1" server="$2" pair="$3" policy reason
+    if ! has "${server}" counterIncrementServer; then
+        at_pair "skipped.counter-increment" "${pair}"
+        skip "${pair}: counters that change (server: counterIncrementServer is false)"
+        return
+    fi
+    if ! has "${server}" frozenCounterEventsServer; then
+        reason=$(jq -r '.unsupportedReasons.frozenCounterEventsServer // "no reason declared"' "${WORK}/caps-${server}.json")
+        at_pair "skipped.frozen-counter-event-time-server" "${pair}"
+        skip "${pair}: g23v5/g23v6 and the frozen event policy (server: ${reason})"
+        counter_plain "${client}" "${server}" "${pair}"
+        return
+    fi
+    if ! has "${client}" frozenCounterEventTimeClient; then
+        reason=$(jq -r '.unsupportedReasons.frozenCounterEventTimeClient // "no reason declared"' "${WORK}/caps-${client}.json")
+        at_pair "skipped.frozen-counter-event-time-client" "${pair}"
+        skip "${pair}: g23v5/g23v6 (client: ${reason})"
+        return
+    fi
+    for policy in $(jq -r '.frozenEventPolicies[]' "${WORK}/caps-${server}.json"); do
+        counter_policy "${client}" "${server}" "${pair}" "${policy}"
+    done
 }
 
 # The serial line: the outstation holds one end of a pseudo-terminal pair,
@@ -340,6 +570,8 @@ suite() {
     for client in "${ADAPTERS[@]}"; do
         has_role "${client}" client || continue
         pair="${client}->${server}"
+        counter_checks "${client}" "${server}" "${pair}"
+        [[ "${ONLY:-}" == counters ]] && continue
 
         # ---- TLS ----
         if has "${server}" tls && has "${client}" tls; then
@@ -1033,7 +1265,8 @@ for server in "${servers[@]}"; do
     read -r p f s k < "${WORK}/tally-${server}"
     PASS=$((PASS + p)) FAIL=$((FAIL + f)) SKIPPED=$((SKIPPED + s)) KNOWN=$((KNOWN + k))
 done
-# A known bug that no longer shows is a stale entry.
+# A known bug that no longer shows is a stale entry. ONLY runs too little to say.
+[[ -n "${ONLY:-}" ]] && : > "${WORK}/active"
 while IFS=$'\t' read -r bug_adapter _ bug_text bug_id bug_url; do
     if grep -qxF "${bug_text}" "${WORK}/reproduced"; then
         waiver "${bug_id}" "${bug_adapter}" "${bug_url}" true

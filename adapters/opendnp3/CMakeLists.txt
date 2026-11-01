@@ -26,6 +26,7 @@ add_executable(dnp3-interop
   src/stack.cpp
   src/server.cpp
   src/client.cpp
+  src/control.cpp
   src/transport.cpp)
 
 # The library's headers are not held to the adapter's warning level.

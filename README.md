@@ -43,7 +43,8 @@ file transfer and secure authentication:
 
 Contract 1.2 adds frozen analog inputs, command events, time and interval
 objects, dual end point (the outstation dials) and security statistics.
-Contract 1.3, the current one, adds device attributes, several controls in
+Contract 1.4, the current one, adds counters that change on a running server
+(`counter-increment`), and the frozen event policy. Contract 1.3 adds device attributes, several controls in
 one request, freeze at time and analog freeze, analog deadbands, file append
 and authentication, event buffer overflow, link-layer confirms and
 keep-alives, broadcast, management functions and several outstations on one
@@ -258,7 +259,7 @@ dnp3-interop/
 │   ├── schema/          JSON Schema of the fixture format
 │   ├── baseline/        the baseline outstation
 │   ├── dnp3py/          what dnp3py's outstation can serve
-│   └── extended/, files/, attributes/, controls/, events/   fixtures of contract 1.1..1.3 features
+│   └── extended/, files/, attributes/, controls/, events/, counters/   fixtures of contract 1.1..1.4 features
 ├── schemas/             JSON Schemas of the capability and client result documents, interop-result-v1
 ├── tests/cases.tsv      self-test cases: operation, expected outcome, features needed
 ├── tests/cases-dnp3py.tsv the cases against the dnp3py fixture
@@ -276,7 +277,7 @@ dnp3-interop/
 ```sh
 make help        # all targets
 make ci          # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
-make features    # cross-stack self-test of the contract 1.1..1.3 features (TLS, UDP, serial, files, SAv5, ...)
+make features    # cross-stack self-test of the contract 1.1..1.4 features (TLS, UDP, serial, files, SAv5, ...)
 make validate    # fixtures against the schema and the cross-field rules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release

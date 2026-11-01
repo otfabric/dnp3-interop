@@ -18,6 +18,9 @@ What a consumer can exercise against the published adapters today.
 | Restart | Cold and warm restart with the delay in g52v2; the outstation does not actually restart | yes |
 | Unsolicited responses | Null unsolicited response at connection; ENABLE and DISABLE UNSOLICITED per class; buffered and new events sent unsolicited and confirmed | yes |
 | Freeze | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0; frozen counter and counter events | yes |
+| Counters that change (1.4) | `counter-increment` on every outstation: the value, its g22 event, the frozen value held until a freeze, a change after a clear | yes |
+| Frozen counter events with time (1.4) | g23v5 and g23v6 from the stepfunc, opendnp3 and DSC go-dnp3 outstations to every master, with the time of the freeze. dnp3py's outstation: unsupported, with the reason | yes |
+| Frozen event policy (1.4) | stepfunc set to `on-change` and to `always`; opendnp3 (`on-change`) and DSC go-dnp3 (`always`) as declared; g21v5 carries the newest freeze's time with or without an event; `frozenEventRetention` as declared (all three: `all`) | yes |
 | Assign class | Served by the stepfunc, opendnp3 and DSC go-dnp3 outstations; sent by the stepfunc, opendnp3 and dnp3py masters | yes, where declared |
 | IIN | DEVICE_RESTART until cleared, NEED_TIME, class event bits, request errors | yes, without DEVICE_RESTART |
 | UDP, TLS, serial (1.1) | stepfunc, opendnp3 and DSC go-dnp3, both roles | yes |

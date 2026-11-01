@@ -185,23 +185,23 @@ std::shared_ptr<IChannel> server_channel(DNP3Manager& manager,
         // certificate against the CA but not its name.
         address = t.connect;
         if (t.tls)
-            return manager.AddTLSClient("server", log_levels(), kRetry, {endpoint(t.connect, "connect")}, "0.0.0.0",
+            return manager.AddTLSClient("server", server_log_levels(), kRetry, {endpoint(t.connect, "connect")}, "0.0.0.0",
                                         tls_config(t), listener);
-        return manager.AddTCPClient("server", log_levels(), kRetry, {endpoint(t.connect, "connect")}, "0.0.0.0",
+        return manager.AddTCPClient("server", server_log_levels(), kRetry, {endpoint(t.connect, "connect")}, "0.0.0.0",
                                     listener);
     }
     if (t.kind == "serial")
     {
         address = t.serial.deviceName;
-        return manager.AddSerial("server", log_levels(), kRetry, t.serial, listener);
+        return manager.AddSerial("server", server_log_levels(), kRetry, t.serial, listener);
     }
     if (t.kind == "udp")
-        return manager.AddUDPChannel("server", log_levels(), kRetry, IPEndpoint(bind, port),
+        return manager.AddUDPChannel("server", server_log_levels(), kRetry, IPEndpoint(bind, port),
                                      endpoint(t.udpPeer, "udp-peer"), listener);
     if (t.tls)
-        return manager.AddTLSServer("server", log_levels(), ServerAcceptMode::CloseExisting, IPEndpoint(bind, port),
+        return manager.AddTLSServer("server", server_log_levels(), ServerAcceptMode::CloseExisting, IPEndpoint(bind, port),
                                     tls_config(t), listener);
-    return manager.AddTCPServer("server", log_levels(), ServerAcceptMode::CloseExisting, IPEndpoint(bind, port),
+    return manager.AddTCPServer("server", server_log_levels(), ServerAcceptMode::CloseExisting, IPEndpoint(bind, port),
                                 listener);
 }
 

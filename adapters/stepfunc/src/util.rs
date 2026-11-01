@@ -11,6 +11,7 @@ pub const ADAPTER: &str = "stepfunc";
 pub const SCHEMA_VERSION: &str = "1.0";
 pub const DEFAULT_FIXTURE: &str = "/fixtures/baseline/fixture.json";
 pub const DEFAULT_READY_FILE: &str = "/run/dnp3-interop/ready";
+pub const DEFAULT_CONTROL_SOCKET: &str = "/run/dnp3-interop/control.sock";
 
 pub const EXIT_OK: i32 = 0;
 pub const EXIT_FAILED: i32 = 1;

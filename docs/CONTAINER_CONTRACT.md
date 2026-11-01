@@ -1,6 +1,6 @@
 # Container contract
 
-Version: **1.3** (`contract_version` in [versions.yaml](../versions.yaml))
+Version: **1.4** (`contract_version` in [versions.yaml](../versions.yaml))
 
 Every adapter image exposes the same commands, flags, JSON documents and exit
 codes. Consumers depend on this document, not on any adapter's source. A
@@ -14,6 +14,7 @@ and changes only with the major version.
 | 1.1 | [Transports](#transports) (UDP, TLS, serial), [file transfer](#file-transfer) (group 70), [secure authentication](#secure-authentication) (SAv5, group 120): flags, operations, events, result fields, error codes and features, all additions |
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
 | 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; [link layer](#link-layer): `--link-confirms`, `--keep-alive-ms`, the `link-status` event; [broadcast](#broadcast): `operate --broadcast`, the `broadcast` event; [management functions](#management-functions): `manage`, the `manage` event; [several outstations](#several-outstations): `server --outstations`; additions |
+| 1.4 | [Counters that change](#counters-that-change): the `counter-increment` command, `server --control-socket`, `server --frozen-event-policy`, the `counters` fixture, the capability fields `frozenEventPolicies`, `frozenEventRetention` and `unsupportedReasons`, the features `counterIncrementServer`, `frozenCounterEventsServer`, `frozenCounterEventTimeClient`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -44,6 +45,7 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 - [Event buffer overflow](#event-buffer-overflow) (1.3)
 - [Analog deadbands](#analog-deadbands) (1.3)
 - [Device attributes](#device-attributes) (1.3)
+- [Counters that change](#counters-that-change) (1.4)
 - [More point types](#more-point-types) (1.2)
 - [Object documents](#object-documents)
 - [`print-capabilities`](#print-capabilities)
@@ -68,7 +70,7 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 
 Contract 1.0 covers DNP3 over TCP. Contract 1.1 adds UDP, TLS and serial
 links, file transfer (group 70) and secure authentication (group 120); 1.2
-and 1.3 add the features in the table above. An image says which of them it
+to 1.4 add the features in the table above. An image says which of them it
 has in its capability document; what it lacks is a usage error (exit 2).
 
 ## Commands
@@ -76,6 +78,7 @@ has in its capability document; what it lacks is a usage error (exit 2).
 ```text
 dnp3-interop server [flags]
 dnp3-interop client <operation> --host HOST [flags]
+dnp3-interop counter-increment --index N [flags]
 dnp3-interop print-capabilities
 dnp3-interop print-fixture [NAME]
 dnp3-interop version
@@ -110,6 +113,8 @@ SIGINT.
 | `--ready-file PATH` | `/run/dnp3-interop/ready` | Readiness file |
 | `--select-timeout-ms N` | 5000 | How long a select stays valid |
 | `--confirm-timeout-ms N` | 5000 | How long the outstation waits for an application confirm |
+| `--control-socket PATH` | `/run/dnp3-interop/control.sock` | 1.4: see [counters that change](#counters-that-change) |
+| `--frozen-event-policy P` | the first of `frozenEventPolicies` | 1.4: see [counters that change](#counters-that-change) |
 | Link flags | | |
 
 Lifecycle:
@@ -758,6 +763,76 @@ An outstation accepts a write of an attribute its fixture marks `writable`,
 of the same type, and reports it with the server event `attribute-write`
 (`set`, `variation`, `type`, `value`); it refuses other writes (a request
 error).
+
+## Counters that change
+
+*Contract 1.4.* Nothing a master sends makes a counter count, so the running
+outstation takes the change from outside DNP3, as a device takes pulses from
+its inputs. `counter-increment` runs **in the server's container**:
+
+```text
+docker exec <server container> dnp3-interop counter-increment --index N [--by D]
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--index N` | required | The counter, 0..65535 |
+| `--by D` | 1 | What to add, 1..4294967295. The value wraps modulo 2^32; no flag changes |
+| `--control-socket PATH` | `/run/dnp3-interop/control.sock` | The server's control socket |
+| `--timeout-ms N` | 5000 | How long to wait for the server |
+
+The server opens the Unix socket before it writes its readiness file and
+removes it on a clean stop; it opens none with `--outstations` above 1. What
+passes on the socket is private to an adapter. The counter takes its new value
+through the library's own update, as a device's input would, so an event of
+class 1..3 is raised by the library's own detection, with the current time for
+a variation that has one. Frozen counters do not change until a freeze.
+
+The command prints one result document, as `client` does (`connected` means
+the socket answered; `iin` is null, `objects` empty), with:
+
+| Field | Meaning |
+|-------|---------|
+| `index` | The counter |
+| `value` | Its new value; null on failure |
+
+| Exit, `error.code` | When |
+|--------------------|------|
+| 0 | The counter changed; the server answered once the change was handed to the library |
+| 1, `failed` | No counter at that index |
+| 2 | Usage error: a bad flag; or an image with `counterIncrementServer` false, which has no such command |
+| 3, `connect-failed` | No server on the socket |
+
+Feature `counterIncrementServer`. The stepfunc, dscsystems and dnp3py adapters
+read the value from the library's database. opendnp3 has no read of its
+database, so that adapter holds the value itself, and learns of a FREEZE AND
+CLEAR from the header of the request, which is all the library tells: it cannot
+see the request's range, and takes every FREEZE AND CLEAR for one of all
+counters, the only one `freeze --clear` sends.
+
+### Frozen event policy
+
+What a freeze does when it leaves a frozen value as it was is the outstation's
+policy, and not settled here as a matter of the standard
+([COMPATIBILITY.md](COMPATIBILITY.md#frozen-counter-events-a-freeze-semantic-and-an-event-policy)):
+
+| Policy | A freeze that leaves the frozen value as it was |
+|--------|-------------------------------------------------|
+| `on-change` | Raises no frozen counter event |
+| `always` | Raises one, with the time of that freeze |
+
+Under both, a freeze that changes the value (or its flags) raises an event.
+`frozenEventPolicies` in the capability document lists what the outstation can
+do, its default first. Two entries: `server --frozen-event-policy P` sets it.
+One: it is fixed by the library. None: the outstation raises no frozen counter
+events (`frozenCounterEventsServer` false; `unsupportedReasons` says why).
+A policy the image does not list is a usage error (exit 2).
+
+Whether a freeze raises an event is one thing; what the outstation keeps of a
+point's events until a master confirms them is another. `frozenEventRetention`
+says which: `all`, or `most-recent` for only the latest event of each point.
+Under either policy a freeze sets the frozen value and its time of freeze: a
+read of g21v5 or g21v6 reports the newest freeze, also when it raised no event.
 
 ## More point types
 

@@ -333,7 +333,7 @@ func runServer(argv []string) int {
 	flags := []string{"fixture", "bind-address", "port", "ready-file", "select-timeout-ms",
 		"confirm-timeout-ms", "local-addr", "remote-addr"}
 	flags = append(append(append(flags, serverTransportFlags...), saFlags...), statisticsFlags...)
-	flags = append(flags, "file-user", "file-password", "outstations")
+	flags = append(flags, "file-user", "file-password", "outstations", "control-socket", "frozen-event-policy")
 	a, err := parseArgs(argv, flags, []string{"link-confirms"})
 	var port, selectTimeout, confirmTimeout, local, remote, count int64
 	var tr transport
@@ -361,6 +361,11 @@ func runServer(argv []string) int {
 	}
 	if err == nil {
 		count, err = a.integer("outstations", 1, 1, 16)
+	}
+	// The library raises a frozen counter event at every freeze and has no
+	// setting for it (contract 1.4).
+	if policy := a.str("frozen-event-policy", "always"); err == nil && policy != "always" {
+		err = usagef("--frozen-event-policy: this outstation has only the policy always")
 	}
 	_, hasUser := a["file-user"]
 	if _, hasPassword := a["file-password"]; err == nil && hasUser != hasPassword {
@@ -501,6 +506,19 @@ func runServer(argv []string) int {
 			logf("server: not listening on %s after 5 s", address)
 			return exitFailed
 		}
+	}
+	// The control socket (contract 1.4), for a server of one outstation.
+	if len(sessions) == 1 {
+		control := a.str("control-socket", defaultControlSocket)
+		l, err := listenControl(control, sessions[0].Database())
+		if err != nil {
+			logf("server: cannot open the control socket %s: %v", control, err)
+			return exitFailed
+		}
+		defer func() {
+			_ = l.Close()
+			_ = os.Remove(control)
+		}()
 	}
 	if err := os.WriteFile(readyFile, nil, 0o644); err != nil {
 		logf("server: cannot write the readiness file %s: %v", readyFile, err)

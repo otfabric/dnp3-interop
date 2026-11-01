@@ -14,7 +14,8 @@
 #   - a freeze copies the counters, a freeze-and-clear also clears them, and
 #     a freeze of unchanged counters keeps the frozen values; whether it
 #     raises frozen counter events is the outstation's policy (either is
-#     accepted, the events it does raise are checked, docs/COMPATIBILITY.md),
+#     accepted, consistently, the one it declares, and the events it does
+#     raise are checked, docs/COMPATIBILITY.md),
 #   - enabling unsolicited responses delivers buffered events unsolicited,
 #   - a class assignment moves the events of a point to another class,
 #   - a time synchronization clears NEED_TIME.
@@ -428,6 +429,11 @@ suite() {
         frozen_event_policy "${pair}" "a freeze and clear raises events for every frozen value or none" "${frozen_events}" "$(objects "$(only_group "${doc}" 23)")"
         at_pair "values.one-frozen-event-policy-across-freezes" "${pair}"
         check "${pair}" "one frozen event policy across freezes" "${first_policy}" "${FROZEN_POLICY}"
+        # An outstation with one policy declares it; contract 1.4. One that can
+        # be set runs its default here, the first it declares.
+        at_pair "values.frozen-event-policy-as-declared" "${pair}"
+        check "${pair}" "the frozen event policy is the one declared" \
+            "$(jq -r '.frozenEventPolicies[0] // "none" | if . == "always" then "every freeze" else "on change" end' "${WORK}/caps-${server}.json")" "${first_policy}"
         at_pair "values.one-frozen-event-policy-across-masters" "${pair}"
         check "${pair}" "one frozen event policy across masters" "${server_policy:-${first_policy}}" "${first_policy}"
         server_policy="${first_policy}"

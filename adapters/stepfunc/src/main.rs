@@ -8,6 +8,7 @@
 #![recursion_limit = "256"]
 
 mod client;
+mod control;
 mod files;
 mod fixture;
 mod server;
@@ -39,6 +40,8 @@ const USAGE: &str = "usage: dnp3-interop <command>
          [--select-timeout-ms N] [--confirm-timeout-ms N] [LINK] [TRANSPORT]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
          [--connect HOST:PORT [--tls-server-name NAME]]
+         [--control-socket PATH] [--frozen-event-policy on-change|always]
+  counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [--keep-alive-ms N] [LINK] [TRANSPORT] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
@@ -202,7 +205,16 @@ fn print_capabilities() -> i32 {
             "deadbandWriteClient": true,
             "deadbandReadServer": true,
             "deadbandReadClient": true,
+            // Contract 1.4.
+            "counterIncrementServer": true,
+            "frozenCounterEventsServer": true,
+            "frozenCounterEventTimeClient": true,
         },
+        // The freeze is the adapter's, and the library's update takes an
+        // event mode: --frozen-event-policy picks detect or force.
+        "frozenEventPolicies": ["on-change", "always"],
+        // Every event stays buffered until confirmed.
+        "frozenEventRetention": "all",
         "pointTypes": fixture::TYPES,
         "commandTypes": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"],
         "clientOperations": ["integrity-poll", "event-poll", "read", "operate", "time-sync", "restart",
@@ -248,6 +260,7 @@ fn main() {
     let code = match (command, rest.len()) {
         ("server", _) => server::run(rest),
         ("client", _) => client::run(rest),
+        ("counter-increment", _) => control::run(rest),
         ("print-capabilities", 0) => print_capabilities(),
         ("print-fixture", 0) => print_fixture("baseline"),
         ("print-fixture", 1) => print_fixture(&rest[0]),
