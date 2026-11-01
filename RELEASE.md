@@ -26,6 +26,38 @@ Tags are immutable. A fix is a new version.
 
 ---
 
+## v0.8.0
+
+**Date:** 2026-11-01
+**Previous release:** v0.7.2
+
+## Summary
+
+Counters that really change on a running outstation, frozen counter events with
+real time stamps, and a declared frozen event policy. Container contract 1.4,
+additions only; fixture format 1.0.
+
+## Changes
+
+### Contract 1.4
+
+- **`counter-increment`**, a command run in the server's container, adds to a counter of the running outstation over `server --control-socket`. Feature `counterIncrementServer`, all four adapters. The change goes through the library's own update, so its event is the library's. The opendnp3 adapter holds the counter values itself, as the library has no read of its database, and takes every FREEZE AND CLEAR for one of all counters.
+- **`server --frozen-event-policy on-change|always`**, for a stack that can be set (stepfunc); a policy an image does not have is a usage error.
+- **Capability document**: `frozenEventPolicies`, `frozenEventRetention`, `unsupportedReasons`, and the features `frozenCounterEventsServer`, `frozenCounterEventTimeClient`.
+- **`counters` fixture**: frozen counter events g23v5 and g23v6.
+
+### Self-test
+
+- **`scripts/features.sh`, `[counters]`**: on every pairing, real changes of a counter, the g22 event, the frozen value held until a freeze, a change after a clear; g23v5 and g23v6 with the time of the freeze; under each policy, a freeze of unchanged counters; g21v5 with the time of the newest freeze, with or without an event; retention of events not yet polled.
+- **`scripts/interop.sh`**: the frozen event policy must be the one declared, as well as consistent.
+- The dnp3py outstation has no frozen counter events: g23v5, g23v6 and the policy are reported unsupported with the reason, and the change itself is tested.
+
+### Docs
+
+- **`docs/COMPATIBILITY.md`**: "Mandatory interoperability contract", apart from normative conformance requirements; generation and retention policy by stack and version. What IEEE 1815 says stays an outstanding research item, not a blocker: what was checked and what is needed are listed, and nothing claims the standard permits or prohibits either behaviour.
+
+---
+
 ## v0.7.2
 
 **Date:** 2026-11-01
