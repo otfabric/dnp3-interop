@@ -220,16 +220,17 @@ The `_NR` forms do the same without a response.
 
 ### Events
 
-A point with `class` 1..3 produces an event when a request changes its value
-(a control, a freeze, a clear). An unchanged value produces no event, with
-one exception: whether a freeze raises a frozen counter event for a frozen
-value that stayed the same is the outstation's own policy, and the libraries
-differ ([docs/COMPATIBILITY.md](COMPATIBILITY.md#frozen-counter-events-a-freeze-semantic-and-an-event-policy)).
+A point with `class` 1..3 produces an event when a request or
+[`counter-increment`](CONTAINER_CONTRACT.md#counters-that-change) changes its
+value (a control, a freeze, a clear, an increment). An unchanged value produces
+no event, with one exception: whether a freeze raises a frozen counter event
+for a frozen value that stayed the same is the outstation's own policy, and the
+libraries differ ([frozen event policy](CONTAINER_CONTRACT.md#frozen-event-policy)).
 The event carries the point's flags, the new value and the current time when
 its `eventVariation` has a time stamp.
 
 Nothing else produces events: the outstation never changes a value on its
-own.
+own, and a counter changes only by a clear or by `counter-increment`.
 
 ### Time synchronization
 
@@ -375,6 +376,15 @@ and 1 (range ±100, target analog input 1). Every outstation serves it.
 NEED_TIME at start, an event buffer of three. Analog input 0 (class 2) and
 analog output 0 (range ±100000, target analog input 0, no events): each
 control of the output makes one analog input event. Every outstation serves
+it.
+
+## The counters fixture
+
+`fixtures/counters/fixture.json` (contract 1.4): outstation 1024, master 1,
+NEED_TIME at start. Counters 0 (100, g20v1, g22v1) and 1 (200, g20v2, g22v2) in
+class 2; frozen counters 0 (g21v1, g23v5) and 1 (g21v2, g23v6) at 0, in class
+3, so that the first freeze changes them and frozen counter events poll apart
+from counter events. Every outstation with `frozenCounterEventsServer` serves
 it.
 
 ## The attributes fixture

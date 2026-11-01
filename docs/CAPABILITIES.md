@@ -133,6 +133,9 @@ serves it and the master sends it.
 | `deadbandWriteClient` | `deadband-write` (1.3) | yes | no ⁴⁶ | yes | no ⁴⁶ |
 | `deadbandReadServer` | The outstation serves a read of g34 (1.3) | yes | no ⁴⁵ | no ⁴⁷ | no ⁴⁵ |
 | `deadbandReadClient` | A read of g34 comes back as objects (1.3) | yes | no ⁴⁶ | no ⁴⁷ | no ⁴⁶ |
+| `counterIncrementServer` | `counter-increment` changes a counter of the running server (1.4) | yes | yes ⁴⁸ | yes | yes |
+| `frozenCounterEventsServer` | The outstation raises frozen counter events, with g23v5 and g23v6 when asked (1.4) | yes | yes | yes | no ⁴⁹ |
+| `frozenCounterEventTimeClient` | The master reports the time of g23v5 and g23v6 (1.4) | yes | yes | yes | yes |
 
 ¹ dnp3py's outstation cannot serve the baseline fixture (no double-bit
 inputs, octet strings or per-point variations); it serves the `dnp3py`
@@ -141,6 +144,16 @@ specific variations), `unsolicited` and `octetStrings` off for the server
 role. The adapter builds the requests its master has no call for (everything
 but the polls) with dnp3py's application-layer types, and decodes responses
 with its decoders.
+
+⁴⁸ opendnp3 has no read of its database: the adapter holds each counter's
+value, and takes every FREEZE AND CLEAR for one of all counters
+([contract](CONTAINER_CONTRACT.md#counters-that-change)).
+
+⁴⁹ dnp3py's outstation has no frozen counter event: its encoder would report
+one as a counter event of group 22, so the adapter refuses a class on a frozen
+counter. `unsupportedReasons.frozenCounterEventsServer` says so, and the
+self-test reports g23v5, g23v6 and the policy as unsupported on it; a change of
+a counter, its g22 event and the frozen value are tested all the same.
 
 ² DSC go-dnp3's master reads start-stop ranges and classes, not all objects of a
 group; `read --group 60 --variation 1..4` works, as a class read.
@@ -302,6 +315,28 @@ The dscsystems server has two limits of its library: the indexes of each
 point type must run from 0 without gaps, and `outstation.needTime` must be
 true (DSC go-dnp3 asserts NEED_TIME until a master writes the time). It refuses
 other fixtures with exit 4.
+
+## Frozen event policy
+
+*Contract 1.4.* `frozenEventPolicies` lists what an outstation does for a
+freeze that leaves a frozen value as it was, its default first
+([contract](CONTAINER_CONTRACT.md#frozen-event-policy)).
+
+| Outstation | `frozenEventPolicies` | Why |
+|------------|-----------------------|-----|
+| stepfunc | `on-change`, `always` | The library leaves the freeze to the application, and its update takes an event mode: `--frozen-event-policy` picks `EventMode::Detect` or `EventMode::Force` |
+| opendnp3 | `on-change` | The library does the freeze itself with event detection (`FreezeRequestHandler`, `EventMode::Detect`), and tells the application nothing that would allow another mode |
+| dscsystems | `always` | The library does the freeze itself and always raises the event (`setFrozen` with `freeze` true), with no setting |
+| dnp3py | none | No frozen counter events |
+
+A policy that can be set is tested both ways; a fixed one as declared, and for
+being the same across freezes and masters.
+
+`frozenEventRetention` is a separate matter: what the outstation keeps of a
+point's frozen counter events until a master confirms them, `all` or
+`most-recent`. stepfunc, opendnp3 and dscsystems declare `all`, none of them
+has a setting for it, and the self-test holds each to it. dnp3py has no such
+field: it raises none.
 
 ## Rules for consumers
 

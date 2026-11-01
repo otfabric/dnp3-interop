@@ -132,7 +132,7 @@ interop: ## Cross-stack self-test: every client against every server, on the bas
 	@scripts/interop.sh $(ADAPTERS)
 	@FIXTURE=dnp3py scripts/interop.sh $(ADAPTERS)
 
-features: ## Cross-stack self-test of contract 1.1: TLS, UDP, serial, file transfer, secure authentication
+features: ## Cross-stack self-test of contracts 1.1 to 1.4: TLS, UDP, serial, file transfer, secure authentication, ...
 	@scripts/features.sh $(ADAPTERS)
 
 # ── Candidates ────────────────────────────────────────────────────────────────

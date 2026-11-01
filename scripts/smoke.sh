@@ -104,6 +104,14 @@ expect_exit 2 "--connect with --port" "${IMAGE}" server --connect master:20000 -
 expect_exit 2 "--listen with --host" "${IMAGE}" client integrity-poll --listen --host nowhere
 expect_exit 2 "freeze --interval-ms without --at" "${IMAGE}" client freeze --host nowhere --interval-ms 1000
 expect_exit 2 "freeze --at with --clear" "${IMAGE}" client freeze --host nowhere --at immediately --clear
+expect_exit 2 "counter-increment without --index" "${IMAGE}" counter-increment
+expect_exit 2 "counter-increment with an unknown flag" "${IMAGE}" counter-increment --index 0 --frobnicate 1
+expect_exit 2 "counter-increment by zero" "${IMAGE}" counter-increment --index 0 --by 0
+expect_exit 3 "counter-increment without a server" "${IMAGE}" counter-increment --index 0
+for policy in on-change always; do
+    jq -e --arg p "${policy}" '.frozenEventPolicies | index($p)' <<<"${caps}" >/dev/null 2>&1 \
+        || expect_exit 2 "--frozen-event-policy ${policy}, which the outstation does not have" "${IMAGE}" server --frozen-event-policy "${policy}"
+done
 expect_exit 2 "operate-multi with a malformed control" "${IMAGE}" client operate-multi --host nowhere --controls g12v1:0
 expect_exit 2 "an update key of the wrong length" "${IMAGE}" client integrity-poll --host nowhere --sa-update-key 0011
 if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then

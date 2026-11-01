@@ -18,6 +18,7 @@
 #include <mutex>
 #include <csignal>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <unistd.h>
 
@@ -230,6 +231,52 @@ Updates initial_values(const Fixture& fx)
         b.Update(OctetString(Buffer(p.octets.data(), p.octets.size())), p.index, EventMode::Suppress);
     return b.Build();
 }
+
+// What the counters hold (contract 1.4). opendnp3 has no read of its database,
+// so the adapter keeps the values itself: fixture values, then increments. A
+// FREEZE AND CLEAR is done inside the library and told to nobody, so the
+// adapter watches the headers of the requests. It cannot see their range: a
+// FREEZE AND CLEAR clears all it holds, and the contract sends no other.
+class Counters
+{
+public:
+    Counters(const Fixture& fx, std::shared_ptr<IOutstation> outstation) : outstation(std::move(outstation))
+    {
+        for (const auto& p : fx.points.at("counters"))
+            held[p.index] = Held{static_cast<uint32_t>(p.value), p.flags};
+    }
+
+    void cleared()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        for (auto& c : held)
+            c.second.value = 0;
+    }
+
+    std::string increment(uint16_t index, uint32_t by, uint32_t& value)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        const auto c = held.find(index);
+        if (c == held.end())
+            return "no counter at index " + std::to_string(index);
+        c->second.value += by;
+        value = c->second.value;
+        UpdateBuilder b;
+        b.Update(Counter(value, Flags(c->second.flags), dnp_now()), index, EventMode::Detect);
+        outstation->Apply(b.Build());
+        return "";
+    }
+
+private:
+    struct Held
+    {
+        uint32_t value;
+        uint8_t flags;
+    };
+    std::mutex mutex;
+    std::map<uint16_t, Held> held;
+    std::shared_ptr<IOutstation> outstation;
+};
 
 class Application final : public IOutstationApplication
 {
@@ -486,7 +533,7 @@ private:
 
 int run_server(const std::vector<std::string>& argv)
 {
-    std::string fixturePath, bindAddress, readyFile;
+    std::string fixturePath, bindAddress, readyFile, controlSocket;
     int64_t port = 20000, selectTimeout = 5000, confirmTimeout = 5000, count = 1;
     std::optional<int64_t> localAddr, remoteAddr;
     Transport transport;
@@ -494,7 +541,7 @@ int run_server(const std::vector<std::string>& argv)
     {
         std::set<std::string> flags = {"fixture",           "bind-address",       "port",      "ready-file",
                                        "select-timeout-ms", "confirm-timeout-ms", "local-addr", "remote-addr",
-                                       "outstations"};
+                                       "outstations", "control-socket", "frozen-event-policy"};
         flags.insert(kServerTransportFlags.begin(), kServerTransportFlags.end());
         Args args(argv, flags, {});
         transport = parse_transport(args, true);
@@ -505,6 +552,11 @@ int run_server(const std::vector<std::string>& argv)
         selectTimeout = args.integer("select-timeout-ms", 5000, 1, 3600000);
         confirmTimeout = args.integer("confirm-timeout-ms", 5000, 1, 3600000);
         count = args.integer("outstations", 1, 1, 16);
+        controlSocket = args.str("control-socket", kDefaultControlSocket);
+        // The library freezes by itself, with event detection, and takes no
+        // setting for that (FreezeRequestHandler; contract 1.4).
+        if (args.str("frozen-event-policy", "on-change") != "on-change")
+            throw UsageError{"--frozen-event-policy: this outstation has only the policy on-change"};
         if (args.has("local-addr"))
             localAddr = args.integer("local-addr", 0, 0, 65519);
         if (args.has("remote-addr"))
@@ -612,6 +664,28 @@ int run_server(const std::vector<std::string>& argv)
             return kExitFailed;
         }
 
+        // The control socket (contract 1.4), for a server of one outstation.
+        std::shared_ptr<Counters> counters;
+        std::unique_ptr<ControlSocket> control;
+        if (count == 1)
+        {
+            counters = std::make_shared<Counters>(fx, outstations[0]);
+            observe_request_headers([counters](const char* message) {
+                if (std::strstr(message, "FUNC: FREEZE_CLEAR"))
+                    counters->cleared();
+            });
+            control = std::make_unique<ControlSocket>(
+                controlSocket, [counters](uint16_t index, uint32_t by, uint32_t& value) {
+                    return counters->increment(index, by, value);
+                });
+            const auto problem = control->open();
+            if (!problem.empty())
+            {
+                logf("server: cannot open the control socket %s: %s", controlSocket.c_str(), problem.c_str());
+                return kExitFailed;
+            }
+        }
+
         {
             std::ofstream ready(readyFile);
             if (!ready)
@@ -633,6 +707,7 @@ int run_server(const std::vector<std::string>& argv)
         sigwait(&signals, &sig);
         logf("server: signal %d, stopping", sig);
         std::remove(readyFile.c_str());
+        control.reset();
         for (auto& outstation : outstations)
             outstation->Disable();
         channel->Shutdown();

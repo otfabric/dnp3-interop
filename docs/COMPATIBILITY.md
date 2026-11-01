@@ -473,12 +473,18 @@ opendnp3 and the stepfunc adapter clear it. Listed in
 
 ### Frozen counter events: a freeze semantic and an event policy
 
-A frozen counter event represents a snapshot taken at a freeze, not
-necessarily a change in value. For periodic energy metering that matters: a
-meter that recorded nothing in an interval still took its reading.
+One view of a frozen counter event is that it reports a snapshot taken at a
+freeze, not necessarily a change in value: a meter that recorded nothing in an
+interval still took its reading. Others report a change. The stacks differ.
 
-**Mandatory freeze semantics, hard checks in `make interop`, for every
-pairing:**
+This section separates two things. An **interoperability contract** is what
+this repository's tests require so that stacks work together; a stack that
+breaks it fails the run. A **normative conformance requirement** is what IEEE
+1815 requires. No item below has been verified against the text of the
+standard, so nothing here is a statement of conformance.
+
+**Mandatory interoperability contract, hard checks in `make interop` and
+`make features`, for every pairing:**
 
 - a freeze copies the counters into the frozen counters, and an event reports
   a frozen value that changed;
@@ -490,39 +496,67 @@ pairing:**
 - every event that is raised has the right index, value and flags, and a time
   stamp if its variation has one;
 - a confirmed event is not sent again.
+- a newer freeze sets the static time of freeze (g21v5), also when it raises no
+  event.
 
-**Implementation-specific event policy, either accepted:** whether a freeze
-that leaves a frozen value as it was raises a frozen counter event. The check
-accepts an event for every frozen value (exactly the expected index and value)
-or no event at all, and nothing in between. An event is not an invalid
-duplicate merely because its value matches an earlier one; a duplicate is an
-event sent again after it was confirmed. The adapters offer no setting for
-this, so no policy is configured: the check requires that one outstation
-follows the same policy across freezes and for every master.
+**Implementation-specific, either accepted if consistent:**
 
-| Outstation | A freeze that changes no frozen value |
-|------------|---------------------------------------|
-| DSC go-dnp3 v0.8.2 | Raises a frozen counter event: `setFrozen` is told a freeze produced the value ([outstation/database.go](https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/database.go#L399-L403), where a comment gives this as the design) |
-| opendnp3 3.1.2 | Raises none |
-| stepfunc dnp3 1.8.0 | Raises none (the adapter does the freeze; the library detects the event, `UpdateOptions::detect_event`) |
+- *Event-generation policy*: whether a freeze that leaves a frozen value as it
+  was raises a frozen counter event (`frozenEventPolicies`).
+- *Event-retention policy*: whether the outstation keeps all of a point's
+  frozen counter events until a master confirms them, or only the most recent
+  (`frozenEventRetention`).
 
-The dnp3py outstation does not serve the baseline: its frozen counters are in
-class 0 and this check does not run on it.
+An event is not an invalid duplicate merely because its value matches an
+earlier one; a duplicate is an event sent again after it was confirmed. An
+outstation with a setting is tested under both generation policies
+(`server --frozen-event-policy`), one without under the policy it declares, and
+every outstation must keep one policy across freezes and for every master. A
+stack with either policy is not a bug, so neither belongs in
+`tests/known-bugs.tsv` unless a real violation of the standard is shown.
 
-Unconditional generation is established implementation behaviour and is
-treated here as legitimate. That is a decision about what these tests accept,
-not a finding about the standard: the normative clause of IEEE 1815-2012 has
-not been verified, so nothing here says the standard mandates or explicitly
-permits it. Check the clause before publishing a definitive
-standards-conformance claim about this behaviour.
+Observed, stack by stack:
 
-Up to v0.7.0 this was listed as a known bug of DSC go-dnp3
-(`dscsystems-freeze-unchanged-events`).
+| Outstation | A freeze that changes no frozen value | Generation setting | Events not yet polled |
+|------------|---------------------------------------|--------------------|-----------------------|
+| DSC go-dnp3 v0.8.2 | Raises a frozen counter event: `setFrozen` is told a freeze produced the value ([outstation/database.go](https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/database.go#L399-L403), where a comment gives this as the design) | none | all kept |
+| opendnp3 3.1.2 | Raises none: the library's freeze detects the event ([FreezeRequestHandler.cpp](https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/outstation/FreezeRequestHandler.cpp#L48-L60), default `EventMode::Detect`) | none: an application's `FreezeCounter` takes a mode, a master's freeze does not | all kept |
+| stepfunc dnp3 1.8.0 | Raises none by default | `--frozen-event-policy`: the adapter does the freeze, and passes `EventMode::Detect` or `EventMode::Force` | all kept |
+| dnp3py 0.6.0 | Raises no frozen counter events at all | none | n/a |
+
+Up to v0.7.0 the first row was listed as a known bug of DSC go-dnp3
+(`dscsystems-freeze-unchanged-events`). It is not one.
+
+**Outstanding research item (not a blocker).** Accepting both generation
+policies is an engineering decision about what these tests accept, and that
+decision is closed. It says nothing about the standard: no clause of IEEE 1815
+on this has been read, so nothing here says the standard permits or prohibits
+either behaviour. What was checked on 2026-11-01:
+
+| Source | Result |
+|--------|--------|
+| IEEE 1815-2012 | Not read: [IEEE](https://standards.ieee.org/ieee/1815/5414/) offers it by purchase or subscription, and lists no free access |
+| DNP3 IED Certification Procedure 3.1 rev 1 (DNP Users Group) | The public [PDF](https://www.dnp.org/API/Evotiva-UserFiles/FileActionsServices/DownloadFile?ItemId=5008&ModuleId=9582&TabId=66) is 17 pages of front matter and contents; section 8.16.2 (frozen counters) is listed at page 91 and is not in it |
+| [dnp3c](https://github.com/stepfunc/dnp3c/blob/881209943b670cc59b16301346dffa7d5523ab72/src/main/scala/io/stepfunc/dnp3c/conformance/v31r1/FrozenCounters.scala) 0.2.0, an independent implementation of that procedure | A secondary source. For a device with frozen counter events, it requires a g23 event of every point in the read after each freeze of 8.16.2.2.3 to 8.16.2.2.6. As dnp3c runs them on a device whose frozen values start apart from its counters, each of these freezes changes the frozen values (counts generated between freezes; a second FREEZE AND CLEAR takes nonzero to zero), so they do not separate the two policies. dnp3c forces no change before the first freeze; whether the procedure does is in the part that is not public |
+| Comments of the stacks | DSC go-dnp3 gives its behaviour as a design choice, citing no clause. opendnp3, stepfunc and dnp3py cite none on this |
+| Public bulletins and vendor manuals found by search | Nothing on this. The manuals read list group 23 and its variations, not when an event is due or what is kept |
+
+Still needed: the text of IEEE 1815 on frozen counter events and freezes (the
+object library for group 23, and the freeze function codes), and section 8.16.2
+of the full certification procedure. DNP Users Group membership gives access to
+the protocol documents and technical bulletins.
+
+The `counters` fixture's frozen counter events are g23v5 and g23v6: the
+self-test (`make features`, `[counters]`) requires each to carry the time of
+the freeze that raised it, read against the outstation's own clock, and, under
+`always`, a later time at a later freeze, and g21v5 to carry the time of the
+newest freeze under either policy. Its counters change by
+`counter-increment`, so a freeze of a changed value is tested with a change
+that is not a clear. The dnp3py outstation is reported as unsupported for
+g23v5, g23v6 and the policy, with the reason, and tested for the change itself.
 
 The baseline's frozen counter events are g23v1 and g23v2, which have no time
-stamp, so the time stamp of a frozen counter event is checked only for being
-absent. A counter changes in these runs only by a clear, because the fixture
-behaviour has no increment ([docs/FIXTURES.md](FIXTURES.md)).
+stamp, so there the time stamp is checked only for being absent.
 
 ### DSC go-dnp3: the outstation does not filter the master address
 

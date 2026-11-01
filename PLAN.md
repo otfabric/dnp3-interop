@@ -200,6 +200,15 @@ adds, all as additions to 1.0:
 
 **Gate:** `make features` checks success, a partial refusal, select-before-operate and the limit for every pairing.
 
+### Contract 1.4: counters that change (done)
+
+- `counter-increment`, run in the server's container, with `--control-socket`; feature `counterIncrementServer`, every adapter.
+- `--frozen-event-policy`, `frozenEventPolicies`, `unsupportedReasons`; the `counters` fixture with g23v5 and g23v6.
+- `frozenEventRetention`: all or most recent, apart from the generation policy.
+- Outstanding research item, not a blocker: the text of IEEE 1815 on frozen counter events has not been read (docs/COMPATIBILITY.md lists what was checked and what is needed). Accepting either policy is decided.
+
+**Gate:** `make features`, `[counters]`, for every pairing.
+
 ### Contract 1.3: freeze at time and analog freeze (done, v0.4.0)
 
 - `freeze --at immediately|+MS|EPOCH_MS [--interval-ms N]` (FREEZE AT TIME with g50v2) and `freeze --group 30`; features `freezeAtTimeServer/Client`, `analogFreezeServer/Client`.

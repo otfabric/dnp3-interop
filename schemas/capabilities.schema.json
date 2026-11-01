@@ -43,6 +43,21 @@
     },
     "commandTypes": { "type": "array", "items": { "enum": ["g12v1", "g41v1", "g41v2", "g41v3", "g41v4"] } },
     "clientOperations": { "type": "array", "items": { "type": "string" } },
+    "frozenEventPolicies": {
+      "description": "Contract 1.4: the policies of the outstation for a freeze that leaves a frozen value as it was, the default first. on-change raises no frozen counter event, always raises one. Two entries: --frozen-event-policy picks. One: fixed. None: no frozen counter events at all.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["on-change", "always"] }
+    },
+    "frozenEventRetention": {
+      "description": "Contract 1.4: what the outstation keeps of a point's frozen counter events until a master confirms them: all, or only the most recent. Absent when it raises none.",
+      "enum": ["all", "most-recent"]
+    },
+    "unsupportedReasons": {
+      "description": "Contract 1.4: why a feature declared false is missing, by feature name, where a consumer reports it.",
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
     "serverFeatures": {
       "description": "Contract 1.2: features whose value for the server role differs from features.",
       "type": "object",

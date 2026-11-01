@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "name": "counters",
+  "description": "Counters that change (contract 1.4): two counters with class 2 events, and frozen counters with class 3 events that carry a time stamp (g23v5, g23v6). Frozen values start at 0, so the first freeze changes them.",
+  "outstation": { "address": 1024, "masterAddress": 1, "needTime": true },
+  "counters": [
+    { "index": 0, "value": 100, "class": 2 },
+    { "index": 1, "value": 200, "class": 2, "staticVariation": 2, "eventVariation": 2 }
+  ],
+  "frozenCounters": [
+    { "index": 0, "value": 0, "class": 3, "eventVariation": 5 },
+    { "index": 1, "value": 0, "class": 3, "staticVariation": 2, "eventVariation": 6 }
+  ]
+}

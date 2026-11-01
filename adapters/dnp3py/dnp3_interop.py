@@ -21,9 +21,11 @@ import math
 import os
 import re
 import signal
+import socket
 import struct
 import sys
 import time
+from functools import partial
 from datetime import UTC
 from importlib.metadata import version as package_version
 
@@ -94,6 +96,8 @@ USAGE = """usage: dnp3-interop <command>
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [--transport tcp] [LINK]
          (serves fixtures within dnp3py's limits: fixtures/dnp3py)
+         [--control-socket PATH]
+  counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [--transport tcp] [LINK] [operation flags]
       integrity-poll
@@ -814,6 +818,7 @@ def client_main(argv):
 
 DEFAULT_FIXTURE = "/fixtures/baseline/fixture.json"
 DEFAULT_READY_FILE = "/run/dnp3-interop/ready"
+DEFAULT_CONTROL_SOCKET = "/run/dnp3-interop/control.sock"
 EXIT_FIXTURE_INVALID = 4
 
 # What dnp3py's outstation serves: one static and one event variation per
@@ -1181,8 +1186,10 @@ def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
 def server_main(argv):
     try:
         a = Args(argv, ["fixture", "bind-address", "port", "ready-file", "select-timeout-ms", "confirm-timeout-ms",
-                        "local-addr", "remote-addr", "transport"])
+                        "local-addr", "remote-addr", "transport", "control-socket", "frozen-event-policy"])
         a.transport()
+        if a.has("frozen-event-policy"):
+            raise UsageError("--frozen-event-policy: this outstation raises no frozen counter events")
         path = a.str("fixture", DEFAULT_FIXTURE)
         bind = a.str("bind-address", "0.0.0.0")
         port = a.integer("port", 20000, 1, 65535)
@@ -1203,7 +1210,8 @@ def server_main(argv):
     local = fx["outstation"]["address"] if local < 0 else local
     remote = fx["outstation"]["masterAddress"] if remote < 0 else remote
     outstation = build_outstation(fx, points, local, remote, select_ms, confirm_ms)
-    return asyncio.run(serve(outstation, fx, bind, port, ready_file, local, remote))
+    control_socket = a.str("control-socket", DEFAULT_CONTROL_SOCKET)
+    return asyncio.run(serve(outstation, fx, bind, port, ready_file, control_socket, local, remote))
 
 
 def write_ready_file(path):
@@ -1212,7 +1220,66 @@ def write_ready_file(path):
         pass
 
 
-async def serve(outstation, fx, bind, port, ready_file, local, remote):
+def increment(db, index, by):
+    """Adds to a counter, modulo 2^32, through the library's update."""
+    counter = db.get_counter(index)
+    if counter is None:
+        raise KeyError(f"no counter at index {index}")
+    value = (counter.value + by) % (1 << 32)
+    db.update_counter(index, value, quality=counter.quality)
+    return value
+
+
+async def serve_control(db, reader, writer):
+    """One exchange on the control socket (contract 1.4): a line of JSON each way."""
+    try:
+        request = json.loads(await reader.readline())
+        if request.get("operation") != "counter-increment":
+            raise KeyError("unknown control operation")
+        reply = {"ok": True, "value": increment(db, request["index"], request["by"])}
+    except (KeyError, ValueError) as e:
+        reply = {"ok": False, "message": str(e)}
+    writer.write((json.dumps(reply) + "\n").encode())
+    await writer.drain()
+    writer.close()
+
+
+def counter_increment_main(argv):
+    """The counter-increment command (contract 1.4), on the running server's control socket."""
+    start = time.monotonic()
+    try:
+        a = Args(argv, ["index", "by", "control-socket", "timeout-ms"])
+        index = a.required_integer("index", 0, 65535)
+        by = a.integer("by", 1, 1, 4294967295)
+        timeout_ms = a.integer("timeout-ms", 5000, 1, 3600000)
+    except UsageError as e:
+        log(f"counter-increment: {e}")
+        return EXIT_USAGE
+
+    def finish(connected, value, error, code):
+        emit({"schemaVersion": SCHEMA_VERSION, "adapter": ADAPTER, "operation": "counter-increment",
+              "ok": error is None, "error": error, "connected": connected, "iin": None, "objects": [],
+              "index": index, "value": value, "elapsedMs": int((time.monotonic() - start) * 1000)})
+        return code
+
+    with socket.socket(socket.AF_UNIX) as s:
+        s.settimeout(timeout_ms / 1000)
+        try:
+            s.connect(a.str("control-socket", DEFAULT_CONTROL_SOCKET))
+        except OSError as e:
+            return finish(False, None, {"code": "connect-failed", "message": str(e)}, EXIT_CONNECT_FAILED)
+        try:
+            s.sendall((json.dumps({"operation": "counter-increment", "index": index, "by": by}) + "\n").encode())
+            with s.makefile("rb") as f:
+                reply = json.loads(f.readline())
+            if not reply.get("ok"):
+                raise ValueError(reply.get("message", "no answer"))
+        except (OSError, ValueError) as e:
+            return finish(True, None, {"code": "failed", "message": str(e)}, EXIT_FAILED)
+    return finish(True, reply["value"], None, EXIT_OK)
+
+
+async def serve(outstation, fx, bind, port, ready_file, control_socket, local, remote):
     runner = EventRunner(outstation=outstation, host=bind, port=port)
     task = asyncio.create_task(runner.run())
     deadline = time.monotonic() + 5
@@ -1224,6 +1291,13 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
             log(f"server: not listening on {bind}:{port} after 5 s")
             return EXIT_FAILED
         await asyncio.sleep(0.01)
+    try:
+        if os.path.exists(control_socket):
+            os.remove(control_socket)
+        control = await asyncio.start_unix_server(partial(serve_control, outstation.database), control_socket)
+    except OSError as e:
+        log(f"server: cannot open the control socket {control_socket}: {e}")
+        return EXIT_FAILED
     try:
         await asyncio.to_thread(write_ready_file, ready_file)
     except OSError as e:
@@ -1239,10 +1313,12 @@ async def serve(outstation, fx, bind, port, ready_file, local, remote):
     signalled = stop.is_set()
     if task in done and not signalled:
         log(f"server: the runner ended without a signal: {task.exception() if not task.cancelled() else 'cancelled'}")
-    try:
-        os.remove(ready_file)
-    except OSError:
-        pass
+    control.close()
+    for path in (ready_file, control_socket):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     await runner.stop()
     task.cancel()
     # Wait for the cancelled runner, at most 2 s; how it ended was logged
@@ -1346,12 +1422,23 @@ def print_capabilities():
             "freezeAtTimeClient": True,
             "analogFreezeServer": False,
             "analogFreezeClient": True,
+            # Contract 1.4.
+            "counterIncrementServer": True,
+            "frozenCounterEventsServer": False,
+            "frozenCounterEventTimeClient": True,
             # Contract 1.3: neither role reads or writes group 34 (the
             # outstation's deadbands are configuration only).
             "deadbandWriteServer": False,
             "deadbandWriteClient": False,
             "deadbandReadServer": False,
             "deadbandReadClient": False,
+        },
+        # Contract 1.4: it raises no frozen counter events, so it has no policy.
+        "frozenEventPolicies": [],
+        "unsupportedReasons": {
+            "frozenCounterEventsServer": "dnp3py's outstation has no frozen counter event: its encoder would report "
+                                         "one as a counter event of group 22, and the fixture rules refuse a class "
+                                         "on a frozen counter",
         },
         "pointTypes": list(SERVED),
         # Contract 1.2: what the outstation does differently from the master.
@@ -1392,6 +1479,8 @@ def main(argv):
         return server_main(rest)
     if command == "client":
         return client_main(rest)
+    if command == "counter-increment":
+        return counter_increment_main(rest)
     if command == "print-capabilities" and not rest:
         return print_capabilities()
     if command == "print-fixture" and len(rest) <= 1:

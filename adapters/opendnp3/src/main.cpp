@@ -27,6 +27,8 @@ const char* kUsage = R"(usage: dnp3-interop <command>
   server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [--outstations N] [LINK] [TRANSPORT]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT] [--connect HOST:PORT]
+         [--control-socket PATH] [--frozen-event-policy on-change]
+  counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [--keep-alive-ms N] [LINK] [TRANSPORT] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
@@ -163,7 +165,15 @@ int print_capabilities()
           {"deadbandWriteServer", false},
           {"deadbandWriteClient", false},
           {"deadbandReadServer", false},
-          {"deadbandReadClient", false}}},
+          {"deadbandReadClient", false},
+          // Contract 1.4.
+          {"counterIncrementServer", true},
+          {"frozenCounterEventsServer", true},
+          {"frozenCounterEventTimeClient", true}}},
+        // The library's freeze detects events: no setting forces one.
+        {"frozenEventPolicies", {"on-change"}},
+        // Every event stays buffered until confirmed.
+        {"frozenEventRetention", "all"},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
           "analogOutputs", "octetStrings"}},
@@ -210,6 +220,8 @@ int main(int argc, char* argv[])
             return adapter::run_server(rest);
         if (command == "client")
             return adapter::run_client(rest);
+        if (command == "counter-increment")
+            return adapter::run_counter_increment(rest);
         if (command == "print-capabilities" && rest.empty())
             return print_capabilities();
         if (command == "print-fixture" && rest.size() <= 1)
