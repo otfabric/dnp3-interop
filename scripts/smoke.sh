@@ -77,6 +77,8 @@ for fixture in baseline dnp3py; do
     then ok "print-fixture ${fixture}"; else fail "print-fixture ${fixture} differs from fixtures/${fixture}/fixture.json"; fi
 done
 expect_exit 1 "print-fixture of an unknown name" "${IMAGE}" print-fixture no-such-fixture
+expect_exit 2 "print-fixture of a name with a /" "${IMAGE}" print-fixture baseline/fixture.json
+expect_exit 2 "print-fixture of a name with .." "${IMAGE}" print-fixture ..
 
 # ---- usage errors never touch the network ----
 # (Without a command the image runs "server": that is its default.)
@@ -120,6 +122,26 @@ if ! jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
 fi
 if jq -e '.features.multipleOutstationsServer' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "--outstations that take in the master's address" "${IMAGE}" server --outstations 2 --remote-addr 1025
+fi
+if jq -e '.features.secureAuthentication' <<<"${caps}" >/dev/null 2>&1; then
+    # A MAC algorithm of the contract that the image does not list is a usage error.
+    for mac in hmac-sha1-4 hmac-sha1-8 hmac-sha1-10 hmac-sha256-8 hmac-sha256-16 aes-gmac; do
+        jq -e --arg m "${mac}" '.secureAuthentication.macAlgorithms | index($m)' <<<"${caps}" >/dev/null 2>&1 && continue
+        expect_exit 2 "--sa-mac ${mac}, which the image does not list" "${IMAGE}" client integrity-poll --host nowhere \
+            --sa-update-key 000102030405060708090a0b0c0d0e0f --sa-mac "${mac}"
+        break
+    done
+    expect_exit 2 "an unknown --sa-mac" "${IMAGE}" client integrity-poll --host nowhere \
+        --sa-update-key 000102030405060708090a0b0c0d0e0f --sa-mac hmac-md5
+fi
+if jq -e '.features.operateDelayClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "--operate-delay-ms without --mode sbo" "${IMAGE}" client operate --host nowhere --type g41v1 --index 0 --value 1 --operate-delay-ms 10
+fi
+if jq -e '.features.activateConfigClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "manage --spec without activate-config" "${IMAGE}" client manage --host nowhere --function save-configuration --spec a
+fi
+if jq -e '.features.fileAuthClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "file-info with credentials" "${IMAGE}" client file-info --host nowhere --name /a --file-user u --file-password p
 fi
 if jq -e '.features.manageClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "manage with an unknown function" "${IMAGE}" client manage --host nowhere --function reboot
@@ -239,6 +261,19 @@ code=$(docker inspect --format '{{.State.ExitCode}}' "${name}")
 last=$(docker logs "${name}" 2>/dev/null | tail -1)
 if [[ "${code}" == 0 ]]; then ok "SIGTERM: exit 0"; else fail "SIGTERM: exit ${code}"; fi
 if jq -e '.event == "stopped"' <<<"${last}" >/dev/null 2>&1; then ok "stopped event"; else fail "last stdout line is not the stopped event: ${last}"; fi
+stop_server "${name}"
+
+# ---- another address and port ----
+name=$(start_server "${ADAPTER}" "${FIXTURE_ARGS[@]}" --bind-address 0.0.0.0 --port 20002)
+if wait_ready "${name}"; then
+    first=$(docker logs "${name}" 2>/dev/null | head -1)
+    if jq -e '.address == "0.0.0.0:20002"' <<<"${first}" >/dev/null 2>&1; then ok "ready event of --bind-address and --port"
+    else fail "--bind-address 0.0.0.0 --port 20002: ready event ${first}"; fi
+    doc=$(run_client "${ADAPTER}" integrity-poll --host "${name}" --port 20002)
+    if jq -e '.ok' <<<"${doc}" >/dev/null 2>&1; then ok "client on --port 20002"; else fail "client on --port 20002: ${doc}"; fi
+else
+    fail "server with --bind-address and --port did not become ready"
+fi
 stop_server "${name}"
 
 # ---- a port that is already taken ----

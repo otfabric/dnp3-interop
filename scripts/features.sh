@@ -488,7 +488,8 @@ reverse_op() {
     docker rm -f "${listener}" "${outst}" >/dev/null 2>&1
     docker run -d --name "${listener}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" -v "${PKI}:/pki:ro" \
         "$(image_of "${client}")" client "$@" --listen --connect-timeout-ms 30000 ${ctls[@]+"${ctls[@]}"} >/dev/null
-    start "${server}" "${outst}" -- --connect "${listener}:20000" ${stls[@]+"${stls[@]}"}
+    # shellcheck disable=SC2046 # the fixture flag, or nothing
+    start "${server}" "${outst}" -- --connect "${listener}:20000" $(reverse_fixture "${server}") ${stls[@]+"${stls[@]}"}
     docker wait "${listener}" >/dev/null 2>&1
     docker logs "${listener}" 2>/dev/null | keep
     # The caller runs this in a subshell: the outstation's events go to a file.
@@ -496,12 +497,18 @@ reverse_op() {
     docker rm -f "${listener}" "${outst}" >/dev/null 2>&1
 }
 
+# reverse_fixture <server>: the fixture flag of an outstation that cannot
+# serve the baseline (no double-bit inputs or octet strings): the dnp3py one.
+serves_baseline() { jq -e '.pointTypes | index("doubleBitInputs") and index("octetStrings")' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
+reverse_fixture() { serves_baseline "$1" || echo "--fixture /fixtures/dnp3py/fixture.json"; }
+
 # reverse <server> <client> <pair> <tcp|tls>
 reverse() {
-    local server="$1" client="$2" pair="$3" tag="$4" doc
+    local server="$1" client="$2" pair="$3" tag="$4" doc want="${WANT_POLL}"
+    serves_baseline "${server}" || want=$(awk -F'\t' '$6 == "integrity-poll" { print $4; exit }' "${ROOT}/tests/cases-dnp3py.tsv")
     doc=$(reverse_op "${server}" "${client}" "${tag}" integrity-poll)
     at_pair "reverse.${tag}.integrity-poll" "${pair}"
-    check "${pair}: [reverse ${tag}] integrity-poll" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
+    check "${pair}: [reverse ${tag}] integrity-poll" "${want}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
     at_pair "reverse.${tag}.outstation-dialled" "${pair}"
     check "${pair}: [reverse ${tag}] the outstation dialled" "true ${tag} true" \
         "$(jq -rs '(map(select(.event == "ready")) | .[0]) as $r | "\($r.dial) \($r.transport) \(any(.[]; .event == "connection-opened"))"' \
@@ -561,6 +568,239 @@ multi() {
     fi
 }
 
+# has_server <adapter> <feature>: the feature as its server role has it
+# (serverFeatures overrides features, contract 1.2).
+has_server() {
+    jq -e --arg f "$2" 'if (.serverFeatures // {}) | has($f) then .serverFeatures[$f] == true else .features[$f] == true end' \
+        "${WORK}/caps-$1.json" >/dev/null 2>&1
+}
+# present <adapter>: the adapter is one of this run's.
+present() { [[ " ${ADAPTERS[*]} " == *" $1 "* ]]; }
+# at_index <document> <group> <index>: the value of one point, whatever else came.
+at_index() { jq -r --argjson g "$2" --argjson i "$3" '[.objects[]? | select(.group == $g and .index == $i) | .value] | if length == 0 then "-" else last | tostring end' <<<"$1" 2>/dev/null; }
+# command_events <container>: the server's command events, one line each.
+command_events() {
+    docker logs "$1" 2>/dev/null | jq -r 'select(.event == "command")
+        | "\(.function):\(.type):\(.index):\(.code // (.value | if type == "number" then . + 0 else . end)):\(.count // "-")/\(.onMs // "-")/\(.offMs // "-"):\(.status)"' | paste -sd' ' -
+}
+CONTROLS=/fixtures/controls/fixture.json
+
+# coverage <client> <server> <pair>: the checks of the coverage additions:
+# command event fields, select and confirm timeouts, restart, a control from
+# another master, connection replacement, DISABLE UNSOLICITED by value,
+# counter wrap, ACTIVATE_CONFIG.
+coverage() {
+    local client="$1" server="$2" pair="$3" name doc a b
+    has_role "${server}" server || return 0
+
+    # ---- command event fields (contract 1.0) ----
+    name="gc-${server}-${RUN_ID}"
+    start "${server}" "${name}" -- --fixture "${CONTROLS}"
+    if wait_ready "${name}"; then
+        local want="direct-operate:g41v1:0:5:-/-/-:SUCCESS direct-operate:g41v1:0:5000:-/-/-:OUT_OF_RANGE"
+        client "${client}" -- operate --type g41v1 --index 0 --value 5 --host "${name}" >/dev/null
+        client "${client}" -- operate --type g41v1 --index 0 --value 5000 --host "${name}" >/dev/null
+        if has "${client}" selectBeforeOperate && has "${server}" selectBeforeOperate; then
+            client "${client}" -- operate --type g12v1 --index 1 --code LATCH_ON --mode sbo --host "${name}" >/dev/null
+            want+=" select:g12v1:1:3:1/100/100:SUCCESS operate:g12v1:1:3:1/100/100:SUCCESS"
+        fi
+        # Pulses are refused (FIXTURES.md); the event still carries count, on and off.
+        doc=$(client "${client}" -- operate --type g12v1 --index 0 --code PULSE_ON --count 3 --on-ms 250 --off-ms 750 --host "${name}")
+        # Refused with NOT_SUPPORTED; opendnp3 adds PARAMETER_ERROR (rejected).
+        at_pair "coverage.pulse-on-is-refused" "${pair}"
+        check "${pair}: [commands] PULSE_ON is refused" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
+        doc=$(client "${client}" -- operate --type g12v1 --index 0 --code PULSE_OFF --host "${name}")
+        at_pair "coverage.pulse-off-is-refused" "${pair}"
+        check "${pair}: [commands] PULSE_OFF is refused" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
+        want+=" direct-operate:g12v1:0:1:3/250/750:NOT_SUPPORTED direct-operate:g12v1:0:2:1/100/100:NOT_SUPPORTED"
+        if has "${client}" directOperateNoAckClient && has "${server}" directOperateNoAckServer; then
+            client "${client}" -- operate --type g41v1 --index 1 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
+            want+=" direct-operate-no-ack:g41v1:1:7:-/-/-:SUCCESS"
+        fi
+        sleep 0.3
+        at_pair "coverage.command-event-fields" "${pair}"
+        check "${pair}: [commands] the server's command events" "${want}" "$(command_events "${name}")"
+    else
+        at_pair "coverage.server-start" "${pair}"
+        fail "${pair}: [commands] server did not start"
+    fi
+    stop_server "${name}"
+
+    # ---- an OPERATE after the select timed out (contract 1.0, 1.5) ----
+    if has "${client}" operateDelayClient && has "${server}" selectBeforeOperate; then
+        name="gs-${server}-${RUN_ID}"
+        start "${server}" "${name}" -- --fixture "${CONTROLS}" --select-timeout-ms 500
+        if wait_ready "${name}"; then
+            doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --mode sbo --operate-delay-ms 1500 --host "${name}")
+            at_pair "coverage.operate-after-the-select-timeout" "${pair}"
+            check "${pair}: [select] an OPERATE after the select timeout" "ok=false error=command-failed TIMEOUT" \
+                "$(outcome "${doc}") $(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+            at_pair "coverage.is-not-carried-out" "${pair}"
+            check "${pair}: [select] is not carried out" "false" \
+                "$(at_index "$(client "${client}" -- read --group 10 --variation 0 --start 0 --stop 0 --host "${name}")" 10 0)"
+            doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --mode sbo --operate-delay-ms 100 --host "${name}")
+            at_pair "coverage.operate-within-the-select-timeout" "${pair}"
+            check "${pair}: [select] an OPERATE within the select timeout" "ok=true error=- SUCCESS" \
+                "$(outcome "${doc}") $(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.select-timeout" "${pair}"
+        skip "${pair}: select timeout (needs client:operateDelayClient,server:selectBeforeOperate)"
+    fi
+
+    # ---- events the master does not confirm (contract 1.0, 1.5) ----
+    if has "${client}" noConfirmClient; then
+        name="gk-${server}-${RUN_ID}"
+        # shellcheck disable=SC2046 # the fixture flag, or nothing
+        start "${server}" "${name}" -- $(reverse_fixture "${server}") --confirm-timeout-ms 500
+        if wait_ready "${name}"; then
+            client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
+            a=$(objects "$(client "${client}" -- event-poll --classes 1,2,3 --no-confirm --host "${name}")")
+            sleep 1
+            b=$(objects "$(client "${client}" -- event-poll --classes 1,2,3 --host "${name}")")
+            at_pair "coverage.unconfirmed-events-are-sent-again" "${pair}"
+            check "${pair}: [confirm] unconfirmed events are sent again" "${a:-<events>}" "${b}"
+            at_pair "coverage.confirmed-events-are-not" "${pair}"
+            check "${pair}: [confirm] confirmed events are not" "" "$(objects "$(client "${client}" -- event-poll --host "${name}")")"
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.confirm-timeout" "${pair}"
+        skip "${pair}: confirm timeout (needs client:noConfirmClient)"
+    fi
+
+    # ---- restart: the event, and DEVICE_RESTART until a master clears it (contract 1.0) ----
+    if has "${client}" restart && has "${server}" restart; then
+        name="gr-${server}-${RUN_ID}"
+        # shellcheck disable=SC2046 # the fixture flag, or nothing
+        start "${server}" "${name}" -- $(reverse_fixture "${server}")
+        if wait_ready "${name}"; then
+            if present dnp3py && [[ "${client}" != dnp3py ]]; then
+                # dnp3py's master never clears IIN1.7, so it reads it as it is.
+                at_pair "coverage.device-restart-at-start" "${pair}"
+                check "${pair}: [restart] DEVICE_RESTART at start" "true" \
+                    "$(client dnp3py -- integrity-poll --host "${name}" | jq -r '.iin | index("DEVICE_RESTART") != null')"
+                client "${client}" -- integrity-poll --host "${name}" >/dev/null
+                at_pair "coverage.device-restart-cleared-by-the-master" "${pair}"
+                check "${pair}: [restart] cleared by the master" "false" \
+                    "$(client dnp3py -- integrity-poll --host "${name}" | jq -r '.iin | index("DEVICE_RESTART") != null')"
+            fi
+            client "${client}" -- restart --type cold --host "${name}" >/dev/null
+            sleep 0.3
+            at_pair "coverage.cold-restart-event" "${pair}"
+            check "${pair}: [restart] the cold restart event" "cold" \
+                "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "restart") | .type' | paste -sd' ' -)"
+        fi
+        stop_server "${name}"
+    fi
+
+    # ---- assign-class: the server event (contract 1.0; opendnp3 only) ----
+    if has "${client}" assignClassClient && has "${server}" assignClassServer && [[ "${server}" == opendnp3 ]]; then
+        name="ga-${server}-${RUN_ID}"
+        start "${server}" "${name}" -- --fixture "${CONTROLS}"
+        if wait_ready "${name}"; then
+            client "${client}" -- assign-class --class 2 --group 30 --start 0 --stop 1 --host "${name}" >/dev/null
+            sleep 0.3
+            at_pair "coverage.assign-class-event" "${pair}"
+            check "${pair}: [assign-class] the server event" "analogInputs:2:0:1" \
+                "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "assign-class") | "\(.pointType):\(.class):\(.start):\(.stop)"' | paste -sd' ' -)"
+        fi
+        stop_server "${name}"
+    fi
+
+    # ---- a control from another master (contract 1.0) ----
+    name="gw-${server}-${RUN_ID}"
+    start "${server}" "${name}" -- --fixture "${CONTROLS}"
+    if wait_ready "${name}"; then
+        client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --local-addr 7 --timeout-ms 1500 --host "${name}" >/dev/null
+        at_pair "coverage.control-from-another-master" "${pair}"
+        check "${pair}: [address] a control from another master is not carried out" "false" \
+            "$(at_index "$(client "${client}" -- read --group 10 --variation 0 --start 0 --stop 0 --host "${name}")" 10 0)"
+    fi
+    stop_server "${name}"
+
+    # ---- a new connection replaces the current one (contract 1.0) ----
+    # The first connection is dnp3py's master, which does not dial again
+    # (opendnp3's channel would, and take the outstation back).
+    name="gn-${server}-${RUN_ID}"
+    present dnp3py && start "${server}" "${name}" -- --fixture "${CONTROLS}"
+    if present dnp3py && wait_ready "${name}"; then
+        docker rm -f "gm-${server}-${RUN_ID}" >/dev/null 2>&1
+        docker run -d --name "gm-${server}-${RUN_ID}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" \
+            "$(image_of dnp3py)" client monitor --duration-ms 5000 --host "${name}" >/dev/null
+        sleep 1.5
+        doc=$(client "${client}" -- integrity-poll --host "${name}")
+        at_pair "coverage.second-connection-is-served" "${pair}"
+        check "${pair}: [connection] a second connection is served" "ok=true error=-" "$(outcome "${doc}")"
+        docker wait "gm-${server}-${RUN_ID}" >/dev/null 2>&1
+        at_pair "coverage.first-connection-is-closed" "${pair}"
+        check "${pair}: [connection] the first is closed" "ok=false error=connection-lost" \
+            "$(outcome "$(docker logs "gm-${server}-${RUN_ID}" 2>/dev/null | keep)")"
+        docker rm -f "gm-${server}-${RUN_ID}" >/dev/null 2>&1
+    fi
+    stop_server "${name}"
+
+    # ---- DISABLE UNSOLICITED, by value (contract 1.0) ----
+    if has "${client}" unsolicited && has_server "${server}" unsolicited; then
+        name="gu-${server}-${RUN_ID}"
+        start "${server}" "${name}" --
+        if wait_ready "${name}"; then
+            client "${client}" -- disable-unsolicited --host "${name}" >/dev/null
+            client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
+            doc=$(client "${client}" -- monitor --duration-ms 2000 --host "${name}")
+            at_pair "coverage.no-unsolicited-responses-after-a-disable" "${pair}"
+            check "${pair}: [unsolicited] none after DISABLE UNSOLICITED" "" \
+                "$(jq -r '[.objects[]? | select(.unsolicited)] | length | select(. > 0)' <<<"${doc}" 2>/dev/null)"
+            at_pair "coverage.events-stay-in-the-buffer" "${pair}"
+            check "${pair}: [unsolicited] the events stay in the buffer" "g11v2:0=true g2v2:1=true" \
+                "$(objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")")"
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.disable-unsolicited" "${pair}"
+        skip "${pair}: DISABLE UNSOLICITED by value (needs client:unsolicited,server:unsolicited)"
+    fi
+
+    # ---- a counter wraps modulo 2^32 (contract 1.4) ----
+    if has "${server}" counterIncrementServer; then
+        name="gv-${server}-${RUN_ID}"
+        start "${server}" "${name}" -- --fixture /fixtures/counters/fixture.json
+        if wait_ready "${name}"; then
+            a=$(at_index "$(client "${client}" -- read --group 20 --variation 0 --start 0 --stop 0 --host "${name}")" 20 0)
+            doc=$(increment "${name}" 0 4294967295)
+            at_pair "coverage.counter-wraps" "${pair}"
+            check "${pair}: [counters] an increment of 2^32-1 wraps" "$((a - 1 < 0 ? 4294967295 : a - 1))" \
+                "$(at_index "$(client "${client}" -- read --group 20 --variation 0 --start 0 --stop 0 --host "${name}")" 20 0)"
+        fi
+        stop_server "${name}"
+    fi
+
+    # ---- ACTIVATE_CONFIG (contract 1.5) ----
+    if has "${client}" activateConfigClient; then
+        name="gp-${server}-${RUN_ID}"
+        start "${server}" "${name}" -- --fixture "${CONTROLS}"
+        if wait_ready "${name}"; then
+            doc=$(client "${client}" -- manage --function activate-config --spec config.xml --host "${name}")
+            if has "${server}" activateConfigServer; then
+                at_pair "coverage.activate-config" "${pair}"
+                check "${pair}: [manage] ACTIVATE_CONFIG" "ok=true error=-" "$(outcome "${doc}")"
+                sleep 0.3
+                at_pair "coverage.activate-config-event" "${pair}"
+                check "${pair}: [manage] the server's ACTIVATE_CONFIG event" "31" \
+                    "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "manage") | .function' | paste -sd' ' -)"
+            else
+                at_pair "coverage.activate-config-refused" "${pair}"
+                check "${pair}: [manage] an outstation without ACTIVATE_CONFIG refuses it" "ok=false error=rejected" "$(outcome "${doc}")"
+            fi
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.activate-config" "${pair}"
+        skip "${pair}: ACTIVATE_CONFIG (needs client:activateConfigClient)"
+    fi
+}
+
 suite() {
     local server="$1" k="$2" client pair name doc host run ip_server ip_client
     PASS=0 FAIL=0 SKIPPED=0 KNOWN=0
@@ -596,6 +836,11 @@ suite() {
                 at_pair "tls.outstation-does-not-serve-a-master-it-does-not-trust" "${pair}"
                 check "${pair}: [tls] an outstation does not serve a master it does not trust" \
                     "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
+                doc=$(client "${client}" -- integrity-poll --host "${host}" --connect-timeout-ms 2000 --timeout-ms 2000 --tls \
+                    --tls-ca /pki/ca.pem --tls-cert /pki/client.pem --tls-key /pki/client.key --tls-server-name not-the-outstation)
+                at_pair "tls.certificate-of-another-name-is-refused" "${pair}"
+                check "${pair}: [tls] a certificate of another name is refused" \
+                    "ok=false error=connect-failed" "$(outcome "${doc}")"
             else
                 at_pair "tls.server-start" "${pair}"
                 fail "${pair}: [tls] server did not start"
@@ -615,6 +860,17 @@ suite() {
                 check "${pair}: [udp] ready event" "udp" "$(ready_transport "${name}")"
                 udp_run() { local a="$1" ipc="$2" ips="$3"; shift 3; client "${a}" --ip "${ipc}" -- "$@" --host "${ips}" --transport udp; }
                 basics "${pair}" udp "udp_run ${client} ${ip_client} ${ip_server}"
+            else
+                at_pair "udp.server-start" "${pair}"
+                fail "${pair}: [udp] server did not start"
+            fi
+            stop_server "${name}"
+            # The master on another port of its own (--udp-local-port).
+            start "${server}" "${name}" --ip "${ip_server}" -- --transport udp --udp-peer "${ip_client}:20007"
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" --ip "${ip_client}" -- integrity-poll --host "${ip_server}" --transport udp --udp-local-port 20007)
+                at_pair "udp.master-on-another-port" "${pair}"
+                check "${pair}: [udp] a master on another port of its own" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
             else
                 at_pair "udp.server-start" "${pair}"
                 fail "${pair}: [udp] server did not start"
@@ -698,6 +954,11 @@ suite() {
                 check "${pair}: [files] server file events" \
                     "read:/readme.txt:SUCCESS read:/data/blocks.bin:SUCCESS list:/:SUCCESS info:/readme.txt:SUCCESS write:/logs/new.txt:SUCCESS" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file") | "\(.action):\(.name):\(.status)"' | head -5 | paste -sd' ' -)"
+                if has "${client}" fileDeleteClient; then
+                    at_pair "files.server-delete-event" "${pair}"
+                    check "${pair}: [files] the server's delete event" "delete:/logs/new.txt:SUCCESS" \
+                        "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file" and .action == "delete") | "\(.action):\(.name):\(.status)"' | paste -sd' ' -)"
+                fi
             else
                 at_pair "files.server-start" "${pair}"
                 fail "${pair}: [files] server did not start"
@@ -730,6 +991,10 @@ suite() {
                 at_pair "files.adds-to-the-end-of-the-file" "${pair}"
                 check "${pair}: [files] adds to the end of the file" "61626364" \
                     "$(client "${client}" -- file-get --name /logs/a.txt --host "${name}" | jq -r '.file.content')"
+                sleep 0.3
+                at_pair "files.server-append-event" "${pair}"
+                check "${pair}: [files] the server's append event" "write:/logs/a.txt:SUCCESS append:/logs/a.txt:SUCCESS" \
+                    "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file" and (.action == "write" or .action == "append")) | "\(.action):\(.name):\(.status)"' | paste -sd' ' -)"
             else
                 at_pair "files.server-start" "${pair}"
                 fail "${pair}: [files] server did not start"
@@ -866,6 +1131,27 @@ suite() {
                 fail "${pair}: [freeze] server did not start"
             fi
             stop_server "${name}"
+            start "${server}" "${name}" --
+            if wait_ready "${name}"; then
+                doc=$(client "${client}" -- freeze --at 1000 --host "${name}")
+                at_pair "freeze.time-already-past-is-refused" "${pair}"
+                check "${pair}: [freeze] a time already past is refused" "ok=false error=rejected" "$(outcome "${doc}")"
+                local noack=()
+                has "${client}" freezeNoAckClient && noack=(--no-ack)
+                doc=$(client "${client}" -- freeze --at +1000 --interval-ms 2500 ${noack[@]+"${noack[@]}"} --host "${name}")
+                at_pair "freeze.at-time-with-an-interval" "${pair}"
+                check "${pair}: [freeze] FREEZE AT TIME${noack[*]:+ NO ACK} with an interval" "ok=true error=-" "$(outcome "${doc}")"
+                client "${client}" -- monitor --duration-ms 2000 --host "${name}" >/dev/null
+                at_pair "freeze.first-of-the-repeating-freezes" "${pair}"
+                check "${pair}: [freeze] the first of the repeating freezes" "g21v1:0=123456 g21v2:1=65535" \
+                    "$(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+                increment "${name}" 0 5 >/dev/null
+                client "${client}" -- monitor --duration-ms 2500 --host "${name}" >/dev/null
+                at_pair "freeze.repeats-at-the-interval" "${pair}"
+                check "${pair}: [freeze] repeats at the interval" "g21v1:0=123461 g21v2:1=65535" \
+                    "$(objects "$(client "${client}" -- read --group 21 --variation 0 --start 0 --stop 1 --host "${name}")")"
+            fi
+            stop_server "${name}"
         else
             at_pair "skipped.freeze-at-time" "${pair}"
             skip "${pair}: freeze at time (needs server:freezeAtTimeServer,client:freezeAtTimeClient)"
@@ -885,6 +1171,17 @@ suite() {
                 fail "${pair}: [freeze] server did not start"
             fi
             stop_server "${name}"
+            if has "${server}" freezeAtTimeServer && has "${client}" freezeAtTimeClient; then
+                start "${server}" "${name}" -- --fixture /fixtures/extended/fixture.json
+                if wait_ready "${name}"; then
+                    doc=$(client "${client}" -- freeze --group 30 --at +1000 --host "${name}")
+                    client "${client}" -- monitor --duration-ms 2000 --host "${name}" >/dev/null
+                    at_pair "freeze.analog-inputs-at-a-time" "${pair}"
+                    check "${pair}: [freeze] analog inputs at a time" "ok=true error=- 0 49.5" \
+                        "$(outcome "${doc}") $(client dscsystems -- read --group 31 --variation 0 --start 0 --stop 1 --host "${name}" | jq -r '[.objects[].value] | join(" ")')"
+                fi
+                stop_server "${name}"
+            fi
         else
             at_pair "skipped.analog-freeze" "${pair}"
             skip "${pair}: analog freeze (needs server:analogFreezeServer,client:analogFreezeClient)"
@@ -1103,7 +1400,7 @@ suite() {
                 doc=$(client "${client}" -- attribute-read --set 1 --host "${name}")
                 at_pair "attributes.read-a-set" "${pair}"
                 check "${pair}: [attributes] read a set" \
-                    "1:visibleString:dnp3-interop reference outstation 2:unsignedInt:4000000000 10:visibleString:writable text 11:unsignedInt:7" \
+                    "1:visibleString:dnp3-interop reference outstation 2:unsignedInt:4000000000 10:visibleString:writable text 11:unsignedInt:7 12:signedInt:-7" \
                     "$(jq -r "${attrs}" <<<"${doc}" 2>/dev/null)"
                 at_pair "attributes.signed-integer" "${pair}"
                 check "${pair}: [attributes] signed integer" "signedInt:-42" \
@@ -1117,15 +1414,18 @@ suite() {
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 11 --uint 99 --host "${name}")
                 at_pair "attributes.write-an-unsigned-integer" "${pair}"
                 check "${pair}: [attributes] write an unsigned integer" "ok=true error=-" "$(outcome "${doc}")"
+                doc=$(client "${client}" -- attribute-write --set 1 --variation 12 --int -300 --host "${name}")
+                at_pair "attributes.write-a-signed-integer" "${pair}"
+                check "${pair}: [attributes] write a signed integer" "ok=true error=-" "$(outcome "${doc}")"
                 at_pair "attributes.written-values-read-back" "${pair}"
-                check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99" \
+                check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99 12:signedInt:-300" \
                     "$(client "${client}" -- attribute-read --set 1 --host "${name}" | jq -r '[.attributes[]? | select(.variation >= 10)] | sort_by(.variation) | map("\(.variation):\(.type):\(.value)") | join(" ")')"
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 1 --text no --host "${name}")
                 at_pair "attributes.read-only-attribute-refuses-a-write" "${pair}"
                 check "${pair}: [attributes] a read-only attribute refuses a write" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
                 sleep 0.3
                 at_pair "attributes.server-events" "${pair}"
-                check "${pair}: [attributes] server events" "10:changed 11:99" \
+                check "${pair}: [attributes] server events" "10:changed 11:99 12:-300" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "attribute-write") | "\(.variation):\(.value)"' | paste -sd' ' -)"
             else
                 at_pair "attributes.server-start" "${pair}"
@@ -1188,6 +1488,8 @@ suite() {
             at_pair "skipped.extended-point-types" "${pair}"
             skip "${pair}: extended point types (needs a server that serves the extended fixture)"
         fi
+
+        coverage "${client}" "${server}" "${pair}"
 
         # ---- secure authentication ----
         if has "${server}" secureAuthentication && has "${client}" secureAuthentication; then

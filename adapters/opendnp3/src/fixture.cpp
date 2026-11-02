@@ -6,6 +6,7 @@
 #include "common.h"
 
 #include <cmath>
+#include <ctime>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -296,7 +297,7 @@ std::string load_fixture(const std::string& path, Fixture& out)
         return "not a JSON object";
 
     Checker c;
-    std::set<std::string> top = {"schemaVersion", "name", "description", "outstation"};
+    std::set<std::string> top = {"schemaVersion", "name", "description", "outstation", "timeAndIntervals"};
     for (const auto& r : type_rules())
         top.insert(r.name);
     for (auto it = fx.begin(); it != fx.end(); ++it)
@@ -392,6 +393,65 @@ std::string load_fixture(const std::string& path, Fixture& out)
                 c.add(std::string(rule.name) + "[" + std::to_string(p.index) + "]: duplicate index");
             seen.insert(p.index);
             points.push_back(p);
+        }
+    }
+
+    if (fx.contains("timeAndIntervals"))
+    {
+        const auto& list = fx["timeAndIntervals"];
+        static const std::regex time_rx("^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})\\.([0-9]{3})Z$");
+        std::set<uint16_t> seen;
+        if (!list.is_array())
+            c.add("timeAndIntervals must be an array");
+        for (size_t i = 0; list.is_array() && i < list.size(); ++i)
+        {
+            const auto& o = list[i];
+            const std::string where = "timeAndIntervals[" + std::to_string(i) + "]";
+            if (!o.is_object())
+            {
+                c.add(where + " must be an object");
+                continue;
+            }
+            for (auto it = o.begin(); it != o.end(); ++it)
+            {
+                if (it.key() != "index" && it.key() != "time" && it.key() != "interval" && it.key() != "units")
+                    c.add(where + ": unknown field '" + it.key() + "'");
+            }
+            TimeAndIntervalPoint t;
+            std::smatch m;
+            std::string text = o.value("time", json()).is_string() ? o["time"].get<std::string>() : "";
+            if (!o.contains("index") || !is_integer(o["index"]) || o["index"].get<int64_t>() < 0
+                || o["index"].get<int64_t>() > 65535)
+                c.add(where + ": index must be 0..65535");
+            else
+                t.index = static_cast<uint16_t>(o["index"].get<int64_t>());
+            if (!std::regex_match(text, m, time_rx))
+                c.add(where + ": time must be YYYY-MM-DDTHH:MM:SS.mmmZ");
+            else
+            {
+                std::tm tm{};
+                tm.tm_year = std::stoi(m[1]) - 1900;
+                tm.tm_mon = std::stoi(m[2]) - 1;
+                tm.tm_mday = std::stoi(m[3]);
+                tm.tm_hour = std::stoi(m[4]);
+                tm.tm_min = std::stoi(m[5]);
+                tm.tm_sec = std::stoi(m[6]);
+                t.timeMs = static_cast<uint64_t>(timegm(&tm)) * 1000 + std::stoi(m[7]);
+            }
+            if (!o.contains("interval") || !is_integer(o["interval"]) || o["interval"].get<int64_t>() < 0
+                || o["interval"].get<int64_t>() > 4294967295LL)
+                c.add(where + ": interval must be 0..4294967295");
+            else
+                t.interval = static_cast<uint32_t>(o["interval"].get<int64_t>());
+            if (!o.contains("units") || !is_integer(o["units"]) || o["units"].get<int64_t>() < 0
+                || o["units"].get<int64_t>() > 11)
+                c.add(where + ": units must be 0..11");
+            else
+                t.units = static_cast<uint8_t>(o["units"].get<int64_t>());
+            if (seen.count(t.index))
+                c.add(where + ": duplicate index");
+            seen.insert(t.index);
+            out.timeAndIntervals.push_back(t);
         }
     }
 

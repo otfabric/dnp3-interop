@@ -26,7 +26,7 @@ import struct
 import sys
 import time
 from functools import partial
-from datetime import UTC
+from datetime import UTC, datetime
 from importlib.metadata import version as package_version
 
 from dnp3.application.fragment import ObjectBlock, RequestFragment
@@ -77,7 +77,10 @@ from dnp3.outstation import (
     UnsolicitedConfig,
 )
 from dnp3.transport.reassembler import ReassemblyError
-from dnp3.transport_io.channel import ChannelError
+from dnp3.transport_io.channel import ChannelError, TcpConfig
+from dnp3.transport_io.tcp_client import TcpClientChannel
+from dnp3.transport_io.tcp_server import serve as tcp_serve
+from dnp3.datalink.builder import build_request_link_status
 
 ADAPTER = "dnp3py"
 SCHEMA_VERSION = "1.0"
@@ -88,22 +91,27 @@ EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_CONNECT_FAILED = 0, 1, 2, 3
 
 OPERATIONS = [
     "integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",
-    "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi",
+    "disable-unsolicited", "assign-class", "freeze", "monitor", "operate-multi", "manage", "deadband-write",
+    "attribute-read", "attribute-write", "file-get", "file-put", "file-ls", "file-info", "file-delete",
+    "file-authenticate",
 ]
+FILE_OPERATIONS = {"file-get", "file-put", "file-ls", "file-info", "file-delete", "file-authenticate"}
 
 USAGE = """usage: dnp3-interop <command>
 
-  server [--fixture PATH] [--bind-address ADDR] [--port N] [--ready-file PATH]
+  server [--fixture PATH] [--bind-address ADDR] [--port N] [--connect HOST:PORT] [--ready-file PATH]
          [--select-timeout-ms N] [--confirm-timeout-ms N] [--transport tcp] [LINK]
          (serves fixtures within dnp3py's limits: fixtures/dnp3py)
          [--control-socket PATH]
   counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [--transport tcp] [LINK] [operation flags]
+         [--collect-ms N] [--transport tcp] [LINK] [--keep-alive-ms N] [--no-confirm] [operation flags]
+         (or --listen [--bind-address ADDR] [--port N] instead of --host: the outstation dials)
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
       operate              --type g12v1|g41v1..4 --index N [--mode direct|sbo|direct-no-ack]
+                           [--broadcast] (direct-no-ack only) [--operate-delay-ms N] (sbo only)
                            g12v1: --code LATCH_ON|LATCH_OFF|PULSE_ON|PULSE_OFF|CLOSE|TRIP
                                   [--count N] [--on-ms N] [--off-ms N]
                            g41:   --value V
@@ -115,6 +123,15 @@ USAGE = """usage: dnp3-interop <command>
       freeze               [--clear] [--no-ack] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
       monitor              [--duration-ms N]
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
+      manage               --function initialize-data|initialize-application|start-application|
+                                      stop-application|save-configuration|activate-config [--spec NAME]
+      deadband-write       --deadbands INDEX:VALUE[,...]
+      attribute-read       --set N [--variation V]
+      attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      file-get|file-ls|file-info|file-delete --name NAME
+      file-put             --name NAME --content HEX [--append]
+      file-authenticate    (with FILE)
+      FILE (file-get, file-put, file-ls, file-delete): [--file-user U --file-password P]
   print-capabilities
   print-fixture [NAME]
   version
@@ -147,6 +164,11 @@ TIMED = {
 # Size of a control object, the status octet included.
 CONTROL_WIDTH = {(12, 1): 11, (41, 1): 5, (41, 2): 3, (41, 3): 5, (41, 4): 9}
 
+# Size of a command event object (groups 13 and 43), the time included.
+COMMAND_EVENT_WIDTH = {(13, 1): 1, (13, 2): 7, (43, 1): 5, (43, 2): 3, (43, 3): 11, (43, 4): 9, (43, 5): 5,
+                       (43, 6): 9, (43, 7): 11, (43, 8): 15}
+ANALOG_COMMAND_FORMAT = {1: "<i", 2: "<h", 3: "<i", 4: "<h", 5: "<f", 6: "<d", 7: "<f", 8: "<d"}
+
 CODES = {"LATCH_ON": 0x03, "LATCH_OFF": 0x04, "PULSE_ON": 0x01, "PULSE_OFF": 0x02, "CLOSE": 0x41, "TRIP": 0x81}
 
 COMMON_FLAGS = ["ONLINE", "RESTART", "COMM_LOST", "REMOTE_FORCED", "LOCAL_FORCED"]
@@ -166,6 +188,10 @@ def format_time(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
 
+def time_from_ms(ms):
+    return format_time(datetime.fromtimestamp(ms / 1000, UTC))
+
+
 def number(v):
     """A value with no fractional part is printed as an integer, as every adapter does."""
     if isinstance(v, float) and v.is_integer() and abs(v) < 2**53:
@@ -179,7 +205,7 @@ def iin_names(bits):
 
 def flag_names(group, flags):
     out = [COMMON_FLAGS[b] for b in range(5) if flags & (1 << b)]
-    counter, analog = group in (20, 21, 22, 23), group in (30, 32, 40, 42)
+    counter, analog = group in (20, 21, 22, 23), group in (30, 31, 32, 33, 40, 42)
     for bit in (5, 6):
         if not flags & (1 << bit):
             continue
@@ -295,6 +321,9 @@ class Recorder:
         # operate-multi: the statuses of the last request's echo (the OPERATE,
         # or the SELECT when the select failed); None until one is sent.
         self.echo = None
+        # Blocks of groups 0, 70 and 91 as (group, variation, qualifier, data).
+        self.raw = []
+        self.file_status = None
 
     def record(self, blocks, info):
         unsolicited = info.is_unsolicited
@@ -314,6 +343,16 @@ class Recorder:
             if g in (110, 111):
                 self._octets(block, g, v, unsolicited)
                 continue
+            if g in (0, 70, 91):
+                # Device attributes and file transfer: decoded by the operation.
+                self.raw.append((g, v, block.header.qualifier, bytes(block.data)))
+                continue
+            if (g, v) in COMMAND_EVENT_WIDTH:
+                self._command_events(block, g, v, unsolicited)
+                continue
+            if (g, v) == (50, 4):
+                self._time_and_interval(block, unsolicited)
+                continue
             wire = layout_for(g, v)
             if wire is None:
                 continue
@@ -323,16 +362,71 @@ class Recorder:
                 values = [(x.index, int(x.state), x.quality, x.timestamp) for x in _decode_double_bit(block, wire, None)]
             elif g in (20, 21, 22, 23):
                 values = [(x.index, x.value, x.quality, x.timestamp) for x in _decode_counter(block, wire, None)]
-            elif g in (30, 32, 40, 42):
+            elif g in (30, 31, 32, 33, 40, 42):
                 values = [(x.index, number(x.value), x.quality, x.timestamp) for x in _decode_analog(block, wire, None)]
             else:
                 continue
             for index, value, quality, stamp in values:
                 o = {"group": g, "variation": v, "index": index, "value": value, "flags": flag_names(g, quality)}
-                if (g, v) in TIMED and stamp is not None:
+                if ((g, v) in TIMED or g in (31, 33)) and stamp is not None:
                     o["time"] = format_time(stamp)
                 o["unsolicited"] = unsolicited
                 self.objects.append(o)
+
+    def _command_events(self, block, g, v, unsolicited):
+        """Groups 13 and 43 (contract 1.2): the commanded state or value, and the status of the control."""
+        width = COMMAND_EVENT_WIDTH[(g, v)]
+        layout = _decode_object_layout(block.header.qualifier, block.data)
+        if layout is None:
+            return
+        for index, offset in _iter_object_slots(layout, block.data, width):
+            raw = block.data[offset : offset + width]
+            if g == 13:
+                value, status, rest = bool(raw[0] & 0x80), raw[0] & 0x7F, raw[1:]
+            else:
+                fmt = ANALOG_COMMAND_FORMAT[v]
+                value, status = number(struct.unpack_from(fmt, raw, 1)[0]), raw[0]
+                rest = raw[1 + struct.calcsize(fmt) :]
+            o = {"group": g, "variation": v, "index": index, "value": value, "status": status_name(status)}
+            if len(rest) >= 6:
+                o["time"] = time_from_ms(int.from_bytes(rest[:6], "little"))
+            o["unsolicited"] = unsolicited
+            self.objects.append(o)
+
+    def time_and_interval_block(self, data, unsolicited):
+        """A g50v4 block from its object header on, with a start-stop range."""
+        if len(data) < 3:
+            return
+        qualifier = data[2]
+        if qualifier == 0x00 and len(data) >= 5:
+            start, stop, offset = data[3], data[4], 5
+        elif qualifier == 0x01 and len(data) >= 7:
+            (start, stop), offset = struct.unpack_from("<HH", data, 3), 7
+        else:
+            return
+        for index in range(start, stop + 1):
+            raw = data[offset : offset + 11]
+            if len(raw) < 11:
+                return
+            offset += 11
+            self.objects.append({
+                "group": 50, "variation": 4, "index": index, "value": int.from_bytes(raw[6:10], "little"),
+                "time": time_from_ms(int.from_bytes(raw[:6], "little")), "units": raw[10],
+                "unsolicited": unsolicited,
+            })
+
+    def _time_and_interval(self, block, unsolicited):
+        """g50v4 (contract 1.2): the interval as the value, the time and the units."""
+        layout = _decode_object_layout(block.header.qualifier, block.data)
+        if layout is None:
+            return
+        for index, offset in _iter_object_slots(layout, block.data, 11):
+            raw = block.data[offset : offset + 11]
+            self.objects.append({
+                "group": 50, "variation": 4, "index": index, "value": int.from_bytes(raw[6:10], "little"),
+                "time": time_from_ms(int.from_bytes(raw[:6], "little")), "units": raw[10],
+                "unsolicited": unsolicited,
+            })
 
     def _statuses(self, block, width):
         layout = _decode_object_layout(block.header.qualifier, block.data)
@@ -356,10 +450,20 @@ class RecordingMaster(Master):
     """dnp3py's master, handing every parsed fragment to a Recorder as well as to its SOE handler."""
 
     recorder: Recorder | None = None
+    _raw = b""
+
+    def process_response(self, data):
+        self._raw = data
+        return super().process_response(data)
 
     def _parse_response_objects(self, objects, info):
         if self.recorder is not None:
             self.recorder.record(objects, info)
+            t = info.truncation
+            if t is not None and (t.group, t.variation) == (50, 4):
+                # dnp3py's parser knows no width for g50v4 and stops there;
+                # the adapter frames that one block from the fragment.
+                self.recorder.time_and_interval_block(self._raw[4 + t.offset :], info.is_unsolicited)
         super()._parse_response_objects(objects, info)
 
 
@@ -413,6 +517,25 @@ class Client:
 
     async def send(self, function, blocks=()):
         await self.runner.send(self.fragment(function, blocks))
+
+    async def request_code(self, function, blocks=()):
+        """A request whose function code dnp3py's FunctionCode may not have (ACTIVATE_CONFIG)."""
+        if isinstance(function, int) and not isinstance(function, FunctionCode):
+            function = RawFunction(function)
+        return await self.request(function, blocks)
+
+
+class RawFunction:
+    """A function code as RequestHeader serialises one: by its value."""
+
+    def __init__(self, value):
+        self.value, self.name = value, f"FC{value}"
+
+    def __eq__(self, other):
+        return getattr(other, "value", other) == self.value
+
+    def __hash__(self):
+        return hash(self.value)
 
 
 def parse_operation(op, a):
@@ -499,7 +622,391 @@ def parse_operation(op, a):
         if no_ack:
             return lambda c: c.send(fc, headers)
         return lambda c: c.request(fc, headers)
+    if op == "manage":
+        return parse_manage(a)
+    if op == "deadband-write":
+        return parse_deadbands(a)
+    if op in ("attribute-read", "attribute-write"):
+        return parse_attribute_operation(op, a)
+    if op in FILE_OPERATIONS:
+        return parse_file_operation(op, a)
     raise UsageError(f"unknown operation '{op}'")
+
+
+# ---- management functions (contract 1.3; activate-config 1.5) ----
+
+MANAGE_FUNCTIONS = {
+    "initialize-data": (FunctionCode.INITIALIZE_DATA, False),
+    "initialize-application": (FunctionCode.INITIALIZE_APPLICATION, True),
+    "start-application": (FunctionCode.START_APPLICATION, True),
+    "stop-application": (FunctionCode.STOP_APPLICATION, True),
+    "save-configuration": (FunctionCode.SAVE_CONFIGURATION, False),
+}
+ACTIVATE_CONFIG = 31  # not in dnp3py's FunctionCode
+
+
+def parse_manage(a):
+    function = a.required("function")
+    if function == "activate-config":
+        # g70v8 file specifications, free format; the outstation answers g91v1.
+        spec = a.str("spec", "config.xml")
+        if not 1 <= len(spec.encode()) <= 255:
+            raise UsageError("--spec must be 1..255 octets")
+        headers = [free_format(70, 8, spec.encode())]
+        return lambda c: c.request_code(ACTIVATE_CONFIG, headers)
+    if a.has("spec"):
+        raise UsageError("--spec goes with --function activate-config")
+    if function not in MANAGE_FUNCTIONS:
+        raise UsageError("--function must be " + ", ".join(MANAGE_FUNCTIONS) + " or activate-config")
+    fc, applications = MANAGE_FUNCTIONS[function]
+    headers = [all_objects(90, 1)] if applications else []
+    return lambda c: c.request(fc, headers)
+
+
+# ---- analog deadbands (contract 1.3) ----
+
+
+def parse_deadbands(a):
+    items = []
+    for item in a.required("deadbands").split(","):
+        index, sep, value = item.partition(":")
+        try:
+            i, v = int(index, 10), float(value)
+        except ValueError:
+            i, v = -1, -1.0
+        if not sep or not 0 <= i <= 65535 or not math.isfinite(v) or v < 0 or v > 3.4028234663852886e38:
+            raise UsageError("--deadbands items are INDEX:VALUE, VALUE a non-negative number")
+        items.append((i, v))
+    # g34v3 (single precision), a one-octet index prefix when every index fits.
+    if all(i <= 0xFF for i, _ in items) and len(items) <= 0xFF:
+        data = bytes([len(items)]) + b"".join(struct.pack("<Bf", i, v) for i, v in items)
+        header = block(34, 3, RangeCode.UINT8_COUNT, data, PrefixCode.UINT8_INDEX)
+    else:
+        data = struct.pack("<H", len(items)) + b"".join(struct.pack("<Hf", i, v) for i, v in items)
+        header = block(34, 3, RangeCode.UINT16_COUNT, data, PrefixCode.UINT16_INDEX)
+    return lambda c: c.request(FunctionCode.WRITE, [header])
+
+
+# ---- device attributes (contract 1.3) ----
+
+ATTRIBUTE_TYPES = {1: "visibleString", 2: "unsignedInt", 3: "signedInt", 4: "float", 5: "octetString",
+                   6: "bitString", 7: "time", 254: "attributeList", 255: "extendedAttributeList"}
+
+
+def attribute_value(kind, raw):
+    if kind == 1:
+        return raw.decode("utf-8", "replace")
+    if kind == 2:
+        return int.from_bytes(raw, "little")
+    if kind == 3:
+        return int.from_bytes(raw, "little", signed=True)
+    if kind == 4:
+        return number(struct.unpack("<f", raw)[0] if len(raw) == 4 else struct.unpack("<d", raw)[0])
+    if kind == 7:
+        return time_from_ms(int.from_bytes(raw[:6], "little"))
+    if kind in (254, 255):
+        return None
+    return raw.hex()
+
+
+def decode_attributes(raw_blocks):
+    """The attributes of group 0 response blocks: a start-stop range (the set) and type, length, value each."""
+    out = []
+    for g, v, qualifier, data in raw_blocks:
+        if g != 0:
+            continue
+        range_code = qualifier & 0x0F
+        if range_code == RangeCode.UINT8_START_STOP and len(data) >= 2:
+            start, stop, offset = data[0], data[1], 2
+        elif range_code == RangeCode.UINT16_START_STOP and len(data) >= 4:
+            (start, stop), offset = struct.unpack_from("<HH", data), 4
+        else:
+            raise ValueError(f"g0v{v} with qualifier 0x{qualifier:02x}")
+        for set_ in range(start, stop + 1):
+            if offset + 2 > len(data):
+                raise ValueError(f"g0v{v}: short attribute")
+            kind, length = data[offset], data[offset + 1]
+            raw = data[offset + 2 : offset + 2 + length]
+            offset += 2 + length
+            out.append({"set": set_, "variation": v, "type": ATTRIBUTE_TYPES.get(kind, "unknown"),
+                        "value": attribute_value(kind, raw)})
+    return out
+
+
+def parse_attribute_operation(op, a):
+    set_ = a.required_integer("set", 0, 255)
+    if op == "attribute-read":
+        variation = a.integer("variation", 254, 1, 254)
+
+        async def read(c):
+            before = len(c.recorder.raw)
+            await c.request(FunctionCode.READ, [block(0, variation, RangeCode.UINT8_START_STOP, bytes([set_, set_]))])
+            c.recorder.attributes = decode_attributes(c.recorder.raw[before:])
+
+        return read
+    variation = a.required_integer("variation", 1, 253)
+    given = [f for f in ("text", "uint", "int") if a.has(f)]
+    if len(given) != 1:
+        raise UsageError("attribute-write needs exactly one of --text, --uint and --int")
+    if given[0] == "text":
+        kind, raw = 1, a.str("text", "").encode()
+        if len(raw) > 255:
+            raise UsageError("--text is longer than 255 octets")
+    elif given[0] == "uint":
+        n = a.integer("uint", 0, 0, 2**64 - 1)
+        kind, raw = 2, n.to_bytes(next(w for w in (1, 2, 4, 8) if n < 1 << (8 * w)), "little")
+    else:
+        n = a.integer("int", 0, -(2**63), 2**63 - 1)
+        width = next(w for w in (1, 2, 4, 8) if -(1 << (8 * w - 1)) <= n < 1 << (8 * w - 1))
+        kind, raw = 3, n.to_bytes(width, "little", signed=True)
+    header = block(0, variation, RangeCode.UINT8_START_STOP, bytes([set_, set_, kind, len(raw)]) + raw)
+    return lambda c: c.request(FunctionCode.WRITE, [header])
+
+
+# ---- file transfer (contracts 1.1 and 1.3), group 70 ----
+
+FILE_STATUS = {0: "SUCCESS", 1: "PERMISSION_DENIED", 2: "INVALID_MODE", 3: "FILE_NOT_FOUND", 4: "FILE_LOCKED",
+               5: "TOO_MANY_OPEN", 6: "INVALID_HANDLE", 7: "WRITE_BLOCK_SIZE", 8: "COMM_LOST", 9: "CANNOT_ABORT",
+               16: "NOT_OPENED", 17: "HANDLE_EXPIRED", 18: "BUFFER_OVERRUN", 19: "FATAL", 20: "BLOCK_SEQ"}
+FILE_NAME = re.compile(r"^(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+$")
+MODE_NULL, MODE_READ, MODE_WRITE, MODE_APPEND = 0, 1, 2, 3
+FILE_BLOCK_SIZE = 1024
+ZERO_TIME = "0001-01-01T00:00:00.000Z"  # a creation time of 0, as the dscsystems adapter prints it
+
+
+class FileStatusError(Exception):
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+
+
+class Refused(Exception):
+    """The outstation answered with an IIN2 request error: the result is "rejected"."""
+
+
+def free_format(group, variation, obj):
+    """One free-format object with a two-octet size (qualifier 0x5B)."""
+    return block(group, variation, RangeCode.FREE_FORMAT, b"\x01" + struct.pack("<H", len(obj)) + obj,
+                 PrefixCode.UINT16_SIZE)
+
+
+def free_format_objects(qualifier, data):
+    width = {4: 1, 5: 2, 6: 4}.get((qualifier >> 4) & 0x07)
+    if width is None or not data:
+        raise ValueError(f"qualifier 0x{qualifier:02x} is not free format")
+    out, offset = [], 1
+    for _ in range(data[0]):
+        size = int.from_bytes(data[offset : offset + width], "little")
+        offset += width
+        out.append(data[offset : offset + size])
+        offset += size
+    return out
+
+
+def file_time(raw):
+    ms = int.from_bytes(raw, "little")
+    return ZERO_TIME if ms == 0 else time_from_ms(ms)
+
+
+def permission_string(p):
+    return "".join("rwx"[2 - i % 3] if p & (1 << i) else "-" for i in range(8, -1, -1))
+
+
+def file_descriptor(obj):
+    """A g70v7 descriptor: the entry of the result, and how many octets it took."""
+    if len(obj) < 20:
+        raise ValueError(f"g70v7 is {len(obj)} octets, needs 20")
+    name_offset, name_size, kind, size = struct.unpack_from("<HHHI", obj)
+    name = obj[name_offset : name_offset + name_size].decode("utf-8", "replace")
+    entry = {"name": name, "type": "directory" if kind == 0 else "file", "size": size,
+             "permissions": permission_string(int.from_bytes(obj[16:18], "little")), "time": file_time(obj[10:16])}
+    return entry, max(name_offset + name_size, 20)
+
+
+class Files:
+    """The file transfer exchanges of one operation, each a request and its response."""
+
+    def __init__(self, c, name, credentials):
+        self.c, self.name, self.credentials, self.key, self.request_id = c, name, credentials, 0, 1
+
+    async def exchange(self, function, headers):
+        before = len(self.c.recorder.raw)
+        await self.c.request_code(function, headers)
+        if (self.c.recorder.iin or 0) & REQUEST_ERRORS:
+            raise Refused()
+        return [(v, q, d) for g, v, q, d in self.c.recorder.raw[before:] if g == 70]
+
+    @staticmethod
+    def first(objects, variation):
+        for v, q, d in objects:
+            if v == variation:
+                found = free_format_objects(q, d)
+                if found:
+                    return found[0]
+        return None
+
+    def check(self, status, what):
+        if status != 0:
+            name = FILE_STATUS.get(status, "UNDEFINED")
+            raise FileStatusError(name, f"{what} {self.name}: the outstation answered {name}")
+
+    async def authenticate(self):
+        user, password = (x.encode() for x in self.credentials)
+        obj = struct.pack("<HHHHI", 12, len(user), 12 + len(user), len(password), 0) + user + password
+        answer = self.first(await self.exchange(FunctionCode.AUTHENTICATE_FILE, [free_format(70, 2, obj)]), 2)
+        if answer is None or len(answer) < 12:
+            raise ValueError("the answer to AUTHENTICATE_FILE carried no g70v2")
+        self.key = int.from_bytes(answer[8:12], "little")
+        if self.key == 0:
+            raise FileStatusError("PERMISSION_DENIED", "the outstation answered key 0: the credentials are refused")
+
+    def command(self, mode, size=0):
+        name = self.name.encode()
+        return free_format(70, 3, struct.pack("<HH", 26, len(name)) + bytes(6)
+                           + struct.pack("<HIIHHH", 0, self.key, size, mode, FILE_BLOCK_SIZE, self.request_id) + name)
+
+    async def open(self, mode, size=0):
+        if self.credentials:
+            await self.authenticate()
+        status = self.first(await self.exchange(FunctionCode.OPEN_FILE, [self.command(mode, size)]), 4)
+        if status is None or len(status) < 13:
+            raise ValueError("the answer to OPEN_FILE carried no g70v4")
+        handle, size, block_size = struct.unpack_from("<IIH", status)
+        self.check(status[12], "opening")
+        if handle == 0:
+            raise ValueError("the outstation returned no handle")
+        return handle, size, min(FILE_BLOCK_SIZE, block_size) if block_size else FILE_BLOCK_SIZE
+
+    async def close(self, handle):
+        obj = struct.pack("<IIHHB", handle, 0, 0, self.request_id, 0)
+        status = self.first(await self.exchange(FunctionCode.CLOSE_FILE, [free_format(70, 4, obj)]), 4)
+        if status is not None and len(status) >= 13:
+            self.check(status[12], "closing")
+
+    async def read(self):
+        handle, _, _ = await self.open(MODE_READ)
+        data, number_ = bytearray(), 0
+        try:
+            while True:
+                objects = await self.exchange(FunctionCode.READ, [free_format(70, 5, struct.pack("<II", handle, number_))])
+                failed = self.first(objects, 6)
+                if failed is not None and len(failed) >= 9:
+                    self.check(failed[8], f"reading block {number_} of")
+                got = self.first(objects, 5)
+                if got is None or len(got) < 8:
+                    raise ValueError(f"reading block {number_} of {self.name}: the response carried no file data")
+                block_word = int.from_bytes(got[4:8], "little")
+                if block_word & 0x7FFFFFFF != number_:
+                    raise ValueError(f"block {block_word & 0x7FFFFFFF} arrived where {number_} was expected")
+                data += got[8:]
+                number_ += 1
+                if block_word & 0x80000000:
+                    break
+        except BaseException:
+            await self.close_quietly(handle)
+            raise
+        await self.close(handle)
+        return bytes(data)
+
+    async def write(self, content, append):
+        handle, _, block_size = await self.open(MODE_APPEND if append else MODE_WRITE, len(content))
+        try:
+            chunks = [content[i : i + block_size] for i in range(0, len(content), block_size)] or [b""]
+            for number_, chunk in enumerate(chunks):
+                word = number_ | (0x80000000 if number_ == len(chunks) - 1 else 0)
+                objects = await self.exchange(FunctionCode.WRITE, [free_format(70, 5, struct.pack("<II", handle, word) + chunk)])
+                failed = self.first(objects, 6)
+                if failed is not None and len(failed) >= 9:
+                    self.check(failed[8], f"writing block {number_} of")
+        except BaseException:
+            await self.close_quietly(handle)
+            raise
+        await self.close(handle)
+
+    async def close_quietly(self, handle):
+        try:
+            await self.close(handle)
+        except Exception:  # noqa: BLE001 - the first error is the one reported
+            pass
+
+    async def delete(self):
+        if self.credentials:
+            await self.authenticate()
+        status = self.first(await self.exchange(FunctionCode.DELETE_FILE, [self.command(MODE_NULL)]), 4)
+        if status is None or len(status) < 13:
+            raise ValueError("the answer to DELETE_FILE carried no g70v4")
+        self.check(status[12], "deleting")
+
+    async def info(self):
+        name = self.name.encode()
+        obj = struct.pack("<HHHI", 20, len(name), 0, 0) + bytes(6) + struct.pack("<HH", 0, self.request_id) + name
+        objects = await self.exchange(FunctionCode.GET_FILE_INFO, [free_format(70, 7, obj)])
+        descriptor = self.first(objects, 7)
+        if descriptor is None:
+            status = self.first(objects, 4)
+            if status is not None and len(status) >= 13:
+                self.check(status[12], "describing")
+            raise ValueError("the answer to GET_FILE_INFO carried no descriptor")
+        return file_descriptor(descriptor)[0]
+
+
+def parse_file_operation(op, a):
+    has_user, has_password = a.has("file-user"), a.has("file-password")
+    if has_user != has_password:
+        raise UsageError("--file-user and --file-password go together")
+    credentials = (a.str("file-user", ""), a.str("file-password", "")) if has_user else None
+    if op == "file-authenticate":
+        if credentials is None:
+            raise UsageError("file-authenticate needs --file-user and --file-password")
+
+        async def authenticate(c):
+            await Files(c, "", credentials).authenticate()
+
+        return authenticate
+    if op == "file-info" and credentials is not None:
+        raise UsageError("file-info takes no --file-user or --file-password: GET_FILE_INFO carries no key")
+    name = a.required("name")
+    if name != "/" and (not FILE_NAME.match(name) or len(name) > 200):
+        raise UsageError("--name must be an absolute file name of at most 200 characters, path elements of "
+                         "A-Za-z0-9._- not starting with '.'")
+    if op == "file-put":
+        try:
+            content = bytes.fromhex(a.required("content"))
+        except ValueError:
+            raise UsageError("--content must be hex") from None
+        append = a.has("append")
+
+        async def put(c):
+            await Files(c, name, credentials).write(content, append)
+
+        return put
+    if op == "file-get":
+        async def get(c):
+            data = await Files(c, name, credentials).read()
+            c.recorder.file = {"name": name, "size": len(data), "content": data.hex()}
+
+        return get
+    if op == "file-ls":
+        async def ls(c):
+            data = await Files(c, name, credentials).read()
+            entries, offset = [], 0
+            while offset < len(data):
+                entry, used = file_descriptor(data[offset:])
+                entries.append(entry)
+                offset += used
+            c.recorder.files = entries
+
+        return ls
+    if op == "file-info":
+        async def info(c):
+            c.recorder.file = await Files(c, name, None).info()
+
+        return info
+
+    async def delete(c):
+        await Files(c, name, credentials).delete()
+
+    return delete
 
 
 def parse_operate(a):
@@ -553,8 +1060,16 @@ def parse_operate(a):
         await c.request(FunctionCode.SELECT, [obj])
         # The OPERATE follows only a successful SELECT, with no request between.
         if c.recorder.statuses and c.recorder.statuses[-1] == 0 and not (c.recorder.iin or 0) & REQUEST_ERRORS:
+            if delay:
+                # --operate-delay-ms (contract 1.5): let the selection age first.
+                await asyncio.sleep(delay / 1000)
             await c.request(FunctionCode.OPERATE, [obj])
 
+    if a.has("broadcast") and mode != "direct-no-ack":
+        raise UsageError("--broadcast needs --mode direct-no-ack")
+    if a.has("operate-delay-ms") and mode != "sbo":
+        raise UsageError("--operate-delay-ms needs --mode sbo")
+    delay = a.integer("operate-delay-ms", 0, 0, 3600000)
     return run
 
 
@@ -636,13 +1151,53 @@ async def monitor(c, seconds):
     end = time.monotonic() + seconds
     while (left := end - time.monotonic()) > 0:
         await c.runner.listen_unsolicited(timeout=left)
+        if not c.runner.is_open:
+            # The runner can return on an end of stream without raising.
+            raise LinkError("the connection closed during the monitoring")
 
 
-async def run_client(op, host, port, local, remote, connect_timeout, timeout, collect, duration, request):
+class NoConfirmRunner(MasterTcpRunner):
+    """--no-confirm (contract 1.5): the master confirms no solicited response, so the outstation keeps its events.
+
+    Unsolicited responses are still confirmed: an outstation that waits for
+    the confirm of its null unsolicited response at start (DSC go-dnp3)
+    answers no request until it has it.
+    """
+
+    async def _send_confirm(self, sequence, *, uns, deadline):
+        if uns:
+            await super()._send_confirm(sequence, uns=uns, deadline=deadline)
+
+
+async def keep_alive(runner, master, every):
+    """--keep-alive-ms (contract 1.3): REQUEST_LINK_STATUS when nothing was written for that long.
+
+    dnp3py's runner has the frame builder but never sends it; the adapter
+    writes it on the runner's channel, and the runner skips the LINK_STATUS
+    answer (a frame without user data).
+    """
+    while True:
+        await asyncio.sleep(every)
+        frame = build_request_link_status(destination=master.config.outstation_address, source=master.config.address,
+                                          dir_from_master=True)
+        await runner._write_frame(frame, runner._deadline(None))
+
+
+async def accept_outstation(o):
+    """--listen (contract 1.2): wait for the outstation to dial; the server stops listening once it has."""
+    server = await tcp_serve(o.bind, o.port)
+    try:
+        return await asyncio.wait_for(server.accept(), o.connect_timeout), server
+    except BaseException:
+        await server.stop()
+        raise
+
+
+async def run_client(op, o, request):
     recorder = Recorder()
     master = RecordingMaster(
         config=MasterConfig(
-            address=local, outstation_address=remote, response_timeout=timeout, enable_unsolicited=True,
+            address=o.local, outstation_address=o.remote, response_timeout=o.timeout, enable_unsolicited=True,
             startup_integrity_poll=False, disable_unsolicited_on_startup=False, enable_unsolicited_on_startup=False,
             time_sync_on_startup=False,
         ),
@@ -651,25 +1206,44 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
     master.recorder = recorder
     # Connected means the TCP connection, as for every adapter: no link reset
     # that an outstation with another address would leave unanswered.
-    runner = MasterTcpRunner(master=master, host=host, port=port, response_timeout=timeout, link_reset=LinkResetPolicy.NEVER)
-    client = Client(master, runner, recorder, timeout)
+    runner_type = NoConfirmRunner if o.no_confirm else MasterTcpRunner
     connected = False
     failure = None
+    listener = None
+    runner = None
+    where = f"{o.bind}:{o.port}" if o.listen else f"{o.host}:{o.port}"
     try:
-        await asyncio.wait_for(runner.open(), connect_timeout)
+        channel = None
+        if o.listen:
+            channel, listener = await accept_outstation(o)
+        runner = runner_type(master=master, host=o.host or o.bind, port=o.port, response_timeout=o.timeout,
+                             link_reset=LinkResetPolicy.NEVER, channel=channel)
+        await asyncio.wait_for(runner.open(), o.connect_timeout)
         connected = True
     # What opening can raise: the channel's ChannelConnectionError and
     # ChannelTimeoutError (both ChannelError), the runner's MasterRunnerError,
     # an OSError the channel does not wrap, and wait_for's TimeoutError.
     except (ChannelError, MasterRunnerError, OSError, TimeoutError) as exc:
-        failure = Failure("connect-failed", f"no connection to {host}:{port}: {exc}")
+        what = "no outstation dialled" if o.listen else "no connection to"
+        failure = Failure("connect-failed", f"{what} {where}: {exc}")
+    client = Client(master, runner, recorder, o.timeout)
 
+    alive = None
+    if connected and o.keep_alive > 0:
+        alive = asyncio.create_task(keep_alive(runner, master, o.keep_alive))
     if connected:
         try:
             if op == "monitor":
-                await monitor(client, duration)
+                await monitor(client, o.duration)
             else:
-                await asyncio.wait_for(request(client), 3 * timeout + 2)
+                # A file transfer is many exchanges, each bounded by the response timeout.
+                bound = 20 * o.timeout + 2 if op in FILE_OPERATIONS else 3 * o.timeout + 2
+                await asyncio.wait_for(request(client), bound)
+        except Refused:
+            pass  # the IIN2 error makes it "rejected" below
+        except FileStatusError as exc:
+            recorder.file_status = exc.status
+            failure = Failure("file-error", str(exc))
         except ResponseTimeoutError as exc:
             failure = Failure("timeout", str(exc) or "no response from the outstation")
         except TimeoutError:
@@ -696,6 +1270,9 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             ArithmeticError,
         ) as exc:
             failure = Failure("failed", f"{type(exc).__name__}: {exc}")
+    if alive is not None and alive.done() and not alive.cancelled() and alive.exception() is not None:
+        if failure is None:
+            failure = Failure("connection-lost", f"keep-alive: {alive.exception()}")
 
     command_status = recorder.statuses[-1] if recorder.statuses else None
     command_statuses = None
@@ -727,20 +1304,32 @@ async def run_client(op, host, port, local, remote, connect_timeout, timeout, co
             failure = Failure("failed", "the outstation's echo did not carry a status")
         elif op == "restart" and recorder.delay_ms is None:
             failure = Failure("failed", "the outstation's answer did not carry a delay")
+        elif op in FILE_OPERATIONS:
+            recorder.file_status = "SUCCESS"
 
-    if connected and failure is None and collect > 0:
+    if connected and failure is None and o.collect > 0:
         try:
-            await monitor(client, collect)
+            await monitor(client, o.collect)
         except (LinkError, MasterRunnerError):
             pass
+    if alive is not None:
+        alive.cancel()
     if connected:
         # Let a confirm of the last response leave before the connection closes.
         await asyncio.sleep(0.2)
         try:
             await runner.close()
-        except (OSError, LinkError, MasterRunnerError):
+            if o.listen:
+                await runner.channel.close()
+        except (OSError, LinkError, MasterRunnerError, ChannelError):
             pass
+    if listener is not None:
+        await listener.stop()
     return connected, failure, command_status, recorder
+
+
+class Options:
+    pass
 
 
 def client_main(argv):
@@ -751,30 +1340,50 @@ def client_main(argv):
     if op not in OPERATIONS:
         log(f"client: unknown operation '{op}'")
         return EXIT_USAGE
-    flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "transport"}
-    switches = set()
+    flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "transport",
+             "keep-alive-ms", "bind-address"}
+    switches = {"listen", "no-confirm"}
     flags |= {
         "event-poll": {"classes"}, "enable-unsolicited": {"classes"}, "disable-unsolicited": {"classes"},
         "read": {"group", "variation", "start", "stop"},
-        "operate": {"type", "index", "code", "count", "on-ms", "off-ms", "value", "mode"},
+        "operate": {"type", "index", "code", "count", "on-ms", "off-ms", "value", "mode", "operate-delay-ms"},
         "operate-multi": {"controls", "mode"},
         "time-sync": {"procedure"}, "restart": {"type"}, "assign-class": {"class", "group", "start", "stop"},
         "monitor": {"duration-ms"}, "freeze": {"group", "at", "interval-ms"},
+        "manage": {"function", "spec"}, "deadband-write": {"deadbands"},
+        "attribute-read": {"set", "variation"}, "attribute-write": {"set", "variation", "text", "uint", "int"},
+        "file-get": {"name", "file-user", "file-password"}, "file-ls": {"name", "file-user", "file-password"},
+        "file-info": {"name", "file-user", "file-password"}, "file-delete": {"name", "file-user", "file-password"},
+        "file-put": {"name", "content", "file-user", "file-password"},
+        "file-authenticate": {"file-user", "file-password"},
     }.get(op, set())
-    if op == "freeze":
-        switches = {"clear", "no-ack"}
+    switches |= {"freeze": {"clear", "no-ack"}, "operate": {"broadcast"}, "file-put": {"append"}}.get(op, set())
+    o = Options()
     try:
         a = Args(argv[1:], flags, switches)
         a.transport()
-        host = a.required("host")
-        port = a.integer("port", 20000, 1, 65535)
-        local = a.integer("local-addr", 1, 0, 65519)
-        remote = a.integer("remote-addr", 1024, 0, 65519)
-        connect_timeout = a.integer("connect-timeout-ms", 5000, 1, 3600000) / 1000
-        timeout = a.integer("timeout-ms", 5000, 1, 3600000) / 1000
-        collect = a.integer("collect-ms", 0, 0, 3600000) / 1000
-        duration = a.integer("duration-ms", 1000, 0, 3600000) / 1000
+        o.listen = a.has("listen")
+        if o.listen:
+            if a.has("host"):
+                raise UsageError("--host does not go with --listen")
+            o.host, o.bind = None, a.str("bind-address", "0.0.0.0")
+        else:
+            if a.has("bind-address"):
+                raise UsageError("--bind-address goes with --listen")
+            o.host, o.bind = a.required("host"), None
+        o.port = a.integer("port", 20000, 1, 65535)
+        o.local = a.integer("local-addr", 1, 0, 65519)
+        o.remote = a.integer("remote-addr", 1024, 0, 65519)
+        o.connect_timeout = a.integer("connect-timeout-ms", 5000, 1, 3600000) / 1000
+        o.timeout = a.integer("timeout-ms", 5000, 1, 3600000) / 1000
+        o.collect = a.integer("collect-ms", 0, 0, 3600000) / 1000
+        o.duration = a.integer("duration-ms", 1000, 0, 3600000) / 1000
+        o.keep_alive = a.integer("keep-alive-ms", 0, 0, 3600000) / 1000
+        o.no_confirm = a.has("no-confirm")
         request = None if op == "monitor" else parse_operation(op, a)
+        if a.has("broadcast"):
+            # Broadcast (contract 1.3): the request goes to 0xFFFF instead of --remote-addr.
+            o.remote = 0xFFFF
         no_response = (op == "freeze" and a.has("no-ack")) or (op == "operate" and a.str("mode", "") == "direct-no-ack")
     except UsageError as exc:
         log(f"client {op}: {exc}")
@@ -789,9 +1398,7 @@ def client_main(argv):
         request.no_response = True
 
     started = time.monotonic()
-    connected, failure, command_status, recorder = asyncio.run(
-        run_client(op, host, port, local, remote, connect_timeout, timeout, collect, duration, request)
-    )
+    connected, failure, command_status, recorder = asyncio.run(run_client(op, o, request))
     reads = op in ("integrity-poll", "event-poll", "read")
     doc = {
         "schemaVersion": SCHEMA_VERSION, "adapter": ADAPTER, "operation": op, "ok": failure is None,
@@ -807,6 +1414,14 @@ def client_main(argv):
         doc["commandStatuses"] = None if statuses is None else [status_name(s) for s in statuses]
     if op == "restart":
         doc["restartDelayMs"] = recorder.delay_ms
+    if op == "attribute-read":
+        doc["attributes"] = getattr(recorder, "attributes", None) or []
+    if op in FILE_OPERATIONS:
+        if getattr(recorder, "files", None) is not None:
+            doc["files"] = recorder.files
+        elif getattr(recorder, "file", None) is not None:
+            doc["file"] = recorder.file
+        doc["fileStatus"] = recorder.file_status
     doc["elapsedMs"] = int((time.monotonic() - started) * 1000)
     emit(doc)
     if failure is None:
@@ -1186,8 +1801,17 @@ def build_outstation(fx, points, local, remote, select_ms, confirm_ms):
 def server_main(argv):
     try:
         a = Args(argv, ["fixture", "bind-address", "port", "ready-file", "select-timeout-ms", "confirm-timeout-ms",
-                        "local-addr", "remote-addr", "transport", "control-socket", "frozen-event-policy"])
+                        "local-addr", "remote-addr", "transport", "control-socket", "frozen-event-policy", "connect"])
         a.transport()
+        dial = None
+        if a.has("connect"):
+            # Dual end point (contract 1.2): the outstation dials the master.
+            if a.has("bind-address") or a.has("port"):
+                raise UsageError("--bind-address and --port do not go with --connect")
+            host, sep, dial_port = a.str("connect", "").rpartition(":")
+            if not sep or not host or not dial_port.isdigit() or not 1 <= int(dial_port) <= 65535:
+                raise UsageError("--connect must be HOST:PORT")
+            dial = (host, int(dial_port))
         if a.has("frozen-event-policy"):
             raise UsageError("--frozen-event-policy: this outstation raises no frozen counter events")
         path = a.str("fixture", DEFAULT_FIXTURE)
@@ -1211,7 +1835,7 @@ def server_main(argv):
     remote = fx["outstation"]["masterAddress"] if remote < 0 else remote
     outstation = build_outstation(fx, points, local, remote, select_ms, confirm_ms)
     control_socket = a.str("control-socket", DEFAULT_CONTROL_SOCKET)
-    return asyncio.run(serve(outstation, fx, bind, port, ready_file, control_socket, local, remote))
+    return asyncio.run(serve(outstation, fx, bind, port, ready_file, control_socket, local, remote, dial))
 
 
 def write_ready_file(path):
@@ -1279,11 +1903,35 @@ def counter_increment_main(argv):
     return finish(True, reply["value"], None, EXIT_OK)
 
 
-async def serve(outstation, fx, bind, port, ready_file, control_socket, local, remote):
+async def dial_master(runner, host, port):
+    """The outstation's side of a dual end point: dial the master, serve the connection, dial again."""
+    while True:
+        channel = TcpClientChannel(config=TcpConfig(host=host, port=port))
+        try:
+            await asyncio.wait_for(channel.open(), 5)
+        except (ChannelError, OSError, TimeoutError):
+            await asyncio.sleep(1)
+            continue
+        try:
+            await runner._handle_connection(channel)
+        finally:
+            try:
+                await channel.close()
+            except (ChannelError, OSError):
+                pass
+        await asyncio.sleep(0.5)
+
+
+async def serve(outstation, fx, bind, port, ready_file, control_socket, local, remote, dial=None):
     runner = EventRunner(outstation=outstation, host=bind, port=port)
-    task = asyncio.create_task(runner.run())
+    if dial is not None:
+        task = asyncio.create_task(dial_master(runner, *dial))
+        address = f"{dial[0]}:{dial[1]}"
+    else:
+        task = asyncio.create_task(runner.run())
+        address = f"{bind}:{port}"
     deadline = time.monotonic() + 5
-    while runner.local_address is None:
+    while dial is None and runner.local_address is None:
         if task.done():
             log(f"server: cannot listen on {bind}:{port}: {task.exception()}")
             return EXIT_FAILED
@@ -1303,8 +1951,8 @@ async def serve(outstation, fx, bind, port, ready_file, control_socket, local, r
     except OSError as e:
         log(f"server: cannot write the readiness file {ready_file}: {e}")
         return EXIT_FAILED
-    emit({"event": "ready", "adapter": ADAPTER, "address": f"{bind}:{port}", "fixture": fx["name"],
-          "linkAddress": local, "masterAddress": remote, "transport": "tcp", "dial": False})
+    emit({"event": "ready", "adapter": ADAPTER, "address": address, "fixture": fx["name"],
+          "linkAddress": local, "masterAddress": remote, "transport": "tcp", "dial": dial is not None})
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -1373,48 +2021,57 @@ def print_capabilities():
             "udp": False,
             "tls": False,
             "serial": False,
-            # Not in the library.
-            "fileTransfer": False,
+            # The library has the function codes and frames free-format
+            # blocks; the master's group 70 objects are the adapter's.
+            # The outstation has no file transfer.
+            "fileTransfer": True,
             "fileServer": False,
-            "fileClient": False,
-            "fileDeleteClient": False,
+            "fileClient": True,
+            "fileDeleteClient": True,
             "fileAppendServer": False,
-            "fileAppendClient": False,
+            "fileAppendClient": True,
             "fileAuthServer": False,
-            "fileAuthClient": False,
+            "fileAuthClient": True,
             "secureAuthentication": False,
-            # Contract 1.2: the decoders know none of g13, g31, g33, g43, g50v4.
+            # Contract 1.2: g31 and g33 through the library's analog decoder;
+            # g13 and g43 framed by the library, decoded by the adapter; g50v4,
+            # which the library cannot frame, framed and decoded by the adapter.
             "commandEventsServer": False,
-            "commandEventsClient": False,
-            "frozenAnalogInputsClient": False,
-            "timeAndIntervalClient": False,
-            # Dual end point: TCP client only.
-            "dualEndpointServer": False,
-            "dualEndpointClient": False,
+            "commandEventsClient": True,
+            "frozenAnalogInputsClient": True,
+            "timeAndIntervalClient": True,
+            # Dual end point over TCP, through the runners' channel injection
+            # (the master's channel parameter, the outstation's connection
+            # handler); no TLS in the library.
+            "dualEndpointServer": True,
+            "dualEndpointClient": True,
             "dualEndpointClientTls": False,
             "securityStatisticsServer": False,
             "securityStatisticsClient": False,
             "deviceAttributesServer": False,
-            "deviceAttributesClient": False,
+            # The library frames group 0; the adapter decodes and encodes it.
+            "deviceAttributesClient": True,
             "multipleControlsClient": True,
             # dnp3py's outstation carries out every control of a request,
             # whatever max_controls_per_request says.
             "maxControlsServer": False,
             # Contract 1.3: the fixture's eventBufferSize, and IIN2.3 when it overflows.
             "eventBufferServer": True,
-            # Contract 1.3: none of the link layer is configurable.
+            # Contract 1.3: none of the link layer is configurable; the
+            # adapter writes the library's REQUEST_LINK_STATUS frame itself.
             "linkConfirmsServer": False,
             "linkConfirmsClient": False,
-            "keepAliveClient": False,
+            "keepAliveClient": True,
             "linkStatusEventServer": False,
-            # Contract 1.3: the outstation ignores broadcast addresses and the
-            # master refuses them.
+            # Contract 1.3: the outstation ignores broadcast addresses; the
+            # master sends to 0xFFFF when it is the outstation address.
             "broadcastServer": False,
             "broadcastEventServer": False,
-            "broadcastClient": False,
-            # Contract 1.3: no management functions.
+            "broadcastClient": True,
+            # Contract 1.3: the master sends the management functions, the
+            # outstation has none.
             "manageServer": False,
-            "manageClient": False,
+            "manageClient": True,
             "multipleOutstationsServer": False,
             # The master sends FREEZE AT TIME and freezes of any group; the
             # outstation has neither (NO_FUNC_CODE_SUPPORT, counters only).
@@ -1426,12 +2083,17 @@ def print_capabilities():
             "counterIncrementServer": True,
             "frozenCounterEventsServer": False,
             "frozenCounterEventTimeClient": True,
-            # Contract 1.3: neither role reads or writes group 34 (the
-            # outstation's deadbands are configuration only).
+            # Contract 1.3: the master writes g34v3; the outstation's
+            # deadbands are configuration only.
             "deadbandWriteServer": False,
-            "deadbandWriteClient": False,
+            "deadbandWriteClient": True,
             "deadbandReadServer": False,
             "deadbandReadClient": False,
+            # Contract 1.5.
+            "activateConfigServer": False,
+            "activateConfigClient": True,
+            "operateDelayClient": True,
+            "noConfirmClient": True,
         },
         # Contract 1.4: it raises no frozen counter events, so it has no policy.
         "frozenEventPolicies": [],

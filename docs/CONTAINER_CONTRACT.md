@@ -1,6 +1,6 @@
 # Container contract
 
-Version: **1.4** (`contract_version` in [versions.yaml](../versions.yaml))
+Version: **1.5** (`contract_version` in [versions.yaml](../versions.yaml))
 
 Every adapter image exposes the same commands, flags, JSON documents and exit
 codes. Consumers depend on this document, not on any adapter's source. A
@@ -15,6 +15,7 @@ and changes only with the major version.
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
 | 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; [link layer](#link-layer): `--link-confirms`, `--keep-alive-ms`, the `link-status` event; [broadcast](#broadcast): `operate --broadcast`, the `broadcast` event; [management functions](#management-functions): `manage`, the `manage` event; [several outstations](#several-outstations): `server --outstations`; additions |
 | 1.4 | [Counters that change](#counters-that-change): the `counter-increment` command, `server --control-socket`, `server --frozen-event-policy`, the `counters` fixture, the capability fields `frozenEventPolicies`, `frozenEventRetention` and `unsupportedReasons`, the features `counterIncrementServer`, `frozenCounterEventsServer`, `frozenCounterEventTimeClient`; additions |
+| 1.5 | [Timers a master can provoke](#timers-a-master-can-provoke): `operate --operate-delay-ms`, the client switch `--no-confirm`, the features `operateDelayClient` and `noConfirmClient`; [ACTIVATE_CONFIG](#management-functions): `manage --function activate-config --spec`, the features `activateConfigServer` and `activateConfigClient`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -46,6 +47,7 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 - [Analog deadbands](#analog-deadbands) (1.3)
 - [Device attributes](#device-attributes) (1.3)
 - [Counters that change](#counters-that-change) (1.4)
+- [Timers a master can provoke](#timers-a-master-can-provoke) (1.5)
 - [More point types](#more-point-types) (1.2)
 - [Object documents](#object-documents)
 - [`print-capabilities`](#print-capabilities)
@@ -206,6 +208,7 @@ does not do it leaves the bit set.
 | `--connect-timeout-ms N` | 5000 | Time to establish the TCP connection |
 | `--timeout-ms N` | 5000 | Response timeout of each request of the operation |
 | `--collect-ms N` | 0 | After a successful operation, keep receiving (unsolicited responses) for this long before closing |
+| `--no-confirm` | off | Confirm no solicited response (1.5): see [timers a master can provoke](#timers-a-master-can-provoke) |
 | Link flags | | |
 
 ### Operations
@@ -247,6 +250,7 @@ time is written, so both kinds of master can run the operation against it.
 | `--off-ms N` | 100 | `g12v1`: off time |
 | `--value V` | required for `g41` | The value, in the range of the variation |
 | `--mode M` | `direct` | `direct` (DIRECT OPERATE), `sbo` (SELECT, then OPERATE after a successful select), `direct-no-ack` (DIRECT OPERATE NO ACK) |
+| `--operate-delay-ms N` | 0 | With `--mode sbo` only (exit 2 otherwise): wait N ms between the select and the operate (1.5): see [timers a master can provoke](#timers-a-master-can-provoke) |
 
 `--mode direct-no-ack` only with the feature `directOperateNoAckClient`; it
 succeeds when the request was sent, and `commandStatus` is null. A
@@ -690,12 +694,19 @@ server event `manage`:
 |-------|---------|
 | `function` | The function code, a number |
 
-ACTIVATE_CONFIG (31, g70v8 file specifications answered with g91v1) is not in
-the contract: no reference master sends it, and an outstation refuses it
-without a `manage` event. The one difference is how: the dscsystems
-outstation answers PARAMETER_ERROR, not NO_FUNC_CODE_SUPPORT, because DSC
-go-dnp3 v0.8.2 routes 31 to the same handler as 15..19 and answers
-NO_FUNC_CODE_SUPPORT only to an outstation without any management handler.
+*Contract 1.5.* `manage --function activate-config [--spec NAME]` sends
+ACTIVATE_CONFIG (31) with one g70v8 file specification, free format (qualifier
+0x5B; NAME defaults to `config.xml`, 1..255 octets); `--spec` with another
+function is a usage error. It succeeds when the outstation answers without an
+IIN2 error (the g91v1 activation status it answers is not reported), and fails
+with `rejected` otherwise. Feature `activateConfigClient`. An outstation with
+`activateConfigServer` takes every specification at once (status 0, no
+delay), answers g91v1 and reports it with the `manage` event, `function` 31.
+An outstation without it refuses ACTIVATE_CONFIG with an IIN2 error and no
+`manage` event: opendnp3 with NO_FUNC_CODE_SUPPORT, dnp3py with
+NO_FUNC_CODE_SUPPORT. (Without an ActivateConfig handler, DSC go-dnp3 v0.8.2
+hands 31 to the management handler of 15..19, which refuses it with
+PARAMETER_ERROR: `outstation/services.go`.)
 
 ## Broadcast
 
@@ -763,6 +774,16 @@ An outstation accepts a write of an attribute its fixture marks `writable`,
 of the same type, and reports it with the server event `attribute-write`
 (`set`, `variation`, `type`, `value`); it refuses other writes (a request
 error).
+
+## Timers a master can provoke
+
+*Contract 1.5.* Two outstation timers only show when a master does what a
+well-behaved master does not, so a master that can do it says so:
+
+| Where | Flag | Meaning |
+|-------|------|---------|
+| client | `operate --mode sbo --operate-delay-ms N` | Wait N ms after a successful SELECT before the OPERATE. Against `server --select-timeout-ms` below N the outstation answers the OPERATE with TIMEOUT (the select expired) and carries nothing out: the operation fails with `command-failed`, `commandStatus` `TIMEOUT`. Feature `operateDelayClient` |
+| client | `--no-confirm` | Confirm no solicited response. The outstation keeps the events it sent; the next poll gets them again. Unsolicited responses are still confirmed: an outstation may answer no request until its null unsolicited response at start is confirmed. A response with more fragments stalls without a confirm, so it is meant for single-fragment responses. Feature `noConfirmClient` |
 
 ## Counters that change
 

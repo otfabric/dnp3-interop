@@ -45,6 +45,13 @@
       "type": "unsignedInt",
       "value": 7,
       "writable": true
+    },
+    {
+      "set": 1,
+      "variation": 12,
+      "type": "signedInt",
+      "value": -7,
+      "writable": true
     }
   ]
 }

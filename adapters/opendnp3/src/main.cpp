@@ -99,8 +99,9 @@ int print_capabilities()
           {"assignClassClient", true},
           {"freeze", true},
           {"freezeNoAckServer", true},
-          // The master always waits for a response to a freeze.
-          {"freezeNoAckClient", false},
+          // IMMED_FREEZE_NR and FREEZE_CLEAR_NR through PerformFunction; its
+          // task waits for a response, and a response timeout means sent.
+          {"freezeNoAckClient", true},
           {"octetStrings", true},
           {"tcp", true},
           {"udp", true},
@@ -169,14 +170,20 @@ int print_capabilities()
           // Contract 1.4.
           {"counterIncrementServer", true},
           {"frozenCounterEventsServer", true},
-          {"frozenCounterEventTimeClient", true}}},
+          {"frozenCounterEventTimeClient", true},
+          // Contract 1.5: no ACTIVATE_CONFIG in the library; its master
+          // operates right after the select and always confirms.
+          {"activateConfigServer", false},
+          {"activateConfigClient", false},
+          {"operateDelayClient", false},
+          {"noConfirmClient", false}}},
         // The library's freeze detects events: no setting forces one.
         {"frozenEventPolicies", {"on-change"}},
         // Every event stays buffered until confirmed.
         {"frozenEventRetention", "all"},
         {"pointTypes",
          {"binaryInputs", "doubleBitInputs", "binaryOutputs", "counters", "frozenCounters", "analogInputs",
-          "analogOutputs", "octetStrings"}},
+          "analogOutputs", "octetStrings", "timeAndIntervals"}},
         {"commandTypes", {"g12v1", "g41v1", "g41v2", "g41v3", "g41v4"}},
         {"clientOperations",
          {"integrity-poll", "event-poll", "read", "operate", "time-sync", "restart", "enable-unsolicited",

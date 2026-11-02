@@ -208,6 +208,13 @@ func printCapabilities() int {
 			{"counterIncrementServer", true},
 			{"frozenCounterEventsServer", true},
 			{"frozenCounterEventTimeClient", true},
+			// Contract 1.5: the outstation answers ACTIVATE_CONFIG through the
+			// library's ActivateConfig; the master sends neither it, nor an
+			// OPERATE apart from its SELECT, and always confirms.
+			{"activateConfigServer", true},
+			{"activateConfigClient", false},
+			{"operateDelayClient", false},
+			{"noConfirmClient", false},
 		}},
 		// A freeze always raises its event, by the library's design.
 		{"frozenEventPolicies", []string{"always"}},

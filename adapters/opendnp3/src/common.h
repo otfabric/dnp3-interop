@@ -90,6 +90,15 @@ struct Point
     std::optional<double> min, max;
 };
 
+// A time and interval object, g50v4 (contract 1.2): static only.
+struct TimeAndIntervalPoint
+{
+    uint16_t index = 0;
+    uint64_t timeMs = 0; // since the epoch
+    uint32_t interval = 0;
+    uint8_t units = 0;
+};
+
 struct Fixture
 {
     std::string name;
@@ -102,6 +111,7 @@ struct Fixture
     std::optional<uint16_t> maxControlsPerRequest; // contract 1.3
     std::optional<uint16_t> eventBufferSize;       // contract 1.3
     std::map<std::string, std::vector<Point>> points; // by array name
+    std::vector<TimeAndIntervalPoint> timeAndIntervals;
 
     const Point* find(const std::string& type, uint16_t index) const;
 };

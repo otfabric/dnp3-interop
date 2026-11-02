@@ -86,56 +86,60 @@ serves it and the master sends it.
 | `assignClassClient` | `assign-class` | yes | no ⁶ | yes |
 | `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes ⁷ | yes |
 | `freezeNoAckServer` | The outstation applies the `_NR` freezes | yes | yes | yes |
-| `freezeNoAckClient` | `freeze --no-ack` | no ³ | no ⁸ | yes |
+| `freezeNoAckClient` | `freeze --no-ack` | yes ³⁹ | no ⁸ | yes |
 | `octetStrings` | g110 in class 0 and reads | yes | yes | yes |
 | `tcp` | DNP3 over TCP | yes | yes | yes |
 | `udp` | DNP3 over UDP (1.1) | yes ⁹ | yes ¹⁰ | no ¹¹ |
 | `tls` | DNP3 over TLS (IEC 62351-3), mutual authentication (1.1) | yes ⁹ | yes | no ¹¹ |
 | `serial` | DNP3 over a serial line (1.1) | yes | yes | no ¹¹ |
-| `fileTransfer` | File transfer, group 70, in at least one role (`fileServer` or `fileClient`) | no ¹² | yes | no ¹¹ |
+| `fileTransfer` | File transfer, group 70, in at least one role (`fileServer` or `fileClient`) | no ¹² | yes | yes ⁴⁰ |
 | `fileServer` | The outstation serves the files of its fixture (1.1) | no ¹² | yes | no |
-| `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | no ¹² | yes | no ¹¹ |
-| `fileDeleteClient` | `file-delete` (1.1) | no ¹² | yes | no ¹¹ |
+| `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | no ¹² | yes | yes ⁴⁰ |
+| `fileDeleteClient` | `file-delete` (1.1) | no ¹² | yes | yes ⁴⁰ |
 | `fileAppendServer` | The outstation opens a file for appending (1.3) | no ¹² | yes | no ¹¹ |
-| `fileAppendClient` | `file-put --append` (1.3) | no ¹² | no ¹³ | no ¹¹ |
+| `fileAppendClient` | `file-put --append` (1.3) | no ¹² | no ¹³ | yes ⁴⁰ |
 | `fileAuthServer` | The outstation requires AUTHENTICATE_FILE with `--file-user` (1.3) | no ¹² | yes | no ¹¹ |
-| `fileAuthClient` | `file-authenticate`, `--file-user`, `--file-password` (1.3) | no ¹² | yes | no ¹¹ |
+| `fileAuthClient` | `file-authenticate`, `--file-user`, `--file-password` (1.3) | no ¹² | yes | yes ⁴⁰ |
 | `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ¹² | yes ¹⁴ | no ¹¹ |
 | `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁵ | yes | no |
-| `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | no ¹⁶ |
-| `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | no ¹⁵ | yes | no ¹⁶ |
-| `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | yes | no ¹⁷ | no ¹⁶ |
-| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | no |
-| `dualEndpointClient` | `client --listen`: the master listens, over TCP (1.2) | yes | yes | no ¹¹ |
+| `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes ¹⁶ |
+| `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | no ¹⁵ | yes | yes ¹⁶ |
+| `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | yes | no ¹⁷ | yes ¹⁶ |
+| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | yes ⁴¹ |
+| `dualEndpointClient` | `client --listen`: the master listens, over TCP (1.2) | yes | yes | yes ⁴¹ |
 | `dualEndpointClientTls` | `client --listen --tls` (1.2) | yes | yes | no ¹¹ |
 | `securityStatisticsServer` | With secure authentication on, the outstation serves g121 and raises g122 events (1.2) | no ¹² | yes | no |
 | `securityStatisticsClient` | The master reports g121 and g122 objects (1.2) | no ¹² | yes ¹⁸ | no ¹¹ |
 | `deviceAttributesServer` | The outstation serves the `deviceAttributes` of its fixture (1.3) | no ¹⁹ | yes | no |
-| `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | no ¹⁹ | yes | no |
+| `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | no ¹⁹ | yes | yes ⁴² |
 | `multipleControlsClient` | `operate-multi` (1.3) | yes | yes | yes |
 | `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | no ²⁰ |
 | `linkConfirmsServer` | `server --link-confirms` (1.3) | no ²¹ | yes | no ²² |
 | `linkConfirmsClient` | `client --link-confirms` (1.3) | no ²¹ | yes | no ²² |
-| `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | no ²² |
+| `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | yes ²² |
 | `linkStatusEventServer` | The server event `link-status` (1.3) | no ²³ | yes ²³ | no ²³ |
 | `multipleOutstationsServer` | `server --outstations N` (1.3) | yes | yes ²⁴ | no |
 | `manageServer` | The outstation accepts the management functions (1.3) | no | yes | no |
-| `manageClient` | `manage` (1.3) | yes | no ²⁵ | no |
+| `manageClient` | `manage` (1.3) | yes | no ²⁵ | yes |
 | `broadcastServer` | The outstation carries out a broadcast request and sets IIN1.0 (1.3) | yes | yes | no ²⁶ |
 | `broadcastEventServer` | The server event `broadcast` (1.3) | no ²⁷ | yes ²³ | no ²⁶ |
-| `broadcastClient` | `operate --broadcast` (1.3) | no ³ | yes | no ²⁶ |
+| `broadcastClient` | `operate --broadcast` (1.3) | no ³ | yes | yes ²⁶ |
 | `eventBufferServer` | The outstation applies the fixture's `eventBufferSize` and sets IIN2.3 when it overflows (1.3) | yes | yes ²⁸ | yes ²⁸ |
 | `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | no ²⁹ | yes ³⁰ | no ²⁹ |
 | `freezeAtTimeClient` | `freeze --at` (1.3) | no ³¹ | yes | yes |
 | `analogFreezeServer` | The outstation freezes analog inputs into frozen analog inputs (1.3) | no ³² | yes | no ³² |
 | `analogFreezeClient` | `freeze --group 30` (1.3) | yes | no ³³ | yes |
 | `deadbandWriteServer` | The outstation applies a deadband written (g34) (1.3) | no ³⁴ | yes | no ³⁴ |
-| `deadbandWriteClient` | `deadband-write` (1.3) | no ³⁵ | yes | no ³⁵ |
+| `deadbandWriteClient` | `deadband-write` (1.3) | no ³⁵ | yes | yes |
 | `deadbandReadServer` | The outstation serves a read of g34 (1.3) | no ³⁴ | no ³⁶ | no ³⁴ |
 | `deadbandReadClient` | A read of g34 comes back as objects (1.3) | no ³⁵ | no ³⁶ | no ³⁵ |
 | `counterIncrementServer` | `counter-increment` changes a counter of the running server (1.4) | yes ³⁷ | yes | yes |
 | `frozenCounterEventsServer` | The outstation raises frozen counter events, with g23v5 and g23v6 when asked (1.4) | yes | yes | no ³⁸ |
 | `frozenCounterEventTimeClient` | The master reports the time of g23v5 and g23v6 (1.4) | yes | yes | yes |
+| `activateConfigServer` | The outstation answers ACTIVATE_CONFIG with g91v1 and the `manage` event (1.5) | no ⁴³ | yes | no ⁴³ |
+| `activateConfigClient` | `manage --function activate-config` (1.5) | no ⁴³ | no ²⁵ | yes |
+| `operateDelayClient` | `operate --mode sbo --operate-delay-ms` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
+| `noConfirmClient` | `client --no-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
 
 ¹ dnp3py's outstation cannot serve the baseline fixture (no double-bit
 inputs, octet strings or per-point variations); it serves the `dnp3py`
@@ -148,9 +152,9 @@ with its decoders.
 ² DSC go-dnp3's master reads start-stop ranges and classes, not all objects of a
 group; `read --group 60 --variation 1..4` works, as a class read.
 
-³ The library's master has no way to send it: opendnp3's `PerformFunction`
-always waits for a response, and opendnp3 has no direct-operate-no-ack mode.
-The flag is a usage error (exit 2).
+³ The library's master has no way to send it: opendnp3 has no
+direct-operate-no-ack mode, and a request to the broadcast address is not one
+its master builds. The flag is a usage error (exit 2).
 
 ⁴ opendnp3's master synchronizes only on NEED_TIME and offers no call to do
 it on request. The adapter reads the IIN first and fails with `failed` when
@@ -192,10 +196,14 @@ itself only: no other image has secure authentication.
 
 ¹⁵ Not in the library: opendnp3's outstation has no command events and no
 frozen analogs (opendnp3 does not even parse groups 31 and 33, so a response
-with them fails as a whole). Its `pointTypes` say what it serves: opendnp3's
-library could serve g50v4 (`timeAndIntervals`), but the adapter does not.
+with them fails as a whole). Its `pointTypes` say what it serves: the
+adapter serves g50v4 (`timeAndIntervals`), read by range and kept out of
+class 0 (`typesAllowedInClass0`), as FIXTURES.md has it.
 
-¹⁶ dnp3py's decoders know none of groups 13, 31, 33, 43 and 50.
+¹⁶ dnp3py's analog decoder takes g31 and g33; its parser frames g13 and g43
+and the adapter decodes them. The parser cannot frame g50v4 (it stops at the
+block with "unknown_width"), so the adapter frames and decodes that block from
+the fragment.
 
 ¹⁷ DSC go-dnp3's master drops g50v4 objects (it has no handler for the
 type). DSC go-dnp3's outstation serves them.
@@ -211,7 +219,10 @@ master cannot parse it.
 
 ²¹ opendnp3 3.x dropped link-layer confirms; it acknowledges them.
 
-²² dnp3py's link layer has no settings.
+²² dnp3py's link layer has no settings. It has the REQUEST_LINK_STATUS frame
+builder, which its runner never uses: the adapter writes that frame on the
+runner's channel when `--keep-alive-ms` passes, and the runner skips the
+answer.
 
 ²³ The library answers REQUEST_LINK_STATUS without telling the application;
 DSC go-dnp3's does the same with a broadcast request. The DSC go-dnp3 adapter
@@ -223,8 +234,8 @@ does not wait for (COMPATIBILITY.md).
 
 ²⁵ DSC go-dnp3's master has no request for the management functions.
 
-²⁶ dnp3py's outstation ignores broadcast addresses and its master refuses
-them.
+²⁶ dnp3py's outstation ignores broadcast addresses. Its master accepts 0xFFFF
+as the outstation address (`MasterConfig` allows up to 65535) and sends to it.
 
 ²⁷ opendnp3 carries out a broadcast without telling the application.
 
@@ -262,6 +273,31 @@ counter. `unsupportedReasons.frozenCounterEventsServer` says so, and the
 self-test reports g23v5, g23v6 and the policy as unsupported on it; a change of
 a counter, its g22 event and the frozen value are tested all the same.
 
+³⁹ opendnp3 sends IMMED_FREEZE_NR and FREEZE_CLEAR_NR through `PerformFunction`,
+whose task then waits for a response that does not come. The adapter shortens
+that wait to at most 1 s and takes its response timeout as "sent"; the freeze
+is checked by the values it leaves (interop and features).
+
+⁴⁰ dnp3py has the file function codes and frames free-format blocks, but no
+group 70 objects: the adapter encodes and decodes g70v2..v7 itself and runs
+the open, read or write, close sequence (and AUTHENTICATE_FILE first, with
+credentials). Its outstation has no file transfer.
+
+⁴¹ Over TCP, through the runners' own channel injection: the master's
+`channel` parameter takes the connection the adapter accepted, the
+outstation's connection handler the one it dialled. dnp3py has no TLS, so no
+`dualEndpointClientTls`.
+
+⁴² dnp3py's parser frames group 0 (type, length, value per attribute); the
+adapter decodes and encodes the values.
+
+⁴³ Not in the library (opendnp3: no function code 31; dnp3py: not in its
+`FunctionCode`, and no outstation handler). The dnp3py adapter sends 31 with
+an adapter-built g70v8.
+
+⁴⁴ The library's master operates right after a successful select and confirms
+every response that asks for it; neither can be changed.
+
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
 (the `needs` column of [tests/cases.tsv](../tests/cases.tsv)), so "no" here
@@ -272,7 +308,7 @@ means "not tested", never "tested and failing".
 opendnp3 and dscsystems serve all eight point arrays of the
 fixture format, with the static and event variations
 [FIXTURES.md](FIXTURES.md#points) lists; dscsystems also serves
-`frozenAnalogInputs` and `timeAndIntervals`. dnp3py serves the `dnp3py`
+`frozenAnalogInputs` and `timeAndIntervals`, opendnp3 `timeAndIntervals`. dnp3py serves the `dnp3py`
 fixture (footnote ¹). Every adapter handles and sends all five control objects
 (`g12v1`, `g41v1`..`g41v4`).
 
