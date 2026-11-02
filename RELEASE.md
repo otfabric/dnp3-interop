@@ -29,6 +29,47 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.10.0
+
+**Date:** 2026-11-02
+**Previous release:** v0.9.0
+
+## Summary
+
+Full coverage of what the three reference stacks support, and an image of OT
+Fabric's own go-dnp3 for anyone to test against. Container contract 1.5,
+additions only; fixture format 1.0 with additions (`pulse`, more attribute
+types). The opendnp3, dscsystems and dnp3py adapters expose everything their
+upstream supports that the contract covers, and the self-tests check every
+declared feature in every pairing that can run it.
+
+## Changes
+
+### Contract 1.5
+
+- **ACTIVATE CONFIG**: `manage --function activate-config`, features `activateConfigServer` and `activateConfigClient`. Served by DSC go-dnp3 (`Config.ActivateConfig`) and go-dnp3; sent by dnp3py and go-dnp3. opendnp3 and dnp3py's outstation answer NO_FUNC_CODE_SUPPORT.
+- **OPERATE without SELECT**: `operate --mode operate`, feature `operateWithoutSelectClient`; every outstation that serves select-before-operate answers NO_SELECT and carries nothing out.
+- **Confirms withheld**: `--no-confirm` (solicited responses) and `monitor --no-unsolicited-confirm`, features `noConfirmClient` and `noUnsolicitedConfirmClient`; the result field `unsolicitedFragments`.
+- **Pulse outputs**: the fixture field `pulse`; PULSE_ON with count, on and off times and PULSE_OFF on output 2 of the `controls` fixture.
+- **Attributes**: float, octet string, bit string and time attributes, with the matching `attribute-write` flags.
+
+### Adapters
+
+- **opendnp3**: serves time-and-interval points (g50v4); the master sends freezes without acknowledgement.
+- **dnp3py**: the master decodes frozen analog inputs and command events, writes deadbands, sends keep-alives, broadcasts, management functions 15 to 19, device attributes, file transfer with append, and dual end point (not over TLS: dnp3py has no TLS channel).
+- **dscsystems**: answers ACTIVATE CONFIG; `--confirm-timeout-ms` also sets the unsolicited confirm timeout.
+
+### Self-test
+
+- File append; FREEZE AT TIME with an interval, without acknowledgement and at a time already past; select timeout and NO_SELECT; events and unsolicited responses resent when not confirmed; DEVICE_RESTART and the restart, command and assign-class events; a control from another master address; a second connection replacing the first; a TLS certificate of another name; a non-default UDP local port and serial settings; an AES-256 update key; DISABLE UNSOLICITED by its effect; value checks on every fixture.
+- **Known bugs** (`tests/known-bugs.tsv`, evidence pinned to commits): opendnp3's TLS master does not check the server name; DSC go-dnp3 and dnp3py carry out a control from another master address; dnp3py answers NO_SELECT, not TIMEOUT, after the select timer, and removes events when the response is built rather than on the confirm.
+
+### Own stack
+
+- **`dnp3-interop-otfabric`** (`own/go-dnp3`, go-dnp3 v1.6.0) declares every feature of contract 1.5. It is built by its own manual workflow from the latest go-dnp3 and is not part of this release; go-dnp3 runs its Self-interop workflow against it. Its permitted differences from the references (relative time while unsynchronized, the association of security statistics, the order of attributes) are in docs/COMPATIBILITY.md.
+
+---
+
 ## v0.9.0
 
 **Date:** 2026-11-02
