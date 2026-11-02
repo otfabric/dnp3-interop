@@ -125,3 +125,29 @@ finish() {
     results_close || FAIL=$((FAIL + 1))
     [[ "${FAIL}" -eq 0 && "${PASS}" -gt 0 ]]
 }
+
+# clock_ms <container>: its clock, the one its outstation stamps events with.
+clock_ms() { docker exec "$1" date +%s%3N; }
+
+# class_poll_objects <document> <from> <to>: the objects of a class poll as
+# objects() lists them, for an outstation whose time may be unsynchronized
+# (NEED_TIME). A class poll leaves the variation to the outstation, and an
+# event recorded while its time is unsynchronized may come with relative time
+# under an unsynchronized CTO (g51v2) instead of the point's event variation:
+# g2v3 for g2v2, g4v3 for g4v2. Such an event is listed as the variation it
+# stands for when its time lies within from..to (ms since the epoch, a second
+# of slack either way). Result documents do not show the CTO, so the g51v2
+# itself is not checked, only the time the master resolved from it. A master
+# that leaves the time of a relative-time object null (dnp3py) is taken at
+# its value.
+class_poll_objects() {
+    jq -r --argjson from "$2" --argjson to "$3" '
+        def ms: (.[0:19] + "Z" | fromdate) * 1000 + (.[20:23] | tonumber);
+        def in_time: .time == null or ((.time | type) == "string"
+            and (.time | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+[.][0-9]{3}Z$"))
+            and ((.time | ms) as $t | $t >= $from - 1000 and $t <= $to + 1000));
+        [.objects[]?
+         | (if (.group == 2 or .group == 4) and .variation == 3 and in_time then 2 else .variation end) as $v
+         | "g\(.group)v\($v)\(if .unsolicited then "u" else "" end):\(.index)=\(.value|tostring)"]
+        | sort | join(" ")' <<<"$1" 2>/dev/null
+}

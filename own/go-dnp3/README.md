@@ -104,14 +104,17 @@ less than one operation:
   `ONLINE`, as the other masters do; the library decodes them with flags 0.
 - `--transport udp` binds the local port itself: `client.UDP` cannot.
 
-While its time is unsynchronized (`needTime` in the fixture, until a master
-writes the time), the outstation reports binary input events of a class poll
-with relative time under an unsynchronized CTO (g2v3 after g51v2), not as the
-event variation of the point. See
-[COMPATIBILITY.md](../../docs/COMPATIBILITY.md#ot-fabric-go-dnp3-binary-events-with-relative-time-while-unsynchronized).
+Three differences from the reference outstations are permitted, and the
+checks accept them:
 
-Two more differences from DSC go-dnp3, the only other outstation with these
-features: the security statistics carry the master's address as their
-association, not 0, and a read of every attribute of a set (g0v254) returns
-them from the highest variation down. See
-[COMPATIBILITY.md](../../docs/COMPATIBILITY.md#ot-fabric-go-dnp3-the-association-of-security-statistics).
+- While its time is unsynchronized (`needTime` in the fixture, until a master
+  writes the time), a class poll returns binary input events with relative
+  time under an unsynchronized CTO (g2v3 after g51v2), not in the point's event
+  variation. This is on purpose: g2v2 cannot say that its time is
+  unsynchronized.
+- The security statistics carry the master's address as their association;
+  DSC go-dnp3 uses 0.
+- A read of every attribute of a set (g0v254) returns them from the highest
+  variation down.
+
+See [COMPATIBILITY.md](../../docs/COMPATIBILITY.md#ot-fabric-go-dnp3-permitted-differences).

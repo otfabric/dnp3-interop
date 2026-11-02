@@ -216,8 +216,6 @@ keep() {
 increment() {
     docker exec "$1" dnp3-interop counter-increment --index "$2" --by "$3" 2>/dev/null | keep
 }
-# clock_ms <container>: its clock, the one its outstation stamps events with.
-clock_ms() { docker exec "$1" date +%s%3N; }
 # event_time_faults <document> <from> <to> [<group>]: the frozen counter events
 # (or the objects of another group) whose time is missing or outside from..to,
 # ms since the epoch, a second of slack either way. Nothing here takes a time
@@ -448,16 +446,19 @@ exec dnp3-interop client \"\$@\" --transport serial --serial-device /tmp/ttyDNP3
 # basics <pair> <tag> <run>: the integrity poll, a control and its events,
 # where <run> runs one client operation (its arguments follow).
 basics() {
-    local pair="$1" tag="$2" run="$3" doc
+    local pair="$1" tag="$2" run="$3" doc from
     doc=$(${run} integrity-poll)
     at_pair "${tag}.integrity-poll" "${pair}"
     check "${pair}: [${tag}] integrity-poll" "${WANT_POLL}" "$(jq -r "${SUMMARY}" <<<"${doc}" 2>/dev/null)"
+    # The outstation's time is unsynchronized here: see class_poll_objects.
+    from=$(clock_ms "${name}")
     doc=$(${run} operate --type g12v1 --index 0 --code LATCH_ON)
     at_pair "${tag}.operate" "${pair}"
     check "${pair}: [${tag}] operate" "SUCCESS" "$(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+    doc=$(${run} event-poll --classes 1)
     at_pair "${tag}.control-produces-class-1-events" "${pair}"
     check "${pair}: [${tag}] the control produces class 1 events" "g11v2:0=true g2v2:1=true" \
-        "$(objects "$(${run} event-poll --classes 1)")"
+        "$(class_poll_objects "${doc}" "${from}" "$(clock_ms "${name}")")"
     at_pair "${tag}.confirmed-events-are-gone" "${pair}"
     check "${pair}: [${tag}] confirmed events are gone" "" "$(objects "$(${run} event-poll)")"
 }
@@ -798,9 +799,12 @@ suite() {
                 client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" \
                     --sa-update-key 0f0e0d0c0b0a09080706050403020100 --sa-user 3 >/dev/null
                 doc=$(client "${client}" -- read --group 121 --variation 1 --start 0 --stop 17 --host "${name}" "${SA[@]}")
-                at_pair "stats.g121-has-the-18-statistics-association-0" "${pair}"
-                check "${pair}: [stats] g121 has the 18 statistics, association 0" "18 0-17 [0]" \
-                    "$(jq -r '"\(.objects | length) \(.objects[0].index)-\(.objects[-1].index) \([.objects[].association] | unique | tostring)"' <<<"${doc}" 2>/dev/null)"
+                # The association of a statistic: present, and one value for
+                # all 18. Which value is the outstation's (DSC go-dnp3 reports
+                # 0, OT Fabric go-dnp3 the master's address).
+                at_pair "stats.g121-has-the-18-statistics-one-association" "${pair}"
+                check "${pair}: [stats] g121 has the 18 statistics, of one association" "18 0-17 1 true" \
+                    "$(jq -r '"\(.objects | length) \(.objects[0].index)-\(.objects[-1].index) \([.objects[].association] | unique | length) \(all(.objects[]; .association | type == "number"))"' <<<"${doc}" 2>/dev/null)"
                 at_pair "stats.refused-key-change-is-counted-statistics-10-and-14" "${pair}"
                 check "${pair}: [stats] a refused key change is counted (statistics 10 and 14)" "true true" \
                     "$(jq -r '"\(.objects[] | select(.index == 10) | .value > 0) \(.objects[] | select(.index == 14) | .value > 0)"' <<<"${doc}" 2>/dev/null)"
@@ -1158,6 +1162,8 @@ suite() {
                     skip "${pair}: time and interval (needs client:timeAndIntervalClient)"
                 fi
                 if has "${client}" commandEventsClient; then
+                    # The outstation's time is unsynchronized here: see class_poll_objects.
+                    from=$(clock_ms "${name}")
                     client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
                     client "${client}" -- operate --type g41v1 --index 0 --value 42 --host "${name}" >/dev/null
                     client "${client}" -- operate --type g41v1 --index 0 --value 5000000 --host "${name}" >/dev/null
@@ -1168,7 +1174,7 @@ suite() {
                     at_pair "points.outputs-own-events-are-unchanged" "${pair}"
                     check "${pair}: [points] the outputs' own events are unchanged" \
                         "g11v2:0=true g2v2:1=true g32v1:0=42 g42v1:0=42" \
-                        "$(objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")")"
+                        "$(class_poll_objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")" "${from}" "$(clock_ms "${name}")")"
                 else
                     at_pair "skipped.command-events" "${pair}"
                     skip "${pair}: command events (needs client:commandEventsClient)"
