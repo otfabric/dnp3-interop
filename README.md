@@ -3,25 +3,16 @@
 A Docker-based interoperability testing framework for DNP3 (IEEE 1815),
 providing independent master and outstation implementations, deterministic
 fixtures, and automated protocol compatibility testing.
-Test DNP3 libraries against established implementations including Step
-Function I/O dnp3 and opendnp3. Reference implementations are independently
+Test DNP3 libraries against established implementations including
+opendnp3, DSC Systems go-dnp3 and dnp3py. Reference implementations are independently
 containerized, enabling reproducible testing across platforms without
 integrating third-party protocol stacks into production applications.
 
 | Adapter | Implementation | Language | Server (outstation) | Client (master) | Image |
 |---------|----------------|----------|:------:|:------:|-------|
-| `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) 1.8.0 | Rust | yes | yes | not published: build it locally, `make image-stepfunc` ² |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.2 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
-
-² The stepfunc image is not published, at Step Function I/O's request: the
-licence of the Step Function I/O dnp3 crate forbids distributing it, and the
-image has the crate compiled in. Build it yourself from this repository
-(`make image-stepfunc`, or
-`docker build -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:dev .`);
-the build fetches the crate from crates.io, under its licence, for you. See
-[Building the stepfunc image](#building-the-stepfunc-image).
 
 The stacks do not all do the same: the opendnp3 master sends no `_NR`
 function, opendnp3's master synchronizes time only when the outstation asks for
@@ -33,11 +24,11 @@ limits. Each image says what it supports (`print-capabilities`); see
 Container contract 1.0 covers DNP3 over TCP. Contract 1.1 adds transports,
 file transfer and secure authentication:
 
-| | stepfunc | opendnp3 | dscsystems | dnp3py |
-|---|:-:|:-:|:-:|:-:|
-| TLS (mutual), UDP, serial | yes | yes | yes | no |
-| File transfer (g70) | master (no delete) | no | both roles | no |
-| Secure authentication v5 (g120) | no | no | both roles | no |
+| | opendnp3 | dscsystems | dnp3py |
+|---|:-:|:-:|:-:|
+| TLS (mutual), UDP, serial | yes | yes | no |
+| File transfer (g70) | no | both roles | no |
+| Secure authentication v5 (g120) | no | both roles | no |
 
 ¹ dnp3py's outstation serves the `dnp3py` fixture only.
 
@@ -51,13 +42,6 @@ keep-alives, broadcast, management functions and several outstations on one
 channel. Which adapter has which is in
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
-The Step Function I/O dnp3 crate is distributed under a non-commercial,
-non-production licence that does not permit redistributing it. This
-repository holds only the MIT-licensed stepfunc adapter and its Dockerfile;
-no stepfunc image is published, and each user builds one locally, getting the
-crate from crates.io under that licence. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
 On hold: the Triangle MicroWorks DNP3
 Source Code Library (C), whose licensed source has no agreed way into the
 builds yet. See [PLAN.md](PLAN.md).
@@ -70,7 +54,6 @@ builds yet. See [PLAN.md](PLAN.md).
   - [Table of contents](#table-of-contents)
   - [What this repository is, and is not](#what-this-repository-is-and-is-not)
   - [Quick start](#quick-start)
-  - [Building the stepfunc image](#building-the-stepfunc-image)
   - [The dnp3c runner](#the-dnp3c-runner)
   - [Using the images from a library's tests](#using-the-images-from-a-librarys-tests)
   - [Repository layout](#repository-layout)
@@ -98,7 +81,7 @@ implementation behave that way; the consumer decides what to assert.
 Needs Docker and `jq`.
 
 ```sh
-make images      # build the adapter images for this machine (stepfunc included)
+make images      # build the adapter images for this machine
 make smoke       # container contract of each image
 make interop     # every master against every outstation
 ```
@@ -132,11 +115,9 @@ docker stop ref
 }
 ```
 
-(abridged). `make run-stepfunc`, `make run-opendnp3` and
-`make run-dscsystems` run an outstation on 127.0.0.1:20000, 20001 and 20002
-(baseline fixture, Ctrl-C to stop); `make run-stepfunc` needs the locally
-built stepfunc image (below). dnp3py has no such target and serves its
-own fixture:
+(abridged). `make run-opendnp3` and `make run-dscsystems` run an outstation
+on 127.0.0.1:20001 and 20002 (baseline fixture, Ctrl-C to stop). dnp3py has
+no such target and serves its own fixture:
 
 ```sh
 docker run --rm -p 127.0.0.1:20003:20000 ghcr.io/otfabric/dnp3-interop-dnp3py:dev \
@@ -159,33 +140,6 @@ print-fixture        the fixture baked into the image
 version              adapter and upstream versions
 ```
 
-## Building the stepfunc image
-
-The stepfunc image is not published, at Step Function I/O's request: the
-licence of their dnp3 crate does not permit distributing it, and the image
-has it compiled in. Interoperability testing with it is allowed, so build it
-yourself; the build fetches the crate from crates.io, under its licence, for
-you. At the release tag you test against (for example `v0.5.1`):
-
-```sh
-git clone --branch v0.5.1 https://github.com/otfabric/dnp3-interop.git
-cd dnp3-interop
-make image-stepfunc VERSION=v0.5.1     # ghcr.io/otfabric/dnp3-interop-stepfunc:v0.5.1, local only
-```
-
-or without make:
-
-```sh
-docker build --build-arg ADAPTER_VERSION=v0.5.1 \
-  -f adapters/stepfunc/Dockerfile -t ghcr.io/otfabric/dnp3-interop-stepfunc:v0.5.1 .
-```
-
-Without `VERSION`, `make image-stepfunc` builds the `dev` tag that
-`make smoke`, `make interop` and `make run-stepfunc` use. The tag names the
-registry, but the image stays on your machine: nothing in this repository
-pushes or pulls it. Do not push it to a registry yourself either; that would
-distribute the crate.
-
 ## The dnp3c runner
 
 `make image-dnp3c` builds `dnp3-interop-dnp3c`, which runs the DNP Users
@@ -201,8 +155,8 @@ The results are not a certification.
 ## Using the images from a library's tests
 
 A consumer needs Docker, the image references and its own test code. It does
-not clone this repository, except to build the stepfunc image
-([above](#building-the-stepfunc-image)).
+not clone this repository, except to build the dnp3c runner
+([above](#the-dnp3c-runner)).
 
 **Library as master, reference as outstation.** Start the server, wait for the
 readiness file (never for a delay), connect to link address 1024 as master 1:
@@ -237,10 +191,9 @@ Skip, do not fail, a scenario that needs a feature an image declares false.
 
 **Pin by digest** in release qualification
 (`ghcr.io/otfabric/dnp3-interop-opendnp3@sha256:...`); the digests of the
-published images are in each release's `manifest.json`. The stepfunc and
-dnp3c images have no published digest: pin them by building them from the
-release tag, whose upstream pins `manifest.json` records under `localOnly`
-(dnp3c from v0.5.1).
+published images are in each release's `manifest.json`. The dnp3c image has
+no published digest: pin it by building it from the release tag, whose
+upstream pins `manifest.json` records under `localOnly` (from v0.5.1).
 
 ## Repository layout
 
@@ -248,7 +201,6 @@ release tag, whose upstream pins `manifest.json` records under `localOnly`
 dnp3-interop/
 ├── adapters/
 │   ├── opendnp3/        C++ adapter: Dockerfile, CMakeLists.txt, src/
-│   ├── stepfunc/        Rust adapter: Dockerfile, Cargo.toml, Cargo.lock, src/ (image built locally, never published)
 │   ├── dscsystems/      Go adapter: Dockerfile, go.mod, *.go
 │   ├── dnp3py/          Python adapter: Dockerfile, requirements.txt, dnp3_interop.py
 │   └── LICENSE          MIT, except adapters/dscsystems/ (GPL-3.0-or-later)
@@ -287,7 +239,7 @@ VERSION=v0.5.1 make qualify                        # Trivy scan and SBOMs of a r
 ```
 
 The **Upstream** workflow resolves the latest release of every stack daily
-(the dnp3 crate on crates.io, opendnp3's tags, DSC go-dnp3 on the Go module
+(opendnp3's tags, DSC go-dnp3 on the Go module
 proxy, dnp3py on PyPI) and the digest of every pinned base image, builds and
 self-tests the adapters whose pin is behind, reports pin versus latest in one
 table in its job summary and keeps a tracking issue open while a pin is
@@ -317,8 +269,6 @@ The repository's own code and documentation, and the adapter sources, are
 MIT-licensed, except `adapters/dscsystems/`, which links a GPL-3.0-or-later
 library and is GPL-3.0-or-later. The images contain the upstream libraries
 under their own licences: opendnp3 is Apache-2.0, DSC go-dnp3 is
-GPL-3.0-or-later and dnp3py is MIT. The Step Function I/O dnp3 crate is under
-a non-commercial, non-production licence agreement that does not permit
-redistribution: its image is not published, and whoever builds it locally
-gets the crate from crates.io under that agreement. See [LICENSE](LICENSE) and
+GPL-3.0-or-later and dnp3py is MIT. The dnp3c runner and its image are
+GPL-3.0-only. See [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

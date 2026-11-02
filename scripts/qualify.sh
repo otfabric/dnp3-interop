@@ -4,8 +4,7 @@
 #
 # Usage: qualify.sh <output directory> <adapter> [<adapter> ...]
 #
-# The adapters are the published ones (make print-published-adapters); the
-# stepfunc image is never published, so it cannot be scanned from the registry.
+# The adapters are the published ones (make print-published-adapters).
 #
 # Scans $(REGISTRY)/dnp3-interop-<adapter>:$(VERSION) from the registry (no
 # local image needed) for linux/amd64 and linux/arm64. Writes, per adapter and
@@ -26,9 +25,6 @@ source "${SCRIPT_DIR}/lib.sh"
 OUT="${1:?usage: qualify.sh <output directory> <adapter> [<adapter> ...]}"
 shift
 [[ $# -ge 1 ]] || { echo "usage: qualify.sh <output directory> <adapter> [<adapter> ...]" >&2; exit 2; }
-for adapter in "$@"; do
-    [[ "${adapter}" != stepfunc ]] || { echo "qualify.sh: the stepfunc image is not published; scan a local build of it yourself" >&2; exit 2; }
-done
 # Trivy, pinned by version and digest. Its vulnerability database is not
 # pinned: it is the point of a scan to use the current one, and its version
 # is recorded in the summary.
@@ -124,8 +120,7 @@ tool=$(trivy version --format json 2>/dev/null | jq -r '.Version' 2>/dev/null)
     echo "image and the Go module information of the dscsystems binary. It cannot see what"
     echo "is compiled into the opendnp3 binary (opendnp3, asio, exe4cpp, ser4cpp, statically linked;"
     echo "listed in \`versions.yaml\`): their versions are in the release's \`manifest.json\` and"
-    echo "\`versions.yaml\`. The stepfunc image is not published (the licence of the Step Function I/O"
-    echo "dnp3 crate forbids distributing it), so it is not scanned here: each user builds it locally."
+    echo "\`versions.yaml\`."
 } > "${OUT}/vulnerabilities.md"
 
 log "summary: ${OUT}/vulnerabilities.md"

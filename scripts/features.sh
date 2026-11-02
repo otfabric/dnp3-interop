@@ -526,7 +526,7 @@ multi_op() {
 multi() {
     local server="$1" client="$2" pair="$3" out
     # statuses <want>: the per-control statuses, or null where the master does
-    # not report them (stepfunc).
+    # not report them.
     statuses() { jq -c '.commandStatuses' <<<"${out%%$'\n'*}" | grep -qx "null" && echo null || echo "$1"; }
     out=$(multi_op "${server}" "${client}" --controls g12v1:0:LATCH_ON,g41v1:0:5)
     at_pair "controls.two-controls" "${pair}"
@@ -953,9 +953,9 @@ suite() {
                 at_pair "broadcast.control-to-0xffff" "${pair}"
                 check "${pair}: [broadcast] a control to 0xFFFF" "ok=true error=-" "$(outcome "${doc}")"
                 sleep 0.3
-                # Read by stepfunc's master, which sends nothing first: DSC go-dnp3's
+                # Read by opendnp3's master, which sends nothing first: DSC go-dnp3's
                 # writes IIN at start, and that response carries IIN1.0.
-                doc=$(client stepfunc -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")
+                doc=$(client opendnp3 -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")
                 at_pair "broadcast.is-carried-out" "${pair}"
                 check "${pair}: [broadcast] is carried out" "77" "$(jq -r '[.objects[]?.value] | join(" ")' <<<"${doc}" 2>/dev/null)"
                 at_pair "broadcast.iin1-0-in-the-next-response" "${pair}"
@@ -1056,8 +1056,8 @@ suite() {
             name="fb-${server}-${RUN_ID}"
             start "${server}" "${name}" --
             if wait_ready "${name}"; then
-                # AO0 drives AI4 (class 2). One change first: stepfunc compares
-                # with the last value reported, RESTART until there is one.
+                # AO0 drives AI4 (class 2). One change first, so that there is a
+                # last reported value to compare with.
                 client dscsystems -- operate --type g41v1 --index 0 --value 1000 --host "${name}" >/dev/null
                 client dscsystems -- event-poll --classes 1,2,3 --host "${name}" >/dev/null
                 doc=$(client "${client}" -- deadband-write --deadbands 4:100 --host "${name}")

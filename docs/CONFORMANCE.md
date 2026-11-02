@@ -28,7 +28,7 @@ GPL-3.0-only too ([conformance/LICENSE](../conformance/LICENSE)). The image
 build fetches dnp3c 0.2.0 and its dependencies from Maven Central, with
 strict checksums.
 
-The image is **built locally and not published**, like the stepfunc image.
+The image is **built locally and not published**.
 GPL-3.0 does allow publishing it, with the corresponding source, but that is
 a separate decision. A DUT talks to the runner over TCP and is not affected
 by its licence. See

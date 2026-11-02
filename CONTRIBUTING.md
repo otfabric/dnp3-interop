@@ -9,7 +9,7 @@
 
 ## Setup
 
-Docker (with buildx), `jq`, GNU make and Python 3. Nothing else: compilers, Cargo and the Go and Python toolchains run inside the image builds.
+Docker (with buildx), `jq`, GNU make and Python 3. Nothing else: compilers, Maven and the Go and Python toolchains run inside the image builds.
 
 ```sh
 make ci     # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
@@ -24,13 +24,11 @@ Run `make` for all targets.
 3. `make interop`: the result documents of all pairings must stay identical. If two stacks disagree, find out which one is right by the standard before touching the expectation.
 4. If behaviour visible to consumers changed, update the contract or fixture documentation in the same change.
 
-Never push the stepfunc image, nor add a target, a variable or a workflow step that could: build it locally (`make image-stepfunc`) and keep it there.
-
 Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except `adapters/dscsystems/`, which links a GPL-3.0-or-later library and is `GPL-3.0-or-later`.
 
 ## Moving an upstream pin
 
-1. Change the pin in the Dockerfile (and `Cargo.toml`/`Cargo.lock`, `requirements.txt` or `go.mod` with `go mod tidy`) and in `versions.yaml`; `scripts/check-versions.sh` must pass.
+1. Change the pin in the Dockerfile (and `requirements.txt`, or `go.mod` with `go mod tidy`) and in `versions.yaml`; `scripts/check-versions.sh` must pass.
 2. `make ci`.
 3. Record the new version, and anything it changed, in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [RELEASE.md](RELEASE.md).
 
@@ -71,8 +69,8 @@ See [docs/FIXTURES.md](docs/FIXTURES.md#adding-a-fixture).
 1. Evaluate the upstream: does it build from a pinned source on both architectures, which roles does it provide, what is its licence, and is its protocol engine its own? Write the answers into [PLAN.md](PLAN.md) before writing code.
 2. Create `adapters/<name>/` with a Dockerfile built from the repository root, following the existing ones: pinned build stage, minimal runtime stage, non-root user, `/fixtures`, `/licenses`, the readiness file, the health check, `ENTRYPOINT ["/usr/local/bin/dnp3-interop"]`.
 3. Implement the contract. For a role the upstream does not support, the command exits 2 with a message and `roles` says `false`. What the upstream cannot do within a role is a feature declared `false`, and the cases that need it name it in their `needs` column: never fake a behaviour the library does not have.
-4. `scripts/smoke.sh <name>` must pass, then `scripts/interop.sh stepfunc opendnp3 dscsystems dnp3py <name>`.
-5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml`, `scripts/check-versions.sh`, the notices and the documentation tables. Add it to `PUBLISHED_ADAPTERS` as well only if its upstream's licence permits distributing the library in an image; otherwise it is built and self-tested like the others but never pushed, as stepfunc is (the Step Function I/O dnp3 crate's licence forbids distributing it, [#19](https://github.com/otfabric/dnp3-interop/issues/19)), and the README says how to build it.
+4. `scripts/smoke.sh <name>` must pass, then `scripts/interop.sh opendnp3 dscsystems dnp3py <name>`.
+5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml`, `scripts/check-versions.sh`, the notices and the documentation tables. Add it to `PUBLISHED_ADAPTERS` as well only if its upstream's licence permits distributing the library in an image; otherwise it is built and self-tested like the others but never pushed, and the README says how to build it.
 
 Do not build a shared adapter framework. Adapters in different languages share a contract, not code.
 
@@ -80,7 +78,6 @@ Do not build a shared adapter framework. Adapters in different languages share a
 
 - Shell: `bash`, `set -uo pipefail`, shellcheck-clean (`make lint`). No associative arrays or other bash 4+ features in code paths macOS's `/bin/bash` could run.
 - C++: C++17, `-Wall -Wextra -Werror` on the adapter's own sources.
-- Rust: `cargo clippy -- -D warnings`, `cargo fmt --check`, a committed `Cargo.lock`.
 - Go: `gofmt`, `go vet`.
 - Python: `python -I`, standard library only besides the upstream package.
 - Documentation states what was verified. If something is assumed or untested, say so.
