@@ -452,9 +452,11 @@ func runServer(argv []string) int {
 		UseLinkConfirms:       a.has("link-confirms"),
 		Management:            management{},
 		ActivateConfig:        activateConfig,
-		Unsolicited:           outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
-		Files:                 files,
-		Log:                   libraryLog(),
+		// --confirm-timeout-ms covers unsolicited responses too.
+		Unsolicited: outstation.UnsolicitedConfig{Enabled: fx.Unsolicited,
+			ConfirmTimeout: time.Duration(confirmTimeout) * time.Millisecond},
+		Files: files,
+		Log:   libraryLog(),
 
 		SecureAuthentication: sec.outstation(),
 	}

@@ -16,7 +16,7 @@ What a consumer can exercise against the published adapters today.
 | Freeze without acknowledgement | Served by every outstation; sent by the opendnp3 and dnp3py masters | yes, values by the dnp3py fixture too |
 | Time synchronization | LAN (RECORD CURRENT TIME, g50v3) and non-LAN (DELAY MEASURE, g50v1); NEED_TIME until the time is written; the written time in the server's event stream | yes |
 | Restart | Cold and warm restart with the delay in g52v2; the outstation does not actually restart; DEVICE_RESTART until a master clears it; the server's restart event | yes |
-| Unsolicited responses | Null unsolicited response at connection; ENABLE and DISABLE UNSOLICITED per class; buffered and new events sent unsolicited and confirmed; nothing sent unsolicited after DISABLE UNSOLICITED | yes |
+| Unsolicited responses | Null unsolicited response at connection; ENABLE and DISABLE UNSOLICITED per class; buffered and new events sent unsolicited and confirmed; nothing sent unsolicited after DISABLE UNSOLICITED; an unconfirmed unsolicited response is sent again (1.5) | yes; the retry: the dnp3py master (`monitor --no-unsolicited-confirm`) against every outstation that sends unsolicited responses |
 | Freeze | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0; frozen counter and counter events | yes |
 | Counters that change (1.4) | `counter-increment` on every outstation: the value, its g22 event, the frozen value held until a freeze, a change after a clear; a wrap modulo 2^32 | yes |
 | Frozen counter events with time (1.4) | g23v5 and g23v6 from the opendnp3 and DSC go-dnp3 outstations to every master, with the time of the freeze. dnp3py's outstation: unsupported, with the reason | yes |
