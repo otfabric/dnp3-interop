@@ -309,6 +309,41 @@ suite() {
         got_flags=$(jq -cS '[.objects[] | select(.flags) | .flags] | sort' <<<"${doc}" 2>/dev/null)
         at_pair "${ID_PREFIX}values.integrity-poll-returns-the-flags-of-the-fixture" "${pair}"
         check "${pair}" "integrity poll returns the flags of the fixture" "${want_flags}" "${got_flags}"
+        # The value checks of the dnp3py fixture: those of the baseline's that
+        # fit its points, read without ranges (its outstation ignores them).
+        if [[ "${FIXTURE_NAME}" == dnp3py ]]; then
+            pick='[.objects[]? | select((.group == 10 and .index == 0) or (.group == 40 and .index == 0)) | "g\(.group):\(.index)=\(.value)"] | sort | join(" ")'
+            frozen='[.objects[]? | select(.group == 21 and .index <= 1) | "g\(.group):\(.index)=\(.value)"] | sort | join(" ")'
+            if supported "${client}" "${server}" "server:freezeNoAckServer,client:freezeNoAckClient"; then
+                name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+                run_client "${client}" freeze --no-ack --host "${name}" >/dev/null
+                at_pair "${ID_PREFIX}values.freeze-without-acknowledgement-copies-the-counters" "${pair}"
+                check "${pair}" "a freeze without acknowledgement copies the counters" "g21:0=123456 g21:1=65535" \
+                    "$(run_client "${client}" read --group 21 --variation 0 --host "${name}" | jq -r "${frozen}")"
+                stop_server "${name}"
+            fi
+            if supported "${client}" "${server}" "server:directOperateNoAckServer,client:directOperateNoAckClient"; then
+                name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+                run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --mode direct-no-ack --host "${name}" >/dev/null
+                run_client "${client}" operate --type g41v2 --index 0 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
+                at_pair "${ID_PREFIX}values.direct-operate-no-ack-operates" "${pair}"
+                check "${pair}" "direct operate no ack operates" "g10:0=true g40:0=7" \
+                    "$(run_client "${client}" integrity-poll --host "${name}" | jq -r "${pick}")"
+                stop_server "${name}"
+            fi
+            if supported "${client}" "${server}" "server:timeSyncLan,client:timeSyncLan"; then
+                name=$(start_server "${server}" "${SERVER_ARGS[@]}"); wait_ready "${name}" || exit 1
+                run_client "${client}" time-sync --host "${name}" >/dev/null
+                at_pair "${ID_PREFIX}values.time-sync-clears-need-time" "${pair}"
+                check "${pair}" "a time synchronization clears NEED_TIME" "false" \
+                    "$(run_client "${client}" integrity-poll --host "${name}" | jq -r '.iin | index("NEED_TIME") != null')"
+                at_pair "${ID_PREFIX}values.cold-restart-is-accepted" "${pair}"
+                check "${pair}" "a cold restart is accepted" "true" \
+                    "$(run_client "${client}" restart --type cold --host "${name}" | jq -r '.ok')"
+                stop_server "${name}"
+            fi
+            continue
+        fi
         # The value checks below use the baseline's points.
         [[ "${FIXTURE_NAME}" == baseline ]] || continue
 

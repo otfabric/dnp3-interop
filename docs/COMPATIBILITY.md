@@ -183,17 +183,24 @@ reference master can do it.
 ### Management functions
 
 Only DSC go-dnp3's outstation accepts the management functions (INITIALIZE DATA,
-INITIALIZE/START/STOP APPLICATION, SAVE CONFIGURATION), and only opendnp3's
-master sends them all. ACTIVATE CONFIG (31) is not in the contract, as no
-reference master sends it; DSC go-dnp3 hands it to the same handler as the
-others, so the dscsystems adapter refuses it there, and the library answers
-that refusal with PARAMETER_ERROR rather than NO_FUNC_CODE_SUPPORT.
+INITIALIZE/START/STOP APPLICATION, SAVE CONFIGURATION); opendnp3's master and
+dnp3py's (requests built by the adapter) send them all. ACTIVATE CONFIG (31,
+contract 1.5) is sent by dnp3py's master only (the adapter builds the g70v8
+file specification; 31 is not in dnp3py's `FunctionCode`) and answered by DSC
+go-dnp3's outstation only, through the library's `Config.ActivateConfig`,
+with g91v1. dnp3py's parser cannot frame g91v1 ("unknown_width"), so the
+activation status is not reported; the request succeeds by its IIN. Without
+an `ActivateConfig` handler DSC go-dnp3 would hand 31 to the management
+handler of 15..19 and answer PARAMETER_ERROR (v0.8.2
+`outstation/services.go`, `onManagement`).
 
 ### Broadcast
 
-Only DSC go-dnp3's master can send a broadcast (a DIRECT OPERATE NO ACK to
-0xFFFF): opendnp3's master has no request that expects no answer, and
-dnp3py's refuses the address. The opendnp3 and DSC go-dnp3 outstations carry
+DSC go-dnp3's and dnp3py's masters send a broadcast (a DIRECT OPERATE NO ACK to
+0xFFFF); opendnp3's master has no direct-operate-no-ack mode. dnp3py's
+`MasterConfig` takes 0xFFFF as the outstation address (it checks against
+65535, not the unused `MAX_ADDRESS` 0xFFFE) and its runner's `send()` frames
+to it. The opendnp3 and DSC go-dnp3 outstations carry
 it out and set IIN1.0 in their next response;
 dnp3py's ignores it. DSC go-dnp3's master sends its start-up WRITE (clearing
 IIN1.7 RESTART) to the broadcast address as well, and a DSC go-dnp3 master that
@@ -205,8 +212,12 @@ reports.
 Only DSC go-dnp3 sends confirmed user data, in both roles. The opendnp3 and
 dnp3py outstations and the opendnp3 master acknowledge it; dnp3py's master
 does not, so it gets no answer from an outstation that asks for link-layer
-confirms (a known bug). The opendnp3 and DSC go-dnp3 masters send keep-alives (REQUEST_LINK_STATUS) on an idle link; every outstation
-answers them, and DSC go-dnp3's adapter reports each one it receives.
+confirms (a known bug: its runner's `_consume_frame` takes the user data of a
+CONFIRMED_USER_DATA frame and sends no ACK,
+[`master/tcp_runner.py#L725-L771`](https://github.com/craigpnnl/dnp3py/blob/c00d5df22e779df72f7caa4402c3f34957eb276d/src/dnp3/master/tcp_runner.py#L725-L771)). The opendnp3 and DSC go-dnp3 masters send keep-alives (REQUEST_LINK_STATUS) on an idle link, and so does
+the dnp3py adapter, which writes the library's own frame on the runner's
+channel (the runner never sends it). Every outstation answers them, and DSC
+go-dnp3's adapter reports each one it receives.
 
 ### File append and authentication
 
@@ -297,7 +308,10 @@ Its UDP channel binds and then connects to the remote endpoint, so an
 outstation answers one master endpoint only and needs it up front
 (`--udp-peer`); a master always sends from its `--udp-local-port`. Its TLS
 master checks the outstation's certificate against the CA but not the name
-in it (`--tls-server-name` has nothing to act on). Built against OpenSSL 3,
+in it (`--tls-server-name` has nothing to act on): a certificate issued to
+another name is accepted
+([`TLSClient.cpp#L66-L69`](https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/channel/tls/TLSClient.cpp#L66-L69)),
+which `make features` shows (`[tls]`, listed in the known bugs). Built against OpenSSL 3,
 asio 1.16 warns about deprecated calls; TLS 1.2 and 1.3 both work.
 
 ### TLS is mutual everywhere, and a refused master learns it late
@@ -366,14 +380,16 @@ outstation that does not set NEED_TIME it fails with `failed`; the capability
 `timeSyncOnDemand` is false. The baseline fixture sets NEED_TIME at start for
 this reason.
 
-### opendnp3's master sends no `_NR` function
+### opendnp3's master waits for an answer to a `_NR` function
 
 opendnp3's master has no direct-operate-no-ack mode and sends any other
 function code through a task that waits for a response (`PerformFunction`),
-so a `_NR` request would end in a timeout: its `directOperateNoAckClient` and
-`freezeNoAckClient` are false. The DSC go-dnp3 and dnp3py masters send them
-too (DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested
-with them.
+so a `_NR` request ends in a response timeout: its `directOperateNoAckClient`
+is false. For IMMED_FREEZE_NR and FREEZE_CLEAR_NR the adapter waits at most
+1 s and takes that timeout as "sent" (`freezeNoAckClient`); the outstation's
+frozen and cleared counters show that the request arrived (interop value
+checks, the `freeze --no-ack` cases against all three outstations). The DSC
+go-dnp3 and dnp3py masters send DIRECT OPERATE NO ACK as well.
 
 ### opendnp3's outstation sets PARAMETER_ERROR with NOT_SUPPORTED
 
@@ -500,12 +516,19 @@ stamp, so there the time stamp is checked only for being absent.
 ### DSC go-dnp3: the outstation does not filter the master address
 
 Its outstation processes requests from a master address other than its
-configured master's and answers them, to that address. Its master drops
-frames addressed to another master address (v0.8.2: `Stack.addressedToUs`),
-but the answer is addressed to the address it asked from, so it takes it.
-Against the other stacks this is harmless (they filter); DSC go-dnp3 against
-itself reads an IIN where every other pairing times out. Listed in the known
-bugs.
+configured master's and answers them, to that address: the stack checks the
+destination and that the source is a valid address, not that it is the
+configured master
+([`internal/stack/stack.go#L305-L342`](https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/internal/stack/stack.go#L305-L342)),
+and the session answers to the request's source
+([`outstation/session.go#L1709-L1716`](https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/session.go#L1709-L1716)).
+Its master drops frames addressed to another master address (v0.8.2:
+`Stack.addressedToUs`), but the answer is addressed to the address it asked
+from, so it takes it.
+The other masters drop the answer, so DSC go-dnp3 against itself reads an IIN
+where every other pairing times out. A control sent from another master
+address is carried out whichever master sends it (`make features`,
+`[address]`). Listed in the known bugs.
 
 ### DSC go-dnp3 sets PARAMETER_ERROR only for a control of a point that does not exist
 
@@ -623,3 +646,25 @@ requires an association on every statistic, the same for all 18, not a value.
 the order they arrived and does not fix that order: go-dnp3 serves g0v254 from
 the highest variation down, DSC go-dnp3 from the lowest up. The attribute
 checks of `scripts/features.sh` compare the attributes by variation.
+
+### dnp3py's outstation: master address, select expiry, event confirms
+
+Three checks of `make features` fail against dnp3py's outstation and are
+listed in the known bugs:
+
+- `[address]`: a control sent from a master address other than the
+  configured master's is carried out. The TCP runner checks a frame's
+  destination, not its source, and learns the master address from the first
+  frame
+  ([`tcp_runner.py#L159-L168`](https://github.com/craigpnnl/dnp3py/blob/c00d5df22e779df72f7caa4402c3f34957eb276d/src/dnp3/outstation/tcp_runner.py#L159-L168)).
+- `[select]`: an OPERATE after the select timer expired is answered
+  NO_SELECT, not TIMEOUT. Expired selections are dropped before the OPERATE
+  is checked, so it finds none
+  ([`outstation.py#L2039-L2084`](https://github.com/craigpnnl/dnp3py/blob/c00d5df22e779df72f7caa4402c3f34957eb276d/src/dnp3/outstation/outstation.py#L2039-L2084)).
+  The control is not carried out either way.
+- `[confirm]`: events a master did not confirm are not sent again. Events
+  are removed when the response is built, not on the confirm
+  ([`outstation.py#L1172-L1176`](https://github.com/craigpnnl/dnp3py/blob/c00d5df22e779df72f7caa4402c3f34957eb276d/src/dnp3/outstation/outstation.py#L1172-L1176);
+  upstream issues
+  [#77](https://github.com/craigpnnl/dnp3py/issues/77) and
+  [#187](https://github.com/craigpnnl/dnp3py/issues/187)).

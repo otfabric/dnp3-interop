@@ -424,6 +424,10 @@ int run_client(const std::vector<std::string>& argv)
     std::vector<Header> headers;
     std::function<void(IMaster&, State&, std::shared_ptr<ISOEHandler>)> start;
     std::string procedure;
+    // freeze --no-ack: opendnp3 sends IMMED_FREEZE_NR and FREEZE_CLEAR_NR
+    // through PerformFunction, whose task then waits for a response that
+    // never comes; the wait ending in a response timeout means it was sent.
+    bool noAck = false;
     Transport transport;
     try
     {
@@ -692,11 +696,11 @@ int run_client(const std::vector<std::string>& argv)
             }
             else
             {
-                if (args.has("no-ack"))
-                    throw UsageError{"--no-ack: opendnp3's master cannot send a freeze without response"};
                 if (args.has("at") || args.has("interval-ms"))
                     throw UsageError{"--at: opendnp3's master cannot send FREEZE AT TIME (its requests carry no g50v2)"};
-                fc = args.has("clear") ? FunctionCode::FREEZE_CLEAR : FunctionCode::IMMED_FREEZE;
+                noAck = args.has("no-ack");
+                fc = args.has("clear") ? (noAck ? FunctionCode::FREEZE_CLEAR_NR : FunctionCode::FREEZE_CLEAR)
+                                       : (noAck ? FunctionCode::IMMED_FREEZE_NR : FunctionCode::IMMED_FREEZE);
                 // Counters, or analog inputs with --group 30 (contract 1.3).
                 const auto group = args.integer("group", 20, 20, 30);
                 if (group != 20 && group != 30)
@@ -774,7 +778,9 @@ int run_client(const std::vector<std::string>& argv)
     {
 
         MasterStackConfig config;
-        config.master.responseTimeout = TimeDuration::Milliseconds(timeout);
+        // Without a response to wait for, the wait is only how long the
+        // request has to leave.
+        config.master.responseTimeout = TimeDuration::Milliseconds(noAck ? std::min<int64_t>(timeout, 1000) : timeout);
         config.master.taskStartTimeout = TimeDuration::Milliseconds(timeout);
         config.master.disableUnsolOnStartup = false;
         config.master.unsolClassMask = ClassField::None();
@@ -871,6 +877,8 @@ int run_client(const std::vector<std::string>& argv)
                 failure = Outcome{"command-failed", "the outstation answered " + command_status_name(*s.commandStatus)};
             else if (s.lost || result == TaskCompletion::FAILURE_NO_COMMS)
                 failure = Outcome{"connection-lost", "the connection closed during the operation"};
+            else if (noAck && result == TaskCompletion::FAILURE_RESPONSE_TIMEOUT)
+                ; // sent, and nothing answers a request without acknowledgement
             else if (result == TaskCompletion::FAILURE_RESPONSE_TIMEOUT || result == TaskCompletion::FAILURE_START_TIMEOUT)
                 failure = Outcome{"timeout", "no response from the outstation"};
             else if ((op == "operate" || op == "operate-multi") && (s.commandMismatch || !s.commandStatus))

@@ -399,6 +399,7 @@ start, one binary input, and in attribute set 1:
 | 3 | signedInt | -42 | no |
 | 10 | visibleString | "writable text" | yes |
 | 11 | unsignedInt | 7 | yes |
+| 12 | signedInt | -7 | yes |
 
 ## The extended fixture
 

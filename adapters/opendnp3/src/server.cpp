@@ -196,6 +196,9 @@ DatabaseConfig database_config(const Fixture& fx)
         auto& c = db.octet_string[p.index];
         c.clazz = point_class(p.clazz);
     }
+    // g50v4 (contract 1.2): static only, so in no class.
+    for (const auto& t : fx.timeAndIntervals)
+        db.time_and_interval[t.index];
     return db;
 }
 
@@ -229,6 +232,8 @@ Updates initial_values(const Fixture& fx)
         b.Update(AnalogOutputStatus(p.value, Flags(p.flags), time), p.index, EventMode::Suppress);
     for (const auto& p : fx.points.at("octetStrings"))
         b.Update(OctetString(Buffer(p.octets.data(), p.octets.size())), p.index, EventMode::Suppress);
+    for (const auto& t : fx.timeAndIntervals)
+        b.Update(TimeAndInterval(DNPTime(t.timeMs), t.interval, t.units), t.index);
     return b.Build();
 }
 
@@ -631,6 +636,9 @@ int run_server(const std::vector<std::string>& argv)
         OutstationStackConfig config(database_config(fx));
         config.outstation.eventBufferConfig = EventBufferConfig::AllTypes(fx.eventBufferSize.value_or(1000));
         config.outstation.params.allowUnsolicited = fx.unsolicited;
+        // g50v4 is read by range, not in class 0 (FIXTURES.md).
+        config.outstation.params.typesAllowedInClass0
+            = StaticTypeBitField::AllTypes().Except(StaticTypeBitmask::TimeAndInterval);
         config.outstation.params.unsolClassMask = ClassField::None();
         config.outstation.params.selectTimeout = TimeDuration::Milliseconds(selectTimeout);
         if (fx.maxControlsPerRequest)

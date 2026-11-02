@@ -20,6 +20,7 @@ import (
 
 	"github.com/dscsystems/go-dnp3"
 	"github.com/dscsystems/go-dnp3/multidrop"
+	"github.com/dscsystems/go-dnp3/objects"
 	"github.com/dscsystems/go-dnp3/outstation"
 )
 
@@ -445,6 +446,7 @@ func runServer(argv []string) int {
 		MaxControlsPerRequest: fx.MaxControls,
 		UseLinkConfirms:       a.has("link-confirms"),
 		Management:            management{},
+		ActivateConfig:        activateConfig,
 		Unsolicited:           outstation.UnsolicitedConfig{Enabled: fx.Unsolicited},
 		Files:                 files,
 		Log:                   libraryLog(),
@@ -558,6 +560,18 @@ func runServer(argv []string) int {
 // is not in the contract, so it is refused and not reported. The library
 // answers a refusal by the handler with PARAMETER_ERROR: with a handler set
 // it has no way to answer 31 with NO_FUNC_CODE_SUPPORT.
+// activateConfig answers ACTIVATE_CONFIG (31, contract 1.5): every named
+// configuration is taken at once (status 0, no delay), and reported in the
+// manage event.
+func activateConfig(names []string) objects.ActivationResult {
+	emit(object{{"event", "manage"}, {"function", 31}})
+	result := objects.ActivationResult{}
+	for range names {
+		result.Statuses = append(result.Statuses, objects.ActivationStatus{Code: 0})
+	}
+	return result
+}
+
 type management struct{}
 
 func (management) Manage(op outstation.ManagementOperation, _ []byte) bool {
