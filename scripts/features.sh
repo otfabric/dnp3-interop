@@ -108,6 +108,7 @@ SA=(--sa-update-key "${SA_KEY}" --sa-user 3)
 : > "${WORK}/reproduced"
 for adapter in "${ADAPTERS[@]}"; do
     docker run --rm "$(image_of "${adapter}")" print-capabilities > "${WORK}/caps-${adapter}.json" 2>/dev/null
+    implementation "${adapter}" "${WORK}/caps-${adapter}.json"
     version=$(jq -r '.upstream.version' "${WORK}/caps-${adapter}.json")
     while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text bug_fixture bug_id bug_url; do
         [[ -z "${bug_adapter}" || "${bug_adapter}" == \#* || "${bug_fixture:-}" != features ]] && continue
@@ -1092,7 +1093,9 @@ suite() {
             name="fd-${server}-${RUN_ID}"
             start "${server}" "${name}" -- --fixture /fixtures/attributes/fixture.json
             if wait_ready "${name}"; then
-                local attrs='[.attributes[]? | select(.variation != 3) | "\(.variation):\(.type):\(.value)"] | join(" ")'
+                # By variation: the contract keeps the order the outstation sent, and
+                # does not say which order that is.
+                local attrs='[.attributes[]? | select(.variation != 3)] | sort_by(.variation) | map("\(.variation):\(.type):\(.value)") | join(" ")'
                 doc=$(client "${client}" -- attribute-read --set 1 --host "${name}")
                 at_pair "attributes.read-a-set" "${pair}"
                 check "${pair}: [attributes] read a set" \
@@ -1112,7 +1115,7 @@ suite() {
                 check "${pair}: [attributes] write an unsigned integer" "ok=true error=-" "$(outcome "${doc}")"
                 at_pair "attributes.written-values-read-back" "${pair}"
                 check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99" \
-                    "$(client "${client}" -- attribute-read --set 1 --host "${name}" | jq -r '[.attributes[]? | select(.variation >= 10) | "\(.variation):\(.type):\(.value)"] | join(" ")')"
+                    "$(client "${client}" -- attribute-read --set 1 --host "${name}" | jq -r '[.attributes[]? | select(.variation >= 10)] | sort_by(.variation) | map("\(.variation):\(.type):\(.value)") | join(" ")')"
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 1 --text no --host "${name}")
                 at_pair "attributes.read-only-attribute-refuses-a-write" "${pair}"
                 check "${pair}: [attributes] a read-only attribute refuses a write" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"

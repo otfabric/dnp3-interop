@@ -55,6 +55,7 @@ builds yet. See [PLAN.md](PLAN.md).
   - [What this repository is, and is not](#what-this-repository-is-and-is-not)
   - [Quick start](#quick-start)
   - [The dnp3c runner](#the-dnp3c-runner)
+  - [OT Fabric's own stack](#ot-fabrics-own-stack)
   - [Using the images from a library's tests](#using-the-images-from-a-librarys-tests)
   - [Repository layout](#repository-layout)
   - [Development](#development)
@@ -67,7 +68,8 @@ It owns the reference implementations, their adapters, the fixtures, the
 container contract, the images and the self-tests that show the references
 agree with each other.
 
-It does not contain, import, build or know about any library under test.
+It does not contain, import, build or know about any library under test, apart
+from [one image](#ot-fabrics-own-stack) kept out of its releases.
 [otfabric/go-dnp3](https://github.com/otfabric/go-dnp3) is a consumer: it
 pulls the images and owns its own scenarios, assertions and compatibility
 claims. A passing self-test here says the *references* interoperate; it says
@@ -151,6 +153,14 @@ input changes and checks of outputs; no adapter here implements it. dnp3c and
 the runner are GPL-3.0-only. The build fetches dnp3c from Maven Central, and
 the image is not published. See [docs/CONFORMANCE.md](docs/CONFORMANCE.md).
 The results are not a certification.
+
+## OT Fabric's own stack
+
+`ghcr.io/otfabric/dnp3-interop-otfabric` is go-dnp3 behind the same contract, so
+you can test your stack against ours the way we test ours against yours. Despite
+the name it shares with the reference images, it is not an independent
+implementation and not part of a release of this repository, so its tags are
+go-dnp3 versions and `manifest.json` does not list it: see [own/go-dnp3/README.md](own/go-dnp3/README.md).
 
 ## Using the images from a library's tests
 

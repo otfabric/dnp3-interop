@@ -71,6 +71,21 @@ implementations:
     language: "C"
     independent_engine: true
 
+# OT Fabric's own stacks. Not independent implementations, not in a release of
+# this repository or its manifest.json: see own/<library>/README.md.
+own_implementations:
+  otfabric:
+    upstream: "go-dnp3"
+    repository: "https://github.com/otfabric/go-dnp3"
+    artifact: "go:github.com/otfabric/go-dnp3"
+    version: "latest release, resolved when the image is built by hand"
+    license: "MIT"
+    language: "Go"
+    independent_engine: false
+    roles: [server, client]
+    image: "ghcr.io/otfabric/dnp3-interop-otfabric"
+    build: "own/go-dnp3"
+
 dependencies:
   nlohmann_json: "debian trixie nlohmann-json3-dev"   # opendnp3 adapter, MIT, header-only
 

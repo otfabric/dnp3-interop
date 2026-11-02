@@ -2,7 +2,7 @@
 
 ## What this is
 
-Independent DNP3 (IEEE 1815) master and outstation implementations (opendnp3, dscsystems, dnp3py) in containers behind one command-line contract, with deterministic fixtures, used as reference peers by go-dnp3 and dnp3ctl. Nothing here depends on go-dnp3. Profile: **interoperability**.
+Independent DNP3 (IEEE 1815) master and outstation implementations (opendnp3, dscsystems, dnp3py) in containers behind one command-line contract, with deterministic fixtures, used as reference peers by go-dnp3 and dnp3ctl. Nothing here depends on go-dnp3, except `own/`, the one image of OT Fabric's own stack (`own/go-dnp3/README.md`). Profile: **interoperability**.
 
 ## Organisation standards
 

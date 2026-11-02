@@ -74,6 +74,7 @@ network_up
 : > "${WORK}/reproduced"
 for adapter in "${ADAPTERS[@]}"; do
     docker run --rm "$(image_of "${adapter}")" print-capabilities > "${WORK}/caps-${adapter}.json" 2>/dev/null
+    implementation "${adapter}" "${WORK}/caps-${adapter}.json"
     version=$(jq -r '.upstream.version' "${WORK}/caps-${adapter}.json")
     log "${adapter}: upstream ${version}"
     while IFS=$'\t' read -r bug_adapter bug_version bug_regex bug_text bug_fixture bug_id bug_url; do
@@ -317,7 +318,7 @@ suite() {
         run_client "${client}" operate --type g41v1 --index 0 --value 42 --host "${name}" >/dev/null
         at_pair "values.controls-produce-class-1-events" "${pair}"
         check "${pair}" "controls produce class 1 events" "g11v2:0=true g2v2:1=true g42v1:0=42" \
-            "$(objects "$(run_client "${client}" event-poll --classes 1 --host "${name}")")"
+            "$(objects "$(run_client "${client}" event-poll --classes 1 --host "${name}")")" "controls produce class 1 events"
         at_pair "values.controls-produce-class-2-events" "${pair}"
         check "${pair}" "controls produce class 2 events" "g32v1:4=42" \
             "$(objects "$(run_client "${client}" event-poll --classes 2 --host "${name}")")"
@@ -459,7 +460,8 @@ suite() {
             run_client "${client}" operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
             at_pair "values.enabling-class-1-delivers-its-events-unsolicited" "${pair}"
             check "${pair}" "enabling class 1 delivers its events unsolicited" "g11v2u:0=true g2v2u:1=true" \
-                "$(objects "$(run_client "${client}" enable-unsolicited --classes 1 --collect-ms 2000 --host "${name}")")"
+                "$(objects "$(run_client "${client}" enable-unsolicited --classes 1 --collect-ms 2000 --host "${name}")")" \
+                "enabling class 1 delivers its events unsolicited"
             at_pair "values.events-delivered-unsolicited-are-not-polled-again" "${pair}"
             check "${pair}" "events delivered unsolicited are not polled again" "" \
                 "$(objects "$(run_client "${client}" event-poll --classes 1 --host "${name}")")"
@@ -479,7 +481,7 @@ suite() {
                 "$(objects "$(run_client "${client}" event-poll --classes 2 --host "${name}")")"
             at_pair "values.old-class-has-them-no-more" "${pair}"
             check "${pair}" "the old class has them no more" "g2v2:1=true" \
-                "$(objects "$(run_client "${client}" event-poll --classes 1 --host "${name}")")"
+                "$(objects "$(run_client "${client}" event-poll --classes 1 --host "${name}")")" "the old class has them no more"
             stop_server "${name}"
         else
             at_pair "skipped.class-assignment" "${pair}"

@@ -15,9 +15,11 @@ published; the dnp3c runner image is not (see
 | `adapters/dscsystems/` (links DSC Systems go-dnp3) | GPL-3.0-or-later |
 | `adapters/dnp3py/` (imports dnp3py) | MIT |
 | `conformance/dnp3c/` (links Step Function I/O dnp3c) | GPL-3.0-only |
+| `own/go-dnp3/` (links OT Fabric go-dnp3) | MIT |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
 | Image `dnp3-interop-dscsystems` | GPL-3.0-or-later (it contains DSC go-dnp3) |
 | Image `dnp3-interop-dnp3py` | MIT (and the Python licence) |
+| Image `dnp3-interop-otfabric` (OT Fabric's own stack, not in a release) | MIT and BSD-3-Clause, and the licences of the components below |
 | Image `dnp3-interop-dnp3c` (not published; built locally by each user) | GPL-3.0-only (it contains dnp3c), and the licences of the components below |
 
 Each adapter is a separate program in a separate image; no image contains two
@@ -50,6 +52,19 @@ over TCP and is not affected by its licence.
 Licence and notice in the image: `/licenses/opendnp3/LICENSE` and
 `/licenses/opendnp3/NOTICE`. The opendnp3 repository is archived; 3.1.2 is its
 last release.
+
+## Image `dnp3-interop-otfabric`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| OT Fabric go-dnp3 | latest release when built | MIT | https://github.com/otfabric/go-dnp3 |
+| Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
+| Adapter | this repository, `own/go-dnp3/` | MIT | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+Licence texts in the image: under `/licenses`, one directory per Go module,
+and `/licenses/dnp3-interop/LICENSE`.
 
 ## Image `dnp3-interop-dscsystems`
 

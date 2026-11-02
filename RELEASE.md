@@ -18,6 +18,9 @@ section per version, newest first, each ending with a `---` line, and no
 
 Tags are immutable. A fix is a new version.
 
+The `dnp3-interop-otfabric` image is not part of these releases. It has its own
+manual workflow and no releases (`own/go-dnp3/README.md`).
+
 | What changed | Version |
 |--------------|---------|
 | Contract or fixture format changed incompatibly | major |

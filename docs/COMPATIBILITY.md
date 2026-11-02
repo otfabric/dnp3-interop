@@ -80,6 +80,16 @@ runs the self-tests on the published images, natively on linux/amd64 and
 linux/arm64, and attaches them as `compatibility-report.md` to the
 [GitHub release](https://github.com/otfabric/dnp3-interop/releases).
 
+OT Fabric's own image (`own/go-dnp3`, go-dnp3 v1.5.4) is in no release, so
+no qualification runs it. Its workflow runs the same self-tests against the
+reference images of the latest release. With it as a fourth stack, on
+linux/arm64 locally on 2026-11-02 against the v0.9.0 references: smoke 63
+passed; cross-stack on the baseline 1364 passed, 16 known bugs, 90 skipped;
+on the dnp3py fixture 1214 passed, 20 known bugs, 102 skipped; features 979
+passed, 25 known bugs, 180 skipped; none failed. Of the 61 known bugs, 27
+are the two go-dnp3 differences described below, 34 those of the reference
+stacks.
+
 The cross-stack self-test runs one suite per server adapter at the same time
 (an outstation serves one master at a time, so the work is split by server)
 and checks the agreement of the documents across pairings when all are done;
@@ -577,3 +587,38 @@ write the application confirm of the last response asynchronously, and an
 immediate close occasionally lost it, so the outstation kept events the
 master had already reported. The parallel self-test exposed this with
 opendnp3 and DSC go-dnp3 masters.
+
+### OT Fabric go-dnp3: binary events with relative time while unsynchronized
+
+OT Fabric's own stack (`own/go-dnp3`, not a reference; see
+[own/go-dnp3/README.md](../own/go-dnp3/README.md)). An outstation of go-dnp3
+v1.5.4 that requests time synchronization (`needTime` in the fixture, which the
+adapter maps to `server.WithTimeSync`) counts its time as unsynchronized until
+a master writes the time. A binary or double-bit input event recorded in that
+time, read by a class poll, is reported with relative time under an
+unsynchronized CTO (g51v2 followed by g2v3 or g4v3), whatever event variation
+the point has (`server/read.go`, `eventItems` and `relativeOf`). The other
+outstations report the point's event variation, g2v2 in the baseline. A read
+that names the variation (g2v2) gets it. The value and the index of
+the events are right, and every other event check passes.
+
+`tests/known-bugs.tsv` lists the checks that poll binary input events before
+a time synchronization, for this adapter as the outstation: three value checks
+of `scripts/interop.sh` and five checks of `scripts/features.sh`.
+
+### OT Fabric go-dnp3: the association of security statistics
+
+The go-dnp3 v1.5.4 outstation reports its security statistics (g121) and
+statistic events (g122) with the master's DNP3 address as the association
+(`server/auth.go`, the `SecurityStatistic` values it builds), 1 in the
+self-test. DSC go-dnp3, the only other outstation with them, reports 0, and the
+check `[stats] g121 has the 18 statistics, association 0` of
+`scripts/features.sh` was written against it. The count, indexes and flags of
+the 18 statistics agree. `tests/known-bugs.tsv` lists that one check for this
+adapter as the outstation.
+
+The order of the attributes of a set is not part of the contract (`attributes`
+keeps the order they arrived in): go-dnp3 serves g0v254 from the highest
+variation down, DSC go-dnp3 (the only other outstation with them) from the
+lowest up. The attribute checks
+of `scripts/features.sh` compare the attributes by variation.

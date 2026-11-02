@@ -28,7 +28,12 @@ waiver_id() { awk -F'\t' -v t="$1" '$3 == t {print $4; exit}' "${WORK}/active"; 
 ok()   { PASS=$((PASS + 1)); record ok "$*"; result pass; [[ -n "${VERBOSE:-}" ]] && log "ok: $*"; return 0; }
 fail() { FAIL=$((FAIL + 1)); record fail "$*"; result fail "$*"; log "FAIL: $*"; return 0; }
 
-image_of() { echo "${REGISTRY}/dnp3-interop-$1:${VERSION}"; }
+# image_of <adapter>: ADAPTER_IMAGE_<adapter> names an image outside the release
+# set, which this repository's scripts know nothing about.
+image_of() {
+    local override="ADAPTER_IMAGE_$1"
+    if [[ -n "${!override:-}" ]]; then echo "${!override}"; else echo "${REGISTRY}/dnp3-interop-$1:${VERSION}"; fi
+}
 
 require_tools() {
     local t
