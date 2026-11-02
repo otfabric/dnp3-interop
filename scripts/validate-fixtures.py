@@ -161,6 +161,13 @@ def semantic_errors(fx):
                     f"deviceAttributes: set {key[0]} variation {key[1]}: value takes {octets} octets of UTF-8; "
                     "a device attribute carries at most 255"
                 )
+        # A float attribute travels in four octets: only a value a 32-bit
+        # float holds exactly reads back as written.
+        if a.get("type") == "float" and isinstance(value, (int, float)):
+            import struct
+
+            if struct.unpack("<f", struct.pack("<f", value))[0] != value:
+                errors.append(f"deviceAttributes: set {key[0]} variation {key[1]}: a 32-bit float does not hold {value} exactly")
     out = fx.get("outstation", {})
     if out.get("address") is not None and out.get("address") == out.get("masterAddress"):
         errors.append("outstation: address and masterAddress are equal")

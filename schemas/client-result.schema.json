@@ -91,6 +91,7 @@
                    "BUFFER_OVERRUN", "FATAL", "BLOCK_SEQ", "UNDEFINED"] }
       ]
     },
+    "unsolicitedFragments": { "description": "Contract 1.5. monitor --no-unsolicited-confirm: the unsolicited fragments that arrived, repeats included.", "type": "integer", "minimum": 0 },
     "elapsedMs": { "type": "number", "minimum": 0 }
   },
   "allOf": [

@@ -74,6 +74,8 @@ void check_point(const TypeRule& rule, const json& p, size_t position, Point& ou
         allowed.insert({"target", "selectRequired"});
     if (type == "analogOutputs")
         allowed.insert({"min", "max"});
+    if (type == "binaryOutputs")
+        allowed.insert("pulse");
     for (auto it = p.begin(); it != p.end(); ++it)
     {
         if (!allowed.count(it.key()))
@@ -149,6 +151,13 @@ void check_point(const TypeRule& rule, const json& p, size_t position, Point& ou
             c.add(where + ": selectRequired must be a boolean");
         else
             out.selectRequired = p["selectRequired"].get<bool>();
+    }
+    if (p.contains("pulse"))
+    {
+        if (!p["pulse"].is_boolean())
+            c.add(where + ": pulse must be a boolean");
+        else
+            out.pulse = p["pulse"].get<bool>();
     }
     if (p.contains("target"))
     {

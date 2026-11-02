@@ -137,6 +137,9 @@ fi
 if jq -e '.features.operateDelayClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "--operate-delay-ms without --mode sbo" "${IMAGE}" client operate --host nowhere --type g41v1 --index 0 --value 1 --operate-delay-ms 10
 fi
+if ! jq -e '.features.operateWithoutSelectClient' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 2 "--mode operate, which the image does not declare" "${IMAGE}" client operate --host nowhere --type g41v1 --index 0 --value 1 --mode operate
+fi
 if jq -e '.features.activateConfigClient' <<<"${caps}" >/dev/null 2>&1; then
     expect_exit 2 "manage --spec without activate-config" "${IMAGE}" client manage --host nowhere --function save-configuration --spec a
 fi

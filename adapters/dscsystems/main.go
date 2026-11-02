@@ -67,7 +67,7 @@ const usage = `usage: dnp3-interop <command>
       file-authenticate    --file-user U --file-password P
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
       attribute-read       --set N [--variation V]
-      attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      attribute-write      --set N --variation V (--text S | --uint N | --int N | --float X | --octets HEX | --bits HEX | --time T)
       deadband-write       --deadbands INDEX:VALUE,...
   print-capabilities
   print-fixture [NAME]
@@ -214,7 +214,9 @@ func printCapabilities() int {
 			{"activateConfigServer", true},
 			{"activateConfigClient", false},
 			{"operateDelayClient", false},
+			{"operateWithoutSelectClient", false},
 			{"noConfirmClient", false},
+			{"noUnsolicitedConfirmClient", false},
 		}},
 		// A freeze always raises its event, by the library's design.
 		{"frozenEventPolicies", []string{"always"}},

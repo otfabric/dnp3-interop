@@ -32,6 +32,7 @@ type point struct {
 	SVar, EVar     uint8
 	Target         *uint16
 	SelectRequired bool
+	Pulse          bool // binary outputs: PULSE_ON and PULSE_OFF succeed and change nothing
 	Min, Max       *float64
 	// Outputs: the class and variation of their command events (groups 13
 	// and 43); class 0 records none.
@@ -70,9 +71,12 @@ type fixture struct {
 // attribute is a device attribute of the fixture.
 type attribute struct {
 	Set, Variation uint8
-	Type           string // visibleString, unsignedInt or signedInt
+	Type           string // visibleString, unsignedInt, signedInt, float, octetString, bitString or time
 	Text           string
 	Number         int64
+	Real           float64
+	Octets         []byte
+	Time           time.Time
 	Writable       bool
 }
 
@@ -143,6 +147,9 @@ func checkPoint(kind string, raw any, position int, errs *[]string) point {
 	}
 	if kind == "analogOutputs" {
 		allowed = append(allowed, "min", "max")
+	}
+	if kind == "binaryOutputs" {
+		allowed = append(allowed, "pulse")
 	}
 	if kind == "binaryOutputs" || kind == "analogOutputs" {
 		allowed = append(allowed, "commandEventClass", "commandEventVariation")
@@ -239,6 +246,13 @@ func checkPoint(kind string, raw any, position int, errs *[]string) point {
 			add("%s: selectRequired must be a boolean", where)
 		}
 		p.SelectRequired = b
+	}
+	if v, present := obj["pulse"]; present {
+		b, ok := v.(bool)
+		if !ok {
+			add("%s: pulse must be a boolean", where)
+		}
+		p.Pulse = b
 	}
 	if v, present := obj["target"]; present {
 		t, ok := integer(v)
@@ -672,8 +686,29 @@ func checkAttributes(fx *fixture, top map[string]any, add func(string, ...any)) 
 				add("deviceAttributes[%d]: value must be an integer in %d..%d", i, lo, hi)
 			}
 			a.Number = n
+		case "float":
+			f, ok := float(o["value"])
+			if !ok || f != float64(float32(f)) {
+				// The outstation sends a float attribute in four octets.
+				add("deviceAttributes[%d]: value must be a number a 32-bit float holds exactly", i)
+			}
+			a.Real = f
+		case "octetString", "bitString":
+			text, _ := o["value"].(string)
+			b, err := hex.DecodeString(text)
+			if err != nil || text != strings.ToLower(text) || len(b) > 255 {
+				add("deviceAttributes[%d]: value must be lower-case hex of up to 255 octets", i)
+			}
+			a.Octets = b
+		case "time":
+			text, _ := o["value"].(string)
+			at, err := time.Parse("2006-01-02T15:04:05.000Z", text)
+			if err != nil {
+				add("deviceAttributes[%d]: value must be YYYY-MM-DDTHH:MM:SS.mmmZ", i)
+			}
+			a.Time = at
 		default:
-			add("deviceAttributes[%d]: type must be visibleString, unsignedInt or signedInt", i)
+			add("deviceAttributes[%d]: type must be visibleString, unsignedInt, signedInt, float, octetString, bitString or time", i)
 		}
 		key := [2]uint8{a.Set, a.Variation}
 		if seen[key] {

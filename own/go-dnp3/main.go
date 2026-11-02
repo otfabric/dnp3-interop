@@ -53,7 +53,7 @@ const usage = `usage: dnp3-interop <command>
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
-      operate              --type g12v1|g41v1..4 --index N [--mode direct|sbo|direct-no-ack [--broadcast]]
+      operate              --type g12v1|g41v1..4 --index N [--mode direct|sbo|direct-no-ack [--broadcast]|operate] [--operate-delay-ms N] (sbo only)
                            g12v1: --code LATCH_ON|LATCH_OFF|PULSE_ON|PULSE_OFF|CLOSE|TRIP
                                   [--count N] [--on-ms N] [--off-ms N]
                            g41:   --value V
@@ -75,7 +75,7 @@ const usage = `usage: dnp3-interop <command>
                            file operations but file-info: [--file-user U --file-password P]
       file-authenticate    --file-user U --file-password P
       attribute-read       --set N [--variation V]
-      attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      attribute-write      --set N --variation V (--text S | --uint N | --int N | --float X | --octets HEX | --bits HEX | --time T)
       deadband-write       --deadbands INDEX:VALUE,...
   print-capabilities
   print-fixture [NAME]
@@ -198,6 +198,20 @@ func printCapabilities() int {
 			{"counterIncrementServer", true},
 			{"frozenCounterEventsServer", true},
 			{"frozenCounterEventTimeClient", true},
+			// Contract 1.5. The library's ApplicationHandler answers
+			// ACTIVATE_CONFIG with IIN bits only, no g91v1 status
+			// (server/handler.go, ApplicationHandler). Its master could
+			// send ACTIVATE_CONFIG, but decodes g91v1 only with a
+			// free-format qualifier and drops the count-qualified answer of
+			// an outstation that serves it (app/registry.go,
+			// desc.freeFormat), so it would time out: refused (exit 2). It confirms every response that asks for it
+			// (client/transaction.go): no --no-confirm.
+			{"activateConfigServer", false},
+			{"activateConfigClient", false},
+			{"operateDelayClient", true},
+			{"operateWithoutSelectClient", true},
+			{"noConfirmClient", false},
+			{"noUnsolicitedConfirmClient", false},
 		}},
 		// A freeze raises a frozen counter event when the frozen value or its
 		// flags change, by the library's design; there is no setting for it.

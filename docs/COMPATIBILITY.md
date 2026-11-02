@@ -160,7 +160,15 @@ with OUT_OF_RANGE. It records none for SELECT.
 
 FREEZE AT TIME works with DSC go-dnp3's outstation (the library schedules it),
 from the DSC go-dnp3 and dnp3py masters; opendnp3's and dnp3py's outstations do
-not support it and opendnp3's master cannot send it. DSC go-dnp3 differs in two
+not support it and opendnp3's master cannot send it. Both are limits of the
+libraries, not of the adapters: opendnp3's outstation dispatches no
+FREEZE_AT_TIME or FREEZE_AT_TIME_NR and answers anything it does not list
+with FUNC_NOT_SUPPORTED
+([`OutstationContext.cpp#L631-L686`](https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/outstation/OutstationContext.cpp#L631-L686)),
+and dnp3py's outstation has no executor for it and answers
+NO_FUNC_CODE_SUPPORT
+([`outstation.py#L1108-L1149`](https://github.com/craigpnnl/dnp3py/blob/c00d5df22e779df72f7caa4402c3f34957eb276d/src/dnp3/outstation/outstation.py#L1108-L1149)).
+The own go-dnp3 image (`own/go-dnp3`) serves it as well. DSC go-dnp3 differs in two
 ways: time 0 with interval 0 is refused with PARAMETER_ERROR rather than
 frozen at once (a known bug), and scheduled freezes run on a tick of the
 session that serves a connection, so a freeze that comes due while no master
@@ -366,6 +374,12 @@ pair for its life and each master's TCP connection is attached to the other
 end (`docs/CONTAINER_CONTRACT.md`). A single pseudo-terminal per TCP
 connection (socat's `fork` on the pty side) loses responses to the
 lingering process of the previous connection.
+
+Contract 1.5 runs the serial checks a second time with 19200 baud, even
+parity and two stop bits at both ends. A pseudo-terminal carries the octets
+whatever the settings, so this checks that each adapter accepts and applies
+them, not their timing. Seven data bits are not run: a DNP3 frame needs all
+eight bits of each octet.
 
 ## Findings
 

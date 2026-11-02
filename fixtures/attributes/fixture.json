@@ -34,6 +34,30 @@
     },
     {
       "set": 1,
+      "variation": 4,
+      "type": "float",
+      "value": 3.5
+    },
+    {
+      "set": 1,
+      "variation": 5,
+      "type": "octetString",
+      "value": "00ff10"
+    },
+    {
+      "set": 1,
+      "variation": 6,
+      "type": "bitString",
+      "value": "a5"
+    },
+    {
+      "set": 1,
+      "variation": 7,
+      "type": "time",
+      "value": "2024-01-02T03:04:05.678Z"
+    },
+    {
+      "set": 1,
       "variation": 10,
       "type": "visibleString",
       "value": "writable text",
@@ -51,6 +75,34 @@
       "variation": 12,
       "type": "signedInt",
       "value": -7,
+      "writable": true
+    },
+    {
+      "set": 1,
+      "variation": 13,
+      "type": "float",
+      "value": -0.25,
+      "writable": true
+    },
+    {
+      "set": 1,
+      "variation": 14,
+      "type": "octetString",
+      "value": "0102",
+      "writable": true
+    },
+    {
+      "set": 1,
+      "variation": 15,
+      "type": "bitString",
+      "value": "0f",
+      "writable": true
+    },
+    {
+      "set": 1,
+      "variation": 16,
+      "type": "time",
+      "value": "2020-01-01T00:00:00.000Z",
       "writable": true
     }
   ]

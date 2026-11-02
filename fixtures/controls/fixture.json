@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "name": "controls",
-  "description": "Several controls in one request (contract 1.3): outputs with targets, and at most two controls per request. Within what every outstation serves.",
+  "description": "Several controls in one request (contract 1.3): outputs with targets, and at most two controls per request; output 2 accepts pulses (contract 1.5). Within what every outstation serves.",
   "outstation": {
     "address": 1024,
     "masterAddress": 1,
@@ -31,7 +31,8 @@
     },
     {
       "index": 2,
-      "value": false
+      "value": false,
+      "pulse": true
     }
   ],
   "analogInputs": [

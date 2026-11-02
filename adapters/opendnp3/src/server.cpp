@@ -378,7 +378,9 @@ public:
     {
         bool value = false;
         auto status = check_crob(c, index, type != OperateType::SelectBeforeOperate, value);
-        if (status == CommandStatus::SUCCESS)
+        // A pulse ends where it began: nothing to update (docs/FIXTURES.md).
+        const bool pulse = c.rawCode == 0x01 || c.rawCode == 0x02;
+        if (status == CommandStatus::SUCCESS && !pulse)
         {
             const auto* p = fx.find("binaryOutputs", index);
             const auto time = dnp_now();
@@ -423,6 +425,11 @@ private:
             return CommandStatus::NOT_SUPPORTED;
         switch (c.rawCode)
         {
+        case 0x01: // PULSE_ON
+        case 0x02: // PULSE_OFF
+            if (!p->pulse)
+                return CommandStatus::NOT_SUPPORTED;
+            break;
         case 0x03: // LATCH_ON
         case 0x41: // PULSE_ON, CLOSE
             value = true;

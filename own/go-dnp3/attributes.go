@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -37,6 +38,14 @@ func libraryAttribute(a attribute) app.Attribute {
 		return app.UintAttribute(uint32(a.Number))
 	case "signedInt":
 		return app.IntAttribute(int32(a.Number))
+	case "float":
+		return app.FloatAttribute(a.Real)
+	case "octetString":
+		return app.Attribute{Type: app.AttrOctetString, Data: a.Octets}
+	case "bitString":
+		return app.Attribute{Type: app.AttrBitString, Data: a.Octets}
+	case "time":
+		return app.TimeAttribute(app.TimestampOf(a.Time))
 	}
 	return app.StringAttribute(a.Text)
 }
@@ -152,8 +161,34 @@ func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 		}
 		w, given = app.IntAttribute(int32(n)), given+1
 	}
+	if a.has("float") {
+		f, err := a.number("float")
+		if err != nil || math.Abs(f) > math.MaxFloat32 {
+			return nil, usagef("--float must be a number in the range of a 32-bit float")
+		}
+		w, given = app.Attribute{Type: app.AttrFloat, Data: binary.LittleEndian.AppendUint32(nil, math.Float32bits(float32(f)))}, given+1
+	}
+	for _, f := range []struct {
+		name string
+		kind app.AttrType
+	}{{"octets", app.AttrOctetString}, {"bits", app.AttrBitString}} {
+		if a.has(f.name) {
+			b, err := hex.DecodeString(a.str(f.name, ""))
+			if err != nil || len(b) > 255 {
+				return nil, usagef("--%s must be hex of up to 255 octets", f.name)
+			}
+			w, given = app.Attribute{Type: f.kind, Data: b}, given+1
+		}
+	}
+	if a.has("time") {
+		at, err := time.Parse("2006-01-02T15:04:05.000Z", a.str("time", ""))
+		if err != nil {
+			return nil, usagef("--time must be YYYY-MM-DDTHH:MM:SS.mmmZ")
+		}
+		w, given = app.TimeAttribute(app.TimestampOf(at)), given+1
+	}
 	if given != 1 {
-		return nil, usagef("attribute-write takes exactly one of --text, --uint, --int")
+		return nil, usagef("attribute-write takes exactly one of --text, --uint, --int, --float, --octets, --bits, --time")
 	}
 	return func(ctx context.Context, c *client.Client, _ *[]object) error {
 		return c.WriteAttributeSet(ctx, uint16(set), uint8(variation), w)

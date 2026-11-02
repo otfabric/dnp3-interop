@@ -176,7 +176,9 @@ int print_capabilities()
           {"activateConfigServer", false},
           {"activateConfigClient", false},
           {"operateDelayClient", false},
-          {"noConfirmClient", false}}},
+          {"operateWithoutSelectClient", false},
+          {"noConfirmClient", false},
+          {"noUnsolicitedConfirmClient", false}}},
         // The library's freeze detects events: no setting forces one.
         {"frozenEventPolicies", {"on-change"}},
         // Every event stays buffered until confirmed.

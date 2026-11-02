@@ -302,9 +302,14 @@ func parseOperation(op string, a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
+		// No activate-config (contract 1.5): the library drops the g91v1
+		// answer (see activateConfigClient in main.go).
 		fc, ok := manageFunctions[name]
 		if !ok {
 			return nil, usagef("--function must be initialize-data, initialize-application, start-application, stop-application or save-configuration")
+		}
+		if a.has("spec") {
+			return nil, usagef("--spec is for --function activate-config, which this adapter does not send")
 		}
 		var hs []app.Header
 		switch fc {
@@ -391,9 +396,16 @@ func parseOperate(a args) (request, error) {
 	}
 	mode := a.str("mode", "direct")
 	modes := map[string]client.CommandMode{"direct": client.DirectOperate, "sbo": client.SelectBeforeOperate,
-		"direct-no-ack": client.DirectOperateNoAck}
+		"direct-no-ack": client.DirectOperateNoAck, "operate": client.SelectBeforeOperate}
 	if _, ok := modes[mode]; !ok {
-		return nil, usagef("--mode must be direct, sbo or direct-no-ack")
+		return nil, usagef("--mode must be direct, sbo, direct-no-ack or operate")
+	}
+	if a.has("operate-delay-ms") && mode != "sbo" {
+		return nil, usagef("--operate-delay-ms needs --mode sbo")
+	}
+	delay, err := a.integer("operate-delay-ms", 0, 0, 3600000)
+	if err != nil {
+		return nil, err
 	}
 	var cmd client.Command
 	if kind == "g12v1" {
@@ -446,6 +458,24 @@ func parseOperate(a args) (request, error) {
 			return c.Broadcast(ctx, link.BroadcastOptionalConfirm, app.FuncDirectOperateNoAck, h)
 		}, nil
 	}
+	if mode == "operate" || delay > 0 {
+		// Contract 1.5: an OPERATE without its SELECT, or after a delay.
+		// Client.Operate sends both in one turn, so each is a request here.
+		h := app.Indexed(cmd.GV, app.Object{Index: cmd.Index, Value: cmd.Value})
+		return func(ctx context.Context, c *client.Client, r *result) error {
+			if mode == "sbo" {
+				if err := controlStep(ctx, c, app.FuncSelect, h, r); err != nil {
+					return err
+				}
+				select {
+				case <-time.After(time.Duration(delay) * time.Millisecond):
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			return controlStep(ctx, c, app.FuncOperate, h, r)
+		}, nil
+	}
 	return func(ctx context.Context, c *client.Client, r *result) error {
 		statuses, err := c.Operate(ctx, modes[mode], cmd)
 		if len(statuses) > 0 && mode != "direct-no-ack" {
@@ -454,6 +484,40 @@ func parseOperate(a args) (request, error) {
 		}
 		return err
 	}, nil
+}
+
+// controlStep sends one SELECT or OPERATE of one control and reports its
+// status as Client.Operate does: a status other than SUCCESS is a
+// *dnp3.CommandError.
+func controlStep(ctx context.Context, c *client.Client, fc app.FunctionCode, h app.Header, r *result) error {
+	res, err := c.Request(ctx, fc, h)
+	var ie *dnp3.IINError
+	if err != nil && (!errors.As(err, &ie) || res == nil) {
+		return err
+	}
+	for _, e := range res.Headers() {
+		for _, o := range e.Objects {
+			var st app.CommandStatus
+			switch v := o.Value.(type) {
+			case app.CROB:
+				st = v.Status
+			case app.AnalogOutput:
+				st = v.Status
+			default:
+				continue
+			}
+			s := uint8(st)
+			r.commandStatus = &s
+			if st != app.StatusSuccess {
+				return &dnp3.CommandError{GV: h.GV, Index: o.Index, Status: st}
+			}
+			return err
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: no control echo", dnp3.ErrProtocol)
 }
 
 // parseControls reads --controls: "g12v1:INDEX:CODE" and "g41vN:INDEX:VALUE"
@@ -549,13 +613,13 @@ func runClient(argv []string) int {
 	case "attribute-read":
 		flags = append(flags, "set", "variation")
 	case "attribute-write":
-		flags = append(flags, "set", "variation", "text", "uint", "int")
+		flags = append(flags, "set", "variation", "text", "uint", "int", "float", "octets", "bits", "time")
 	case "event-poll", "enable-unsolicited", "disable-unsolicited":
 		flags = append(flags, "classes")
 	case "read":
 		flags = append(flags, "group", "variation", "start", "stop")
 	case "operate":
-		flags = append(flags, "type", "index", "code", "count", "on-ms", "off-ms", "value", "mode")
+		flags = append(flags, "type", "index", "code", "count", "on-ms", "off-ms", "value", "mode", "operate-delay-ms")
 		switches = append(switches, "broadcast")
 	case "operate-multi":
 		flags = append(flags, "controls", "mode")
@@ -573,7 +637,7 @@ func runClient(argv []string) int {
 	case "monitor":
 		flags = append(flags, "duration-ms")
 	case "manage":
-		flags = append(flags, "function")
+		flags = append(flags, "function", "spec")
 	}
 
 	// Everything is parsed before anything is sent.
@@ -659,6 +723,12 @@ func runClient(argv []string) int {
 		client.WithLogger(libraryLog()),
 		client.WithStream(stream.open),
 		client.WithLink(client.Link{Confirmed: a.has("link-confirms"), KeepAlive: ka}),
+	}
+	if op == "operate" && (a.str("mode", "") == "operate" || a.has("operate-delay-ms")) {
+		// Contract 1.5: nothing between the SELECT and the OPERATE, or the
+		// OPERATE is not the next request: no automatic clear of the
+		// restart bit after the SELECT's response.
+		opts = append(opts, client.WithAutoClearRestart(false))
 	}
 	if sec.on {
 		opts = append(opts, client.WithSecureAuthentication(sec.user))

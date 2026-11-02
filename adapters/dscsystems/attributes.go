@@ -7,7 +7,9 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"math"
 	"strconv"
+	"time"
 
 	"github.com/dscsystems/go-dnp3"
 	"github.com/dscsystems/go-dnp3/master"
@@ -16,6 +18,7 @@ import (
 
 var attributeTypes = map[string]dnp3.AttributeType{
 	"visibleString": dnp3.AttrVisibleString, "unsignedInt": dnp3.AttrUnsignedInt, "signedInt": dnp3.AttrSignedInt,
+	"float": dnp3.AttrFloat, "octetString": dnp3.AttrOctetString, "bitString": dnp3.AttrBitString, "time": dnp3.AttrTime,
 }
 
 var attributeTypeNames = map[dnp3.AttributeType]string{
@@ -25,7 +28,8 @@ var attributeTypeNames = map[dnp3.AttributeType]string{
 }
 
 func libraryAttribute(a attribute) dnp3.Attribute {
-	return dnp3.Attribute{Set: a.Set, Variation: a.Variation, Type: attributeTypes[a.Type], Text: a.Text, Number: a.Number}
+	return dnp3.Attribute{Set: a.Set, Variation: a.Variation, Type: attributeTypes[a.Type], Text: a.Text, Number: a.Number,
+		Real: a.Real, Octets: a.Octets, Time: a.Time}
 }
 
 // attributeConfig gives the outstation the fixture's attributes; an accepted
@@ -113,8 +117,34 @@ func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 			w.Type, w.Number, given = f.kind, n, given+1
 		}
 	}
+	if a.has("float") {
+		f, err := a.number("float")
+		if err != nil || math.Abs(f) > math.MaxFloat32 {
+			return nil, usagef("--float must be a number in the range of a 32-bit float")
+		}
+		w.Type, w.Real, given = dnp3.AttrFloat, f, given+1
+	}
+	for _, f := range []struct {
+		name string
+		kind dnp3.AttributeType
+	}{{"octets", dnp3.AttrOctetString}, {"bits", dnp3.AttrBitString}} {
+		if a.has(f.name) {
+			b, err := hex.DecodeString(a.str(f.name, ""))
+			if err != nil || len(b) > 255 {
+				return nil, usagef("--%s must be hex of up to 255 octets", f.name)
+			}
+			w.Type, w.Octets, given = f.kind, b, given+1
+		}
+	}
+	if a.has("time") {
+		at, err := time.Parse("2006-01-02T15:04:05.000Z", a.str("time", ""))
+		if err != nil {
+			return nil, usagef("--time must be YYYY-MM-DDTHH:MM:SS.mmmZ")
+		}
+		w.Type, w.Time, given = dnp3.AttrTime, at, given+1
+	}
 	if given != 1 {
-		return nil, usagef("attribute-write takes exactly one of --text, --uint, --int")
+		return nil, usagef("attribute-write takes exactly one of --text, --uint, --int, --float, --octets, --bits, --time")
 	}
 	return func(ctx context.Context, s *master.Session, _ *[]object) error {
 		return s.WriteAttribute(ctx, w)
