@@ -2,7 +2,7 @@
 # scripts/features.sh.
 #
 # Entries exist for versions that are built as candidates (make
-# candidate-stepfunc), so that one upstream bug is reported as such instead of
+# candidate-<adapter>), so that one upstream bug is reported as such instead of
 # hiding whether everything else works, and for a pinned version only when the
 # bug cannot be avoided by an adapter and the behaviour it breaks is covered
 # by another check (docs/COMPATIBILITY.md says which).

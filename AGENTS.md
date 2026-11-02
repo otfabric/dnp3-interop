@@ -2,7 +2,7 @@
 
 ## What this is
 
-Independent DNP3 (IEEE 1815) master and outstation implementations (Step Function I/O dnp3, opendnp3, dscsystems, dnp3py) in containers behind one command-line contract, with deterministic fixtures, used as oracles by go-dnp3 and dnp3ctl. Nothing here depends on go-dnp3. Profile: **interoperability**.
+Independent DNP3 (IEEE 1815) master and outstation implementations (opendnp3, dscsystems, dnp3py) in containers behind one command-line contract, with deterministic fixtures, used as oracles by go-dnp3 and dnp3ctl. Nothing here depends on go-dnp3. Profile: **interoperability**.
 
 ## Organisation standards
 

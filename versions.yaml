@@ -1,11 +1,10 @@
 # Machine-readable version manifest for dnp3-interop.
 # Upstream pins and base image digests are release inputs; nothing floats.
-# The Dockerfiles, adapters/stepfunc/Cargo.toml (with Cargo.lock),
-# adapters/dnp3py/requirements.txt and adapters/dscsystems/go.mod are the
-# source of truth for a build: scripts/check-versions.sh fails when this file
-# disagrees with them.
+# The Dockerfiles, adapters/dnp3py/requirements.txt and adapters/dscsystems/go.mod
+# are the source of truth for a build: scripts/check-versions.sh fails when this
+# file disagrees with them.
 
-interop_version: "0.8.0"
+interop_version: "0.9.0"
 contract_version: "1.4"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -14,26 +13,6 @@ protocol:
   default_port: 20000
 
 implementations:
-  stepfunc:
-    priority: P0
-    status: implemented
-    upstream: "Step Function I/O dnp3"
-    repository: "https://github.com/stepfunc/dnp3"
-    crate: "dnp3"
-    version: "1.8.0"             # latest release (crates.io, 2026-10-29)
-    revision: "235533ae276cd8f33b669c6db395979a308ef848"   # tag 1.8.0
-    license: "Step Function I/O non-commercial licence (LICENSE.txt of the crate)"
-    language: "Rust"
-    independent_engine: true
-    roles: [server, client]
-    published: false
-    note: >-
-      Non-commercial, non-production licence that forbids distributing the
-      library (LICENSE.txt section 2.2). The image is not published, at Step
-      Function I/O's request (#19): each user builds it locally
-      (make image-stepfunc), getting the crate from crates.io under that
-      licence. The images of v0.1.0 to v0.4.2 are withdrawn.
-
   opendnp3:
     priority: P0
     status: implemented
@@ -94,15 +73,12 @@ implementations:
 
 dependencies:
   nlohmann_json: "debian trixie nlohmann-json3-dev"   # opendnp3 adapter, MIT, header-only
-  # stepfunc adapter: tokio, serde_json, tracing-subscriber at the versions in
-  # adapters/stepfunc/Cargo.lock
 
 base_images:
   # Digests recorded 2026-10-30; the Dockerfiles pin these by digest.
   debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4"
   python_3_14_8_slim_trixie: "docker.io/library/python:3.14.8-slim-trixie@sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da3aec724f50eed4a"
   golang_1_27_2_trixie: "docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
-  rust_1_99_1_slim_trixie: "docker.io/library/rust:1.99.1-slim-trixie@sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbfeb2fccd5f982247"
 
 # Test tools: not implementations, no adapter.
 tools:
@@ -126,8 +102,6 @@ tools:
       published. See docs/CONFORMANCE.md.
 
 images:
-  # Local tag only: never pushed or pulled (see implementations.stepfunc).
-  stepfunc: "ghcr.io/otfabric/dnp3-interop-stepfunc"
   opendnp3: "ghcr.io/otfabric/dnp3-interop-opendnp3"
   dscsystems: "ghcr.io/otfabric/dnp3-interop-dscsystems"
   dnp3py: "ghcr.io/otfabric/dnp3-interop-dnp3py"

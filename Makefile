@@ -10,8 +10,8 @@ REGISTRY  ?= ghcr.io/otfabric
 VERSION   ?= dev
 PLATFORMS ?= linux/amd64,linux/arm64
 
-# Registry of the base images (debian, rust). They
-# are pinned by digest in the Dockerfiles, so any mirror of Docker Hub's
+# Registry of the base images (debian, golang, python, maven, eclipse-temurin).
+# They are pinned by digest in the Dockerfiles, so any mirror of Docker Hub's
 # official images gives the same build. The workflows set
 #   BASE_REGISTRY=mirror.gcr.io/library
 # because anonymous pulls from Docker Hub are rate limited per runner address.
@@ -31,14 +31,10 @@ BUILDER ?= dnp3-interop
 
 # Every adapter, in priority order: built and self-tested everywhere. Override
 # to work on one: make smoke ADAPTERS=opendnp3
-ADAPTERS ?= stepfunc opendnp3 dscsystems dnp3py
+ADAPTERS ?= opendnp3 dscsystems dnp3py
 
-# The adapters whose images are pushed to the registry. stepfunc is not one of
-# them and must never be: the licence of the Step Function I/O dnp3 crate
-# forbids distributing it, and its image has the crate compiled in. Each user
-# builds that image locally (make image-stepfunc), getting the crate from
-# crates.io under that licence. 'override': neither the environment nor the
-# command line can change it.
+# The adapters whose images are pushed to the registry. 'override': neither
+# the environment nor the command line can change it.
 override PUBLISHED_ADAPTERS := opendnp3 dscsystems dnp3py
 
 # Parallel jobs for "make documents" (the smoke tests); the image builds take
@@ -51,7 +47,7 @@ export REGISTRY VERSION
 
 # image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-stepfunc run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -125,7 +121,7 @@ image-dnp3c: FORCE ## Build the dnp3c runner image (DNP3 IED Certification Proce
 
 smoke: $(addprefix smoke-,$(ADAPTERS)) ## Container-contract smoke test of every adapter
 
-smoke-%: FORCE ## Smoke test one adapter, e.g. smoke-stepfunc
+smoke-%: FORCE ## Smoke test one adapter, e.g. smoke-opendnp3
 	@scripts/smoke.sh $*
 
 interop: ## Cross-stack self-test: every client against every server, on the baseline and the dnp3py fixture
@@ -181,12 +177,8 @@ capabilities: ## Print the capability document of every adapter
 
 # ── Run a reference server on the host ────────────────────────────────────────
 
-STEPFUNC_PORT ?= 20000
 OPENDNP3_PORT ?= 20001
 DSCSYSTEMS_PORT ?= 20002
-
-run-stepfunc: ## Run the stepfunc outstation on 127.0.0.1:$(STEPFUNC_PORT)
-	docker run --rm -p 127.0.0.1:$(STEPFUNC_PORT):20000 $(call image,stepfunc):$(VERSION) server
 
 run-opendnp3: ## Run the opendnp3 outstation on 127.0.0.1:$(OPENDNP3_PORT)
 	docker run --rm -p 127.0.0.1:$(OPENDNP3_PORT):20000 $(call image,opendnp3):$(VERSION) server
@@ -229,7 +221,7 @@ publish: ## Build and push the published multi-arch images under emulation, from
 # ── Multi-arch publish from native runners ────────────────────────────────────
 # The release workflow builds every adapter on an amd64 and on an arm64 runner
 # (no emulation), self-tests there and pushes what it tested of the published
-# adapters (PUBLISHED_ADAPTERS, never stepfunc) under <image>:<version>-<arch>.
+# adapters (PUBLISHED_ADAPTERS) under <image>:<version>-<arch>.
 # A last job joins the two into <image>:<version>.
 
 ARCH ?= $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')

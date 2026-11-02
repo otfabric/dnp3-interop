@@ -20,7 +20,7 @@ mkdir -p "${DIR}"
 cd "${DIR}"
 
 # Named curve: LibreSSL otherwise writes the explicit curve parameters, which
-# rustls and Go refuse (the stepfunc and dscsystems adapters cannot load them).
+# Go refuses (the dscsystems adapter cannot load them).
 key() { openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -out "$1" 2>/dev/null; }
 
 ca() {  # ca <name> <subject>

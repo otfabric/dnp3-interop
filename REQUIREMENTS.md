@@ -23,7 +23,7 @@ framework.
 - R1.2 A consumer depends on published images and the documented contract
   only. It does not need a checkout of this repository to run its tests,
   except to build an image whose upstream licence forbids publishing it
-  (stepfunc, R7.5).
+  (R7.5).
 - R1.3 No third-party code from here is copied into a consumer, and the
   contract does not shape a consumer's public API.
 
@@ -39,11 +39,10 @@ framework.
 
 ## R2 - Reference implementations
 
-- R2.1 Exactly these five are in scope, in this order of priority:
+- R2.1 Exactly these four are in scope, in this order of priority:
 
   | Priority | Implementation | Language | Licence | Independent engine |
   |----------|----------------|----------|---------|:------------------:|
-  | P0 | Step Function I/O dnp3 (`stepfunc/dnp3`) | Rust | non-commercial licence | yes |
   | P0 | opendnp3 (`dnp3/opendnp3`, archived) | C++ | Apache-2.0 | yes |
   | P1 | dnp3py (`craigpnnl/dnp3py`) | Python | MIT | yes |
   | P1 | DSC Systems go-dnp3 (`dscsystems/go-dnp3`), experimental | Go | GPL-3.0-or-later | yes |
@@ -132,12 +131,8 @@ framework.
   restrict use (non-commercial, commercial) are recorded with the image and
   in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - R7.5 An image whose upstream licence forbids distributing the library is
-  never published: no workflow, target or script pushes it. The stepfunc
-  image is one (the Step Function I/O dnp3 crate, LICENSE.txt §2.2; #19): the
-  repository holds its adapter and Dockerfile, the self-tests build it
-  locally, and each user builds it (`make image-stepfunc`), getting the crate
-  from crates.io under that licence. The Makefile's `PUBLISHED_ADAPTERS`
-  lists what is published.
+  never published: no workflow, target or script pushes it. The Makefile's
+  `PUBLISHED_ADAPTERS` lists what is published.
 
 ## R8 - Scope discipline
 

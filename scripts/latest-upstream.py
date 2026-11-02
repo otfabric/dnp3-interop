@@ -59,12 +59,6 @@ def git_tags(repository):
     return commits
 
 
-def stepfunc():
-    crate = json.loads(fetch("https://crates.io/api/v1/crates/dnp3"))
-    live = [v["num"] for v in crate["versions"] if not v.get("yanked")]
-    return newest(live), "", "crates.io"
-
-
 def opendnp3():
     # The repository is archived (2022); a new tag is not expected, and an
     # untagged commit is not a release.
@@ -85,7 +79,6 @@ def dnp3py():
 
 
 RESOLVERS = {
-    "stepfunc": stepfunc,
     "opendnp3": opendnp3,
     "dscsystems": dscsystems,
     "dnp3py": dnp3py,

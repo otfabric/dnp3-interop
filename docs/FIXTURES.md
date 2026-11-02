@@ -33,7 +33,7 @@ way; this document says what "the same way" is.
 | `needTime` | Whether IIN1.4 NEED_TIME is set at start (default false). It is cleared when a master writes the time |
 | `coldRestartDelayMs`, `warmRestartDelayMs` | The delay the outstation announces for a cold or warm restart, 0..65535 ms. Absent: that restart is refused |
 | `maxControlsPerRequest` | Contract 1.3: the most controls of one request the outstation carries out, 1..255; the rest are answered TOO_MANY_OPS. Absent: the library's default (at least 16) |
-| `eventBufferSize` | Contract 1.3: the most events the outstation buffers, 1..65535: of each type (stepfunc, opendnp3), in all (DSC go-dnp3, one buffer), or of each type in each class (dnp3py, whose class buffer holds three times it). An event that does not fit is lost and the outstation sets IIN2.3 EVENT_BUFFER_OVERFLOW. Absent: the adapter's default (1000; dnp3py 100) |
+| `eventBufferSize` | Contract 1.3: the most events the outstation buffers, 1..65535: of each type (opendnp3), in all (DSC go-dnp3, one buffer), or of each type in each class (dnp3py, whose class buffer holds three times it). An event that does not fit is lost and the outstation sets IIN2.3 EVENT_BUFFER_OVERFLOW. Absent: the adapter's default (1000; dnp3py 100) |
 
 ### Points
 
@@ -75,7 +75,7 @@ unique; they need not be contiguous.
 | `analogOutputs` | number | 1, 2, 3, 4 | 1, 2, 3, 4, 5, 6, 7, 8 |
 | `octetStrings` | 1..255 octets, lower-case hex | the length | the length |
 
-These are the variations the stepfunc, opendnp3 and dscsystems outstations
+These are the variations the opendnp3 and dscsystems outstations
 serve (dnp3py serves fewer: see the `dnp3py` fixture in
 [COMPATIBILITY.md](COMPATIBILITY.md#dnp3pys-outstation-the-dnp3py-fixture)). Variations with relative
 time (g2v3, g4v3) are left out because they need a CTO header whose content

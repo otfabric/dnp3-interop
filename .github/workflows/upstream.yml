@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        adapter: [stepfunc, opendnp3, dscsystems, dnp3py]
+        adapter: [opendnp3, dscsystems, dnp3py]
     steps:
       - uses: actions/checkout@v7
 
@@ -117,9 +117,8 @@ jobs:
             ### To update
 
             - **Library:** move `ARG UPSTREAM_VERSION` and `ARG UPSTREAM_SHA` in
-              `adapters/<adapter>/Dockerfile`, the adapter's lock file (`Cargo.toml` and
-              `Cargo.lock` for stepfunc, `go.mod` and `go.sum` for dscsystems, `requirements.txt`
-              for dnp3py) and `versions.yaml`. Reproduce a candidate with
+              `adapters/<adapter>/Dockerfile`, the adapter's lock file (`go.mod` and `go.sum`
+              for dscsystems, `requirements.txt` for dnp3py) and `versions.yaml`. Reproduce a candidate with
               `make candidate-<adapter> CANDIDATE_VERSION=<version>` (opendnp3: also
               `CANDIDATE_SHA=<commit>`); a `failure` needs the self-test log of the run first. A
               release that fails the self-tests stays a candidate: list its bug in

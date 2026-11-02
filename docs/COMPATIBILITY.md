@@ -14,20 +14,18 @@ self-tested as a candidate.
 
 | Adapter | Upstream | Pinned | Latest | Pin | Engine |
 |---------|----------|--------|--------|-----|--------|
-| `stepfunc` | [Step Function I/O dnp3](https://github.com/stepfunc/dnp3) | 1.8.0 | 1.8.0 | crate `dnp3 =1.8.0` from crates.io, checksum in `Cargo.lock` (tag commit `235533ae276cd8f33b669c6db395979a308ef848`) | independent, Rust |
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.2 | v0.8.2 | Go module `github.com/dscsystems/go-dnp3@v0.8.2` (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`), checksum in `go.sum` | independent, Go |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
-(trixie), Rust 1.99.1, Go 1.27.2, Python 3.14.8.
+(trixie), Go 1.27.2, Python 3.14.8.
 
-The pins live in the Dockerfiles, `adapters/stepfunc/Cargo.toml` and
-`Cargo.lock` and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
+The pins live in the Dockerfiles and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream**
 workflow (`.github/workflows/upstream.yml`, daily and on demand) resolves
 the latest stable release of every stack with `scripts/latest-upstream.py`:
-the dnp3 crate on crates.io, opendnp3's tags on GitHub, DSC go-dnp3 on the Go
+opendnp3's tags on GitHub, DSC go-dnp3 on the Go
 module proxy and dnp3py on PyPI, and checks the digest of every pinned base
 image. It builds the adapter on each release that differs from its pin (once
 per pin and latest version), runs the smoke and cross-stack self-tests,
@@ -60,38 +58,32 @@ fixture, the events controls and freezes cause, unsolicited responses, class
 assignment and time synchronization. A case that needs a feature a pairing
 does not declare is skipped for that pairing and counted as such.
 
-| Client → Server | stepfunc | opendnp3 | dscsystems |
-|-----------------|:--------:|:--------:|:----------:|
-| **stepfunc** | pass ¹ ² | pass | pass ⁴ |
-| **opendnp3** | pass ¹ ² | pass | pass ⁴ |
-| **dscsystems** | pass ¹ ³ | pass ³ | pass ³ ⁴ ⁵ |
-| **dnp3py** | pass ¹ ² ⁶ | pass ⁶ | pass ⁴ ⁶ |
+| Client → Server | opendnp3 | dscsystems |
+|-----------------|:--------:|:----------:|
+| **opendnp3** | pass | pass ² |
+| **dscsystems** | pass ¹ | pass ¹ ² ³ |
+| **dnp3py** | pass ⁴ | pass ² ⁴ |
 
-¹ without class assignment: the stepfunc outstation does not implement it.
-² the first select-before-operate on a freshly started stepfunc outstation
-can fail (known bug below); select-before-operate after that is checked
-separately and passes.
-³ without all-objects reads, restart delays and class assignment, which the
+¹ without all-objects reads, restart delays and class assignment, which the
 DSC go-dnp3 master cannot send or report; with direct operate no ack, which it
 can send.
-⁴ with a known bug of the DSC go-dnp3 outstation's FREEZE AND CLEAR, below.
-⁵ with the known master-address bug below.
-⁶ with direct operate no ack and the freezes without acknowledgement, which
+² with a known bug of the DSC go-dnp3 outstation's FREEZE AND CLEAR, below.
+³ with the known master-address bug below.
+⁴ with direct operate no ack and the freezes without acknowledgement, which
 the dnp3py master sends. dnp3py has no server column: it cannot serve the
-baseline. How the four outstations compare on the `dnp3py` fixture is below
+baseline. How the outstations compare on the `dnp3py` fixture is below
 ([dnp3py's outstation: the dnp3py fixture](#dnp3pys-outstation-the-dnp3py-fixture)).
 
 The numbers of a run (checks passed and failed, known-bug hits, skips, per
 pairing and architecture) are not kept here: every release's qualification
-runs the self-tests on the published images (and on a stepfunc image built
-from the release tag, which is not published), natively on linux/amd64 and
+runs the self-tests on the published images, natively on linux/amd64 and
 linux/arm64, and attaches them as `compatibility-report.md` to the
 [GitHub release](https://github.com/otfabric/dnp3-interop/releases).
 
 The cross-stack self-test runs one suite per server adapter at the same time
 (an outstation serves one master at a time, so the work is split by server)
 and checks the agreement of the documents across pairings when all are done;
-on a laptop the smoke and cross-stack tests together take about four minutes.
+on a laptop the smoke and cross-stack tests together take a few minutes.
 
 The untagged tip of opendnp3's archived repository (commit `c1dc7165`) was
 built and self-tested once (Upstream candidates run 39339958041): it passes
@@ -111,11 +103,11 @@ restart with the delay; immediate freeze and freeze-and-clear with their
 events; enable and disable unsolicited, and buffered events delivered
 unsolicited and not polled again; monitor.
 
-Covered where declared: class assignment (stepfunc, opendnp3 and dnp3py
+Covered where declared: class assignment (opendnp3 and dnp3py
 masters; opendnp3 and DSC go-dnp3 outstations); direct operate no ack (DSC go-dnp3
 and dnp3py masters, all outstations); freezes without acknowledgement
 (dnp3py master, all outstations); all-objects reads and restart delays
-(stepfunc, opendnp3 and dnp3py masters).
+(opendnp3 and dnp3py masters).
 
 ## Contract 1.1 features
 
@@ -131,10 +123,10 @@ taking effect.
 
 | Feature | Pairings (client → server) |
 |---------|---------------------------|
-| TLS | stepfunc, opendnp3, dscsystems → stepfunc, opendnp3, dscsystems (9) |
-| UDP | the same 9 |
-| Serial (socat pseudo-terminal line) | the same 9 |
-| File transfer | stepfunc, dscsystems → dscsystems (2); stepfunc refuses DELETE_FILE; stepfunc and opendnp3 outstations refuse file transfer |
+| TLS | opendnp3, dscsystems → opendnp3, dscsystems (4) |
+| UDP | the same 4 |
+| Serial (socat pseudo-terminal line) | the same 4 |
+| File transfer | dscsystems → dscsystems (1); the opendnp3 outstation refuses file transfer |
 | Secure authentication v5 | dscsystems → dscsystems (1); no other stack has it |
 
 dnp3py has TCP only and none of the 1.1 features.
@@ -144,11 +136,11 @@ dnp3py has TCP only and none of the 1.1 features.
 Only the DSC go-dnp3 outstation serves the extended fixture: frozen analog inputs,
 command events of its outputs and g50v4. Its masters' counterparts:
 
-| Objects | stepfunc master | opendnp3 master | DSC go-dnp3 master | dnp3py master |
-|---------|:-:|:-:|:-:|:-:|
-| g31/g33 frozen analogs | yes | no: the response fails to parse | yes | no |
-| g13/g43 command events | yes | yes | yes | no |
-| g50v4 time and interval | no: ignored | yes | no: dropped | no |
+| Objects | opendnp3 master | DSC go-dnp3 master | dnp3py master |
+|---------|:-:|:-:|:-:|
+| g31/g33 frozen analogs | no: the response fails to parse | yes | no |
+| g13/g43 command events | yes | yes | no |
+| g50v4 time and interval | yes | no: dropped | no |
 
 DSC go-dnp3 records a command event for every control that reaches its control
 handler, with the status it answered: a value out of range produces a g43
@@ -156,15 +148,14 @@ with OUT_OF_RANGE. It records none for SELECT.
 
 ### Freeze at time and analog freeze
 
-FREEZE AT TIME works with stepfunc's outstation (the adapter schedules what the
-library hands over) and DSC go-dnp3's (the library schedules it), from the
-stepfunc, DSC go-dnp3 and dnp3py masters; opendnp3's and dnp3py's outstations do
+FREEZE AT TIME works with DSC go-dnp3's outstation (the library schedules it),
+from the DSC go-dnp3 and dnp3py masters; opendnp3's and dnp3py's outstations do
 not support it and opendnp3's master cannot send it. DSC go-dnp3 differs in two
 ways: time 0 with interval 0 is refused with PARAMETER_ERROR rather than
 frozen at once (a known bug), and scheduled freezes run on a tick of the
 session that serves a connection, so a freeze that comes due while no master
 is connected runs when the next one is. Only DSC go-dnp3's outstation freezes
-analog inputs (a g30 header in a freeze): the stepfunc, opendnp3 and dnp3py
+analog inputs (a g30 header in a freeze): the opendnp3 and dnp3py
 masters send it, DSC go-dnp3's master cannot.
 
 ### Several outstations
@@ -175,10 +166,9 @@ master reaches each by its address. DSC go-dnp3's bus detaches every station whe
 a connection closes and starts routing as soon as the next connection is up,
 before the stations' sessions have re-attached: a request that arrives first
 would be unrouted and lost. The DSC go-dnp3 adapter holds the bus's first read of
-each connection until every station is back. stepfunc's server picks an outstation per
-connection by the master's IP address, so it cannot. A master that listens and
-picks among outstations dialling in by link address is not in the contract:
-of the references only stepfunc's master can do it.
+each connection until every station is back. A master that listens and picks
+among outstations dialling in by link address is not in the contract: no
+reference master can do it.
 
 ### Management functions
 
@@ -192,9 +182,9 @@ that refusal with PARAMETER_ERROR rather than NO_FUNC_CODE_SUPPORT.
 ### Broadcast
 
 Only DSC go-dnp3's master can send a broadcast (a DIRECT OPERATE NO ACK to
-0xFFFF): stepfunc's master cannot address one, opendnp3's has no request that
-expects no answer, and dnp3py's refuses the address. The stepfunc, opendnp3
-and DSC go-dnp3 outstations carry it out and set IIN1.0 in their next response;
+0xFFFF): opendnp3's master has no request that expects no answer, and
+dnp3py's refuses the address. The opendnp3 and DSC go-dnp3 outstations carry
+it out and set IIN1.0 in their next response;
 dnp3py's ignores it. DSC go-dnp3's master sends its start-up WRITE (clearing
 IIN1.7 RESTART) to the broadcast address as well, and a DSC go-dnp3 master that
 reads afterwards gets IIN1.0 in the response to that WRITE, not in the one it
@@ -202,59 +192,52 @@ reports.
 
 ### Link layer
 
-Only DSC go-dnp3 sends confirmed user data, in both roles. The stepfunc, opendnp3
-and dnp3py outstations and the stepfunc and opendnp3 masters acknowledge it;
-dnp3py's master does not, so it gets no answer from an outstation that asks
-for link-layer confirms (a known bug). The stepfunc, opendnp3 and DSC go-dnp3 masters
-send keep-alives (REQUEST_LINK_STATUS) on an idle link; every outstation
+Only DSC go-dnp3 sends confirmed user data, in both roles. The opendnp3 and
+dnp3py outstations and the opendnp3 master acknowledge it; dnp3py's master
+does not, so it gets no answer from an outstation that asks for link-layer
+confirms (a known bug). The opendnp3 and DSC go-dnp3 masters send keep-alives (REQUEST_LINK_STATUS) on an idle link; every outstation
 answers them, and DSC go-dnp3's adapter reports each one it receives.
 
 ### File append and authentication
 
 Only DSC go-dnp3's outstation serves files, so it is the only one to test
 against. It appends and, given `--file-user`, requires AUTHENTICATE_FILE
-before every open and delete. stepfunc's master appends and authenticates;
-DSC go-dnp3's master authenticates but opens files for writing only. Both
-masters get PERMISSION_DENIED without credentials and with a wrong password.
+before every open and delete. DSC go-dnp3's master authenticates but opens
+files for writing only; no other master has file transfer. It gets
+PERMISSION_DENIED without credentials and with a wrong password.
 
 ### Analog deadbands
 
-The stepfunc and DSC go-dnp3 masters write deadbands (g34v3) to the stepfunc and
-DSC go-dnp3 outstations, which then hold back events of a smaller change. Only
-stepfunc serves a read of group 34 and decodes one; DSC go-dnp3's outstation
-refuses it. stepfunc compares a change with the last value it reported, and
-starts with none (the RESTART value): the first change after start makes an
-event whatever the deadband. opendnp3's outstation refuses the write; dnp3py
+The DSC go-dnp3 master writes deadbands (g34v3) to the DSC go-dnp3
+outstation, which then holds back events of a smaller change. DSC go-dnp3's
+outstation refuses a read of group 34, and its master drops one. opendnp3's outstation refuses the write; dnp3py
 has no deadbands.
 
 ### Several controls in one request
 
-All four outstations carry out each control of a request on its own: in a
-request with one refused control the others take effect. The stepfunc,
-opendnp3 and DSC go-dnp3 outstations apply a limit the same way: the controls
-within it are carried out, the rest answered TOO_MANY_OPS. dnp3py's ignores
-the limit. stepfunc's master reports only the first refused control. DSC
-go-dnp3's master sends the OPERATE after a SELECT echo that carried only some
+Every outstation carries out each control of a request on its own: in a
+request with one refused control the others take effect. The opendnp3 and
+DSC go-dnp3 outstations apply a limit the same way: the controls within it
+are carried out, the rest answered TOO_MANY_OPS. dnp3py's ignores the limit.
+DSC go-dnp3's master sends the OPERATE after a SELECT echo that carried only some
 of the controls, all SUCCESS; the other masters stop after the select.
 
 ### Event buffer overflow
 
-All four outstations apply the fixture's `eventBufferSize` and set IIN2.3
+Every outstation applies the fixture's `eventBufferSize` and sets IIN2.3
 EVENT_BUFFER_OVERFLOW when an event does not fit; the event is lost. They
-count differently: stepfunc and opendnp3 per type, DSC go-dnp3 over all types
+count differently: opendnp3 per type, DSC go-dnp3 over all types
 (one buffer), dnp3py per type and class, so a class holds three times the
 size (FIXTURES.md). dnp3py 0.6.0 keeps IIN2.3 set after the master has
 confirmed the events, where the others clear it (a known bug).
 
-### Device attributes: stepfunc and DSC go-dnp3
+### Device attributes: DSC go-dnp3
 
-Both outstations serve the attributes of a private set, accept writes of the
-writable ones and refuse the others (stepfunc with NO_FUNC_CODE_SUPPORT for an
-attribute that is not writable, PARAMETER_ERROR when its application refuses);
-DSC go-dnp3 also derives the standard attributes of set 0 (point counts, fragment
-sizes) itself. Both masters read and write them. Before 1.8.0, stepfunc's
-master read a signed integer of one octet as unsigned: -42 arrived as 214.
-Both outstations encode -42 in one octet, as the standard's shortest form.
+The DSC go-dnp3 outstation serves the attributes of a private set, accepts
+writes of the writable ones and refuses the others; it also derives the
+standard attributes of set 0 (point counts, fragment sizes) itself. Its master
+reads and writes them. The outstation encodes -42 in one octet, as the
+standard's shortest form.
 
 ### DSC go-dnp3: security statistics
 
@@ -273,7 +256,7 @@ per type (g1v2/g2v1, g10v2, g20v1/g22v5, g21v1, g30v1/g32v1, g40v1 or v2),
 binary inputs in class 1, analog inputs in class 2, counters in class 3, no
 events of outputs and frozen counters (it would encode them as g2 and g22),
 integer analog values, no double-bit inputs, octet strings or unsolicited
-responses. Within that it agrees with the other three outstations on every
+responses. Within that it agrees with the other outstations on every
 case of tests/cases-dnp3py.tsv, with two known bugs: a read of a range
 returns every point of the type, and a control of a point that does not
 exist is answered NOT_SUPPORTED without IIN2.2 (the others set
@@ -288,14 +271,12 @@ response (the adapter reads both from the request).
 With unsolicited responses off, the DSC go-dnp3 outstation answers requests from
 any master address, to that address: a known bug in the dnp3py fixture runs.
 
-### Dual end point: three stacks, both ways
+### Dual end point: two stacks, both ways
 
-The outstations of stepfunc (`spawn_outstation_tcp_client`,
-`spawn_outstation_tls_client`), opendnp3 (a client channel; channels carry
-either role) and DSC go-dnp3 (a client channel; sessions take any channel) dial
-a listening master, and the masters of all three listen: stepfunc with
-`spawn_master_tcp_server` (no TLS listener), opendnp3 with a server channel,
-DSC go-dnp3 with `channel.TCPServer`/`TLSServer`. Every pairing works both ways
+The outstations of opendnp3 (a client channel; channels carry either role)
+and DSC go-dnp3 (a client channel; sessions take any channel) dial a
+listening master, and the masters of both listen: opendnp3 with a server
+channel, DSC go-dnp3 with `channel.TCPServer`/`TLSServer`. Every pairing works both ways
 (`make features`, `[reverse]`). A dialling DSC go-dnp3 outstation may connect
 twice to a DSC go-dnp3 master that listens: the first connection closes and it
 redials; the operation succeeds.
@@ -311,13 +292,13 @@ asio 1.16 warns about deprecated calls; TLS 1.2 and 1.3 both work.
 
 ### TLS is mutual everywhere, and a refused master learns it late
 
-All three libraries require a client certificate on the outstation and
-verify the outstation's on the master; none can switch verification off.
+Both libraries with TLS (opendnp3 and DSC go-dnp3) require a client
+certificate on the outstation and verify the outstation's on the master; none can switch verification off.
 With TLS 1.3 the master finishes its side of the handshake before the
 outstation checks the master's certificate, so a master the outstation does
 not trust sees the connection close afterwards, and its error code differs
 by library; the self-test checks only that the operation fails. A master that does not trust the outstation
-fails to connect (`connect-failed`) with all three.
+fails to connect (`connect-failed`) with both.
 
 ### DSC go-dnp3 (v0.8.2): its UDP outstation loses requests without a peer
 
@@ -329,14 +310,11 @@ adapter drops such a datagram instead of returning the error (as UDP would
 lose it), so the outstation works with or without `--udp-peer`. It also
 answers the first endpoint it hears from for its whole life.
 
-### DSC go-dnp3 and stepfunc: file transfer
+### DSC go-dnp3: file transfer
 
 The DSC go-dnp3 outstation serves a directory: entries report the file system's
 sizes (a directory its block size, 4096) and modification times as creation
-times. It handles one transfer at a time. The stepfunc master has
-`read_file`, `read_directory`, `get_file_info` and open/write/close, but no
-DELETE_FILE: `file-delete` is not among its operations. Both masters
-produce the same listing and descriptors of the same outstation.
+times. It handles one transfer at a time.
 
 ### DSC go-dnp3: secure authentication, against itself only
 
@@ -378,54 +356,20 @@ outstation that does not set NEED_TIME it fails with `failed`; the capability
 `timeSyncOnDemand` is false. The baseline fixture sets NEED_TIME at start for
 this reason.
 
-### opendnp3's master sends no `_NR` function; stepfunc's only DIRECT OPERATE NO ACK
+### opendnp3's master sends no `_NR` function
 
 opendnp3's master has no direct-operate-no-ack mode and sends any other
 function code through a task that waits for a response (`PerformFunction`),
 so a `_NR` request would end in a timeout: its `directOperateNoAckClient` and
-`freezeNoAckClient` are false. stepfunc's master sends DIRECT OPERATE NO ACK
-since 1.8.0 (`operate_no_ack`), so its `directOperateNoAckClient` is true
-since dnp3-interop v0.6.0; its freezes still go through
-`send_and_expect_empty_response`, which waits for a response, so
-`freezeNoAckClient` stays false. The DSC go-dnp3 and dnp3py masters send them
+`freezeNoAckClient` are false. The DSC go-dnp3 and dnp3py masters send them
 too (DSC go-dnp3 DIRECT OPERATE NO ACK only), so every outstation is tested
 with them.
 
-### Before 1.8.0, the first SELECT on a fresh stepfunc outstation failed with NO_SELECT
+### opendnp3's outstation sets PARAMETER_ERROR with NOT_SUPPORTED
 
-With unsolicited responses supported, the stepfunc outstation sends a null
-unsolicited response as soon as a master connects. Both masters (stepfunc
-and opendnp3) send their confirm of it only after the response to their
-first request. When that request is a SELECT, the confirm arrives between
-SELECT and OPERATE:
-
-```text
-TX UnsolicitedResponse seq 0 (null, CON)
-RX Select seq 0
-TX Response seq 0
-RX Confirm (UNS) seq 0
-RX Operate seq 1          -> "received OPERATE without prior SELECT", NO_SELECT
-```
-
-The outstation checks that OPERATE is the frame directly after SELECT
-(`SelectState::match_operate` compares frame counters) and counts the
-confirm as one. stepfunc keeps the "null response confirmed" state for the
-life of the outstation, not per connection, so only the first SELECT after
-start is affected. The opendnp3 outstation checks the sequence number only
-and accepts the same exchange.
-
-No adapter could avoid it without disabling unsolicited responses. stepfunc
-1.8.0 fixes it: since dnp3-interop v0.5.2 it is no longer in
-[tests/known-bugs.tsv](../tests/known-bugs.tsv), and the first SELECT after
-start passes.
-
-### Both outstations set PARAMETER_ERROR with NOT_SUPPORTED, and stepfunc's master drops the echo
-
-When the control handler answers NOT_SUPPORTED, both the opendnp3 and the
-stepfunc outstation set IIN2.2 PARAMETER_ERROR in the response. The stepfunc
-master then fails the task with `RejectedByIin2` and does not report the
-echoed status; the opendnp3 master reports both. The contract therefore
-makes such a response `rejected` with `commandStatus` null for every adapter
+When the control handler answers NOT_SUPPORTED, the opendnp3 outstation sets
+IIN2.2 PARAMETER_ERROR in the response; the opendnp3 master reports both the
+IIN and the echoed status. The contract makes such a response `rejected` with `commandStatus` null for every adapter
 (the opendnp3 adapter names the echo in the message). Refusals by status
 alone, such as OUT_OF_RANGE, carry no IIN bit and are `command-failed` with
 the status.
@@ -441,8 +385,7 @@ counter of the same index, freezing that counter and restoring it, all with
 
 opendnp3's internal freeze clears every selected counter, whether or not a
 frozen counter with its index exists. That is what IEEE 1815 describes, and
-the fixture behaviour says so; the stepfunc adapter, whose library leaves the
-freeze to the application, does the same.
+the fixture behaviour says so.
 
 ### opendnp3 needs `<cstdint>` with GCC 14
 
@@ -450,25 +393,12 @@ The 2022 sources use the fixed-width integer types without including
 `<cstdint>`, which GCC 14 no longer provides through other headers. The
 Dockerfile passes `-include cstdint`.
 
-### stepfunc's outstation implements ASSIGN CLASS since 1.8.0
-
-Up to 1.7.0 it answered function code 22 with NO_FUNC_CODE_SUPPORT. 1.8.0
-applies it to its database and reports each point header to the application,
-so the adapter emits `assign-class` server events, and `assignClassServer` is
-true since dnp3-interop v0.6.0. A header that names all points of a type is
-reported with the lowest and highest index of that type in the fixture.
-
-### stepfunc keeps octet strings out of class 0 by default
-
-`ClassZeroConfig.octet_string` defaults to false; the adapter enables it, so
-that both outstations answer an integrity poll with the same points.
-
 ### DSC go-dnp3: FREEZE AND CLEAR clears only counters that have a frozen counter
 
 `Database.freezeRange` walks the indexes below the smaller of the number of
 counters and of frozen counters, and clears only those. The baseline's
 counter 2 has no frozen counter and keeps its value after FREEZE AND CLEAR;
-opendnp3 and the stepfunc adapter clear it. Listed in
+opendnp3 clears it. Listed in
 [tests/known-bugs.tsv](../tests/known-bugs.tsv).
 
 ### Frozen counter events: a freeze semantic and an event policy
@@ -521,7 +451,6 @@ Observed, stack by stack:
 |------------|---------------------------------------|--------------------|-----------------------|
 | DSC go-dnp3 v0.8.2 | Raises a frozen counter event: `setFrozen` is told a freeze produced the value ([outstation/database.go](https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/database.go#L399-L403), where a comment gives this as the design) | none | all kept |
 | opendnp3 3.1.2 | Raises none: the library's freeze detects the event ([FreezeRequestHandler.cpp](https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/outstation/FreezeRequestHandler.cpp#L48-L60), default `EventMode::Detect`) | none: an application's `FreezeCounter` takes a mode, a master's freeze does not | all kept |
-| stepfunc dnp3 1.8.0 | Raises none by default | `--frozen-event-policy`: the adapter does the freeze, and passes `EventMode::Detect` or `EventMode::Force` | all kept |
 | dnp3py 0.6.0 | Raises no frozen counter events at all | none | n/a |
 
 Up to v0.7.0 the first row was listed as a known bug of DSC go-dnp3
@@ -538,7 +467,7 @@ either behaviour. What was checked on 2026-11-01:
 | IEEE 1815-2012 | Not read: [IEEE](https://standards.ieee.org/ieee/1815/5414/) offers it by purchase or subscription, and lists no free access |
 | DNP3 IED Certification Procedure 3.1 rev 1 (DNP Users Group) | The public [PDF](https://www.dnp.org/API/Evotiva-UserFiles/FileActionsServices/DownloadFile?ItemId=5008&ModuleId=9582&TabId=66) is 17 pages of front matter and contents; section 8.16.2 (frozen counters) is listed at page 91 and is not in it |
 | [dnp3c](https://github.com/stepfunc/dnp3c/blob/881209943b670cc59b16301346dffa7d5523ab72/src/main/scala/io/stepfunc/dnp3c/conformance/v31r1/FrozenCounters.scala) 0.2.0, an independent implementation of that procedure | A secondary source. For a device with frozen counter events, it requires a g23 event of every point in the read after each freeze of 8.16.2.2.3 to 8.16.2.2.6. As dnp3c runs them on a device whose frozen values start apart from its counters, each of these freezes changes the frozen values (counts generated between freezes; a second FREEZE AND CLEAR takes nonzero to zero), so they do not separate the two policies. dnp3c forces no change before the first freeze; whether the procedure does is in the part that is not public |
-| Comments of the stacks | DSC go-dnp3 gives its behaviour as a design choice, citing no clause. opendnp3, stepfunc and dnp3py cite none on this |
+| Comments of the stacks | DSC go-dnp3 gives its behaviour as a design choice, citing no clause. opendnp3 and dnp3py cite none on this |
 | Public bulletins and vendor manuals found by search | Nothing on this. The manuals read list group 23 and its variations, not when an event is due or what is kept |
 
 Still needed: the text of IEEE 1815 on frozen counter events and freezes (the
@@ -572,8 +501,8 @@ bugs.
 
 For a control the handler refuses with NOT_SUPPORTED on an existing point (an
 unsupported code, a direct operate of a select-required output) the DSC go-dnp3
-outstation answers with the status and no IIN bit; opendnp3 and stepfunc also
-set PARAMETER_ERROR. The capability `parameterErrorWithNotSupported` says
+outstation answers with the status and no IIN bit; opendnp3 also sets
+PARAMETER_ERROR. The capability `parameterErrorWithNotSupported` says
 which an outstation does, and the cases expect `command-failed` or
 `rejected` accordingly.
 
@@ -593,9 +522,8 @@ call for ASSIGN CLASS. The capabilities `readAllObjectsClient`,
 
 ### DSC go-dnp3's master confirms before its first request
 
-Unlike the stepfunc and opendnp3 masters, it confirms the outstation's null
-unsolicited response before it sends its first request, so its first SELECT
-on a fresh stepfunc outstation succeeded even before stepfunc 1.8.0.
+Unlike the opendnp3 master, it confirms the outstation's null unsolicited
+response before it sends its first request.
 
 ### DSC go-dnp3's outstation: one connection at a time, contiguous indexes, NEED_TIME at start
 
@@ -622,9 +550,8 @@ move. Its master does not clear the outstation's restart bit, and the adapter
 connects without a link reset (`LinkResetPolicy.NEVER`), so that connected
 means the TCP connection as for every adapter.
 
-Like the stepfunc and opendnp3 masters, it confirms the null unsolicited
-response only after its first request's response, so it trips the stepfunc
-outstation's first-SELECT bug every time.
+Like the opendnp3 master, it confirms the null unsolicited response only
+after its first request's response.
 
 ### dnp3py's outstation cannot serve the baseline fixture
 
@@ -637,7 +564,7 @@ instead (see
 ### DSC go-dnp3 refuses a READ without object headers
 
 It answers PARAMETER_ERROR ("request carried no objects but requires them");
-opendnp3 and stepfunc answer a null response. The opendnp3 adapter sends such
+opendnp3 answers a null response. The opendnp3 adapter sends such
 a READ to learn the IIN before its library's time synchronization; it judges
 `time-sync` by the outcome of the synchronization itself, not by the IIN of
 that READ, which the null unsolicited response can make the last one to

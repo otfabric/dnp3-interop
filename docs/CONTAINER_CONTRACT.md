@@ -57,7 +57,7 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 
 | Item | Value |
 |------|-------|
-| Image | `ghcr.io/otfabric/dnp3-interop-<adapter>`; the stepfunc image is not published and exists only where it was built (`make image-stepfunc`) |
+| Image | `ghcr.io/otfabric/dnp3-interop-<adapter>` |
 | Entrypoint | `dnp3-interop` (`/usr/local/bin/dnp3-interop`) |
 | Default command | `server` |
 | Port | 20000/tcp (20000/udp with `--transport udp`) |
@@ -149,7 +149,7 @@ One JSON object per line on stdout.
 | `command` | `function`, `type`, `index`, `code` or `value`, `status` | A select or operate reached the outstation's control handler |
 | `time-sync` | `time` | The master wrote the outstation's time (either procedure) |
 | `restart` | `type` (`cold` or `warm`) | A restart request was accepted |
-| `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only where the library tells the application (opendnp3, stepfunc since 1.8.0) |
+| `assign-class` | `pointType`, `class`, `start`, `stop` | A class assignment was accepted. Only where the library tells the application (opendnp3) |
 | `file` | `action`, `name`, `status` (1.1) | See [file transfer](#file-transfer) |
 | `auth` | `user`, `function` (1.1) | See [secure authentication](#secure-authentication) |
 | `auth-error` | `user`, `code` (1.1) | See [secure authentication](#secure-authentication) |
@@ -611,7 +611,7 @@ on and off time 100 ms) and `g41v1..v4:INDEX:VALUE`. Feature
 | Result field | Meaning |
 |--------------|---------|
 | `commandStatus` | The first status other than SUCCESS, or SUCCESS when all succeeded; null when no echo arrived or the response carried a request error |
-| `commandStatuses` | The status of each control in order; null when no echo arrived, when only some controls were echoed, when the response carried a request error, or where the master library reports only the first refusal (stepfunc) |
+| `commandStatuses` | The status of each control in order; null when no echo arrived, when only some controls were echoed, when the response carried a request error, or where the master library reports only the first refusal |
 
 When the outstation echoed only some of the controls, `commandStatuses` is
 null (it has one entry per control or none) and the operation fails:
@@ -731,7 +731,7 @@ of the value larger than it makes an event, a smaller one does not.
 
 | Operation | Flags | Does |
 |-----------|-------|------|
-| `deadband-write` | `--deadbands INDEX:VALUE[,...]`, VALUE a non-negative number | WRITE of g34v3 (single precision) with a one- or two-octet index prefix (the master library's choice; stepfunc always two). Feature `deadbandWriteClient` (master), `deadbandWriteServer` (outstation) |
+| `deadband-write` | `--deadbands INDEX:VALUE[,...]`, VALUE a non-negative number | WRITE of g34v3 (single precision) with a one- or two-octet index prefix (the master library's choice). Feature `deadbandWriteClient` (master), `deadbandWriteServer` (outstation) |
 
 It succeeds when the outstation accepted the write. A master reads the
 deadbands with `read --group 34 --variation 1|2|3 --start A --stop B` (or
@@ -803,7 +803,7 @@ the socket answered; `iin` is null, `objects` empty), with:
 | 2 | Usage error: a bad flag; or an image with `counterIncrementServer` false, which has no such command |
 | 3, `connect-failed` | No server on the socket |
 
-Feature `counterIncrementServer`. The stepfunc, dscsystems and dnp3py adapters
+Feature `counterIncrementServer`. The dscsystems and dnp3py adapters
 read the value from the library's database. opendnp3 has no read of its
 database, so that adapter holds the value itself, and learns of a FREEZE AND
 CLEAR from the header of the request, which is all the library tells: it cannot
@@ -941,7 +941,7 @@ needs no checkout of this repository and cannot drift from the image.
 - **stderr carries diagnostics** for people. Nothing on stderr is part of the
   contract. Library logging goes there too. `DNP3_INTEROP_DEBUG=1` in the
   environment turns the library logging up to its most detailed level
-  (frames and objects); all four adapters read it.
+  (frames and objects); every adapter reads it.
 - Field names and exit codes are stable within a major contract version.
   Fields may be added in a minor version; consumers ignore fields they do not
   know.

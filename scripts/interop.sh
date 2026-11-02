@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reference-stack self-test: every client adapter against every server adapter.
 #
-# Usage: interop.sh <adapter> [<adapter> ...]      e.g. interop.sh stepfunc opendnp3
+# Usage: interop.sh <adapter> [<adapter> ...]      e.g. interop.sh opendnp3 dscsystems
 #
 # For each case in tests/cases.tsv and each client/server pairing:
 #   - the outcome must match the expectation of the case, and
