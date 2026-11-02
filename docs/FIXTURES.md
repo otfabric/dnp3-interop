@@ -62,6 +62,7 @@ unique; they need not be contiguous.
 | `eventVariation` | Variation of its events |
 | `target` | `binaryOutputs`, `analogOutputs`: index of a binary or analog input that follows the output; at most one output per input |
 | `selectRequired` | `binaryOutputs`, `analogOutputs`: when true, only select-before-operate is accepted. Default false |
+| `pulse` | `binaryOutputs` (contract 1.5): when true, PULSE_ON and PULSE_OFF are accepted and change nothing (see [controls](#controls-select-operate-direct-operate-direct-operate-no-ack)). Default false |
 | `min`, `max` | `analogOutputs`: the accepted range of a control value, inclusive. Default unlimited |
 
 | Array | `value` | Static variations (default first) | Event variations (default first) |
@@ -120,7 +121,12 @@ the feature `deviceAttributesServer` serves a fixture with `deviceAttributes`.
 
 | Field | Meaning |
 |-------|---------|
-| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt", "value", "writable": false }]`; a `visibleString` value has at most 255 characters and must also fit in 255 octets of UTF-8 (the length octet on the wire); an adapter refuses a longer one (exit 4). Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
+| `deviceAttributes` | `[{ "set": 1..255, "variation": 1..253, "type": "visibleString" \| "unsignedInt" \| "signedInt" \| "float" \| "octetString" \| "bitString" \| "time", "value", "writable": false }]`; a `visibleString` value has at most 255 characters and must also fit in 255 octets of UTF-8 (the length octet on the wire); an adapter refuses a longer one (exit 4). Private sets only (set 0 holds the standard's attributes, which the libraries derive) |
+
+*Contract 1.5* adds the types `float` (a number a 32-bit float holds exactly,
+since an outstation may send it in four octets), `octetString` and
+`bitString` (lower-case hex, at most 255 octets) and `time` (a time stamp,
+`YYYY-MM-DDTHH:MM:SS.mmmZ`, sent as a 48-bit DNP3 time).
 
 A writable attribute accepts a WRITE of the same type, which replaces its
 value until the outstation restarts.
@@ -187,7 +193,8 @@ output, at index `i`:
 | Condition, first match wins | Status | Effect |
 |-----------------------------|--------|--------|
 | No output of that type at `i` | NOT_SUPPORTED | none |
-| `g12v1` with a code other than LATCH_ON, LATCH_OFF, CLOSE (pulse on, close) or TRIP (pulse on, trip) | NOT_SUPPORTED | none |
+| `g12v1` PULSE_ON or PULSE_OFF on an output without `pulse` (1.5) | NOT_SUPPORTED | none |
+| `g12v1` with a code other than LATCH_ON, LATCH_OFF, CLOSE (pulse on, close), TRIP (pulse on, trip), PULSE_ON or PULSE_OFF | NOT_SUPPORTED | none |
 | `g41`: value below `min` or above `max` | OUT_OF_RANGE | none |
 | DIRECT OPERATE (with or without ack) and `selectRequired` | NOT_SUPPORTED | none |
 | SELECT | SUCCESS | none: the library arms the point |
@@ -199,9 +206,12 @@ Effect of a successful operate:
 |---------|--------|--------|
 | `g12v1` LATCH_ON, CLOSE | value := true | value := true |
 | `g12v1` LATCH_OFF, TRIP | value := false | value := false |
+| `g12v1` PULSE_ON, PULSE_OFF (`pulse` outputs) | unchanged | unchanged |
 | `g41` | value := control value | value := control value |
 
-Count, on time and off time are not evaluated. Flags of the output and the
+Count, on time and off time are not evaluated: a pulse is taken to end where
+it began, and no outstation runs it in time. The server's `command` event
+reports them. Flags of the output and the
 target are not changed. Matching an operate to its select, the select
 timeout (`--select-timeout-ms`) and the sequence number check are done by
 the outstation library before this table applies.
@@ -368,7 +378,8 @@ of them.
 start, at most two controls per request. Binary inputs 0 and 1 (false, no
 events), binary outputs 0 and 1 (targets binary inputs 0 and 1) and 2,
 analog inputs 0 and 1, analog outputs 0 (range ±1000, target analog input 0)
-and 1 (range ±100, target analog input 1). Every outstation serves it.
+and 1 (range ±100, target analog input 1). Binary output 2 accepts pulses
+(`pulse`, contract 1.5). Every outstation serves it.
 
 ## The events fixture
 
@@ -400,6 +411,11 @@ start, one binary input, and in attribute set 1:
 | 10 | visibleString | "writable text" | yes |
 | 11 | unsignedInt | 7 | yes |
 | 12 | signedInt | -7 | yes |
+
+Contract 1.5 adds, read-only: 4 float 3.5, 5 octetString `00ff10`,
+6 bitString `a5`, 7 time `2024-01-02T03:04:05.678Z`; writable: 13 float
+-0.25, 14 octetString `0102`, 15 bitString `0f`, 16 time
+`2020-01-01T00:00:00.000Z`.
 
 ## The extended fixture
 

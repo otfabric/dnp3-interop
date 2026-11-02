@@ -788,19 +788,41 @@ coverage() {
         start "${server}" "${name}" --
         if wait_ready "${name}"; then
             client "${client}" -- disable-unsolicited --host "${name}" >/dev/null
+            # The outstation's time is unsynchronized here: see class_poll_objects.
+            local from to
+            from=$(clock_ms "${name}")
             client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
+            to=$(clock_ms "${name}")
             doc=$(client "${client}" -- monitor --duration-ms 2000 --host "${name}")
             at_pair "coverage.no-unsolicited-responses-after-a-disable" "${pair}"
             check "${pair}: [unsolicited] none after DISABLE UNSOLICITED" "" \
                 "$(jq -r '[.objects[]? | select(.unsolicited)] | length | select(. > 0)' <<<"${doc}" 2>/dev/null)"
             at_pair "coverage.events-stay-in-the-buffer" "${pair}"
             check "${pair}: [unsolicited] the events stay in the buffer" "g11v2:0=true g2v2:1=true" \
-                "$(objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")")"
+                "$(class_poll_objects "$(client "${client}" -- event-poll --classes 1 --host "${name}")" "${from}" "${to}")"
         fi
         stop_server "${name}"
     else
         at_pair "skipped.disable-unsolicited" "${pair}"
         skip "${pair}: DISABLE UNSOLICITED by value (needs client:unsolicited,server:unsolicited)"
+    fi
+
+    # ---- unsolicited responses the master does not confirm (contract 1.5) ----
+    if has "${client}" noUnsolicitedConfirmClient && has_server "${server}" unsolicited; then
+        name="gy-${server}-${RUN_ID}"
+        start "${server}" "${name}" -- --confirm-timeout-ms 500
+        if wait_ready "${name}"; then
+            # The null unsolicited response at start, never confirmed, comes
+            # again after each confirm timeout.
+            doc=$(client "${client}" -- monitor --duration-ms 3000 --no-unsolicited-confirm --host "${name}")
+            at_pair "coverage.unconfirmed-unsolicited-is-sent-again" "${pair}"
+            check "${pair}: [unsolicited] an unconfirmed unsolicited response is sent again" "true" \
+                "$(jq -r '.unsolicitedFragments >= 3' <<<"${doc}" 2>/dev/null)"
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.unsolicited-retry" "${pair}"
+        skip "${pair}: unsolicited retry (needs client:noUnsolicitedConfirmClient,server:unsolicited)"
     fi
 
     # ---- a counter wraps modulo 2^32 (contract 1.4) ----

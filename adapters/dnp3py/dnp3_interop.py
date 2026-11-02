@@ -121,7 +121,7 @@ USAGE = """usage: dnp3-interop <command>
       disable-unsolicited  [--classes 1,2,3]
       assign-class         --class C --group G [--start N --stop N]
       freeze               [--clear] [--no-ack] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
-      monitor              [--duration-ms N]
+      monitor              [--duration-ms N] [--no-unsolicited-confirm]
       operate-multi        --controls g12v1:I:CODE,g41vN:I:VALUE,... [--mode direct|sbo]
       manage               --function initialize-data|initialize-application|start-application|
                                       stop-application|save-configuration|activate-config [--spec NAME]
@@ -1175,8 +1175,10 @@ async def time_sync_non_lan(c):
 
 async def monitor(c, seconds):
     end = time.monotonic() + seconds
+    c.recorder.unsolicited_fragments = 0
     while (left := end - time.monotonic()) > 0:
-        await c.runner.listen_unsolicited(timeout=left)
+        if await c.runner.listen_unsolicited(timeout=left) is not None:
+            c.recorder.unsolicited_fragments += 1
         if not c.runner.is_open:
             # The runner can return on an end of stream without raising.
             raise LinkError("the connection closed during the monitoring")
@@ -1192,6 +1194,18 @@ class NoConfirmRunner(MasterTcpRunner):
 
     async def _send_confirm(self, sequence, *, uns, deadline):
         if uns:
+            await super()._send_confirm(sequence, uns=uns, deadline=deadline)
+
+
+class NoUnsolicitedConfirmRunner(MasterTcpRunner):
+    """monitor --no-unsolicited-confirm (contract 1.5): no unsolicited response is confirmed.
+
+    The outstation sends it again after its confirm timeout; the monitor
+    counts every unsolicited fragment it receives.
+    """
+
+    async def _send_confirm(self, sequence, *, uns, deadline):
+        if not uns:
             await super()._send_confirm(sequence, uns=uns, deadline=deadline)
 
 
@@ -1233,6 +1247,8 @@ async def run_client(op, o, request):
     # Connected means the TCP connection, as for every adapter: no link reset
     # that an outstation with another address would leave unanswered.
     runner_type = NoConfirmRunner if o.no_confirm else MasterTcpRunner
+    if o.no_unsolicited_confirm:
+        runner_type = NoUnsolicitedConfirmRunner
     connected = False
     failure = None
     listener = None
@@ -1368,7 +1384,7 @@ def client_main(argv):
         return EXIT_USAGE
     flags = {"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "transport",
              "keep-alive-ms", "bind-address"}
-    switches = {"listen", "no-confirm"}
+    switches = {"listen", "no-confirm", "no-unsolicited-confirm"}
     flags |= {
         "event-poll": {"classes"}, "enable-unsolicited": {"classes"}, "disable-unsolicited": {"classes"},
         "read": {"group", "variation", "start", "stop"},
@@ -1406,6 +1422,9 @@ def client_main(argv):
         o.duration = a.integer("duration-ms", 1000, 0, 3600000) / 1000
         o.keep_alive = a.integer("keep-alive-ms", 0, 0, 3600000) / 1000
         o.no_confirm = a.has("no-confirm")
+        o.no_unsolicited_confirm = a.has("no-unsolicited-confirm")
+        if o.no_unsolicited_confirm and (op != "monitor" or o.no_confirm):
+            raise UsageError("--no-unsolicited-confirm is for monitor, without --no-confirm")
         request = None if op == "monitor" else parse_operation(op, a)
         if a.has("broadcast"):
             # Broadcast (contract 1.3): the request goes to 0xFFFF instead of --remote-addr.
@@ -1440,6 +1459,8 @@ def client_main(argv):
         doc["commandStatuses"] = None if statuses is None else [status_name(s) for s in statuses]
     if op == "restart":
         doc["restartDelayMs"] = recorder.delay_ms
+    if op == "monitor" and o.no_unsolicited_confirm:
+        doc["unsolicitedFragments"] = getattr(recorder, "unsolicited_fragments", 0)
     if op == "attribute-read":
         doc["attributes"] = getattr(recorder, "attributes", None) or []
     if op in FILE_OPERATIONS:
@@ -2129,6 +2150,7 @@ def print_capabilities():
             "operateDelayClient": True,
             "operateWithoutSelectClient": True,
             "noConfirmClient": True,
+            "noUnsolicitedConfirmClient": True,
         },
         # Contract 1.4: it raises no frozen counter events, so it has no policy.
         "frozenEventPolicies": [],

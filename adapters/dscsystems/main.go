@@ -216,6 +216,7 @@ func printCapabilities() int {
 			{"operateDelayClient", false},
 			{"operateWithoutSelectClient", false},
 			{"noConfirmClient", false},
+			{"noUnsolicitedConfirmClient", false},
 		}},
 		// A freeze always raises its event, by the library's design.
 		{"frozenEventPolicies", []string{"always"}},

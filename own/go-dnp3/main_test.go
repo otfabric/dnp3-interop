@@ -306,6 +306,8 @@ func TestUsageErrors(t *testing.T) {
 		{"client", "integrity-poll", "--transport", "udp", "--host", "h", "--tls"},
 		{"client", "integrity-poll", "--transport", "serial", "--host", "h", "--serial-device", "/dev/null"},
 		{"client", "manage", "--host", "h", "--function", "activate-config"},
+		{"client", "manage", "--host", "h", "--function", "save-configuration", "--spec", "a"},
+		{"client", "operate", "--host", "h", "--type", "g41v1", "--index", "0", "--value", "1", "--operate-delay-ms", "10"},
 		{"server", "--frozen-event-policy", "always"},
 		{"server", "--tls-cert", "c.pem"},
 		{"server", "--outstations", "2", "--connect", "h:1"},

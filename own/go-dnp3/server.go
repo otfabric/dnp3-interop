@@ -102,6 +102,14 @@ func (h *controlHandler) check(c server.Command, direct bool) (app.CommandStatus
 		}
 		var on bool
 		switch v.Code() {
+		case 0x01, 0x02: // PULSE_ON, PULSE_OFF: only on a pulse output, which keeps its value
+			if !p.Pulse {
+				return app.StatusNotSupported, nil
+			}
+			if direct && p.SelectRequired {
+				return app.StatusNotSupported, nil
+			}
+			return app.StatusSuccess, nil
 		case 0x03, 0x41: // LATCH_ON; PULSE_ON with CLOSE
 			on = true
 		case 0x04, 0x81: // LATCH_OFF; PULSE_ON with TRIP
@@ -194,7 +202,8 @@ func (h *controlHandler) SetTime(_ context.Context, t time.Time) {
 }
 
 // Application (server.ApplicationHandler) accepts the management functions
-// 15..19; ACTIVATE_CONFIG, not in the contract, is refused.
+// 15..19. ACTIVATE_CONFIG (contract 1.5) is refused with NO_FUNC_CODE_SUPPORT:
+// the handler can answer IIN bits only, not the g91v1 status.
 func (h *controlHandler) Application(_ context.Context, fc app.FunctionCode, _ []app.Header) app.IIN {
 	switch fc {
 	case app.FuncInitializeData, app.FuncInitializeApplication, app.FuncStartApplication,

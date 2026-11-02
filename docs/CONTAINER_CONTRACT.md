@@ -15,7 +15,7 @@ and changes only with the major version.
 | 1.2 | [More point types](#more-point-types): frozen analog inputs (groups 31, 33), command events (groups 13, 43), time and interval (group 50 variation 4) in object documents, the `extended` fixture and their features; [dual end point](#dual-end-point): `server --connect`, `client --listen`; [security statistics](#security-statistics) (groups 121, 122); `serverFeatures` in the capability document; additions |
 | 1.3 | [Device attributes](#device-attributes) (group 0): the `attributes` fixture, `attribute-read`, `attribute-write`, the `attribute-write` event; [several controls in one request](#several-controls-in-one-request): `operate-multi`, `commandStatuses`, the fixture's `maxControlsPerRequest`; [freeze at time and analog freeze](#freeze-at-time-and-analog-freeze): `freeze --at`, `--interval-ms`, `--group`; [analog deadbands](#analog-deadbands) (group 34): `deadband-write`, group 34 in object documents; [file append and authentication](#file-append-and-authentication): `file-put --append`, `file-authenticate`, `--file-user`, `--file-password`; [event buffer overflow](#event-buffer-overflow): the fixture's `eventBufferSize`, the `events` fixture; [link layer](#link-layer): `--link-confirms`, `--keep-alive-ms`, the `link-status` event; [broadcast](#broadcast): `operate --broadcast`, the `broadcast` event; [management functions](#management-functions): `manage`, the `manage` event; [several outstations](#several-outstations): `server --outstations`; additions |
 | 1.4 | [Counters that change](#counters-that-change): the `counter-increment` command, `server --control-socket`, `server --frozen-event-policy`, the `counters` fixture, the capability fields `frozenEventPolicies`, `frozenEventRetention` and `unsupportedReasons`, the features `counterIncrementServer`, `frozenCounterEventsServer`, `frozenCounterEventTimeClient`; additions |
-| 1.5 | [Timers a master can provoke](#timers-a-master-can-provoke): `operate --operate-delay-ms`, the client switch `--no-confirm`, the features `operateDelayClient` and `noConfirmClient`; [ACTIVATE_CONFIG](#management-functions): `manage --function activate-config --spec`, the features `activateConfigServer` and `activateConfigClient`; additions |
+| 1.5 | [Timers a master can provoke](#timers-a-master-can-provoke): `operate --operate-delay-ms`, `operate --mode operate`, `monitor --no-unsolicited-confirm` and `unsolicitedFragments`, the client switch `--no-confirm`, the features `operateDelayClient`, `operateWithoutSelectClient`, `noUnsolicitedConfirmClient` and `noConfirmClient`; the fixture field `pulse`; the attribute types `float`, `octetString`, `bitString` and `time` in fixtures and `attribute-write`; [ACTIVATE_CONFIG](#management-functions): `manage --function activate-config --spec`, the features `activateConfigServer` and `activateConfigClient`; additions |
 
 Not every adapter has every operation or event. What an image lacks it says
 in [`print-capabilities`](#print-capabilities), and an operation it does not
@@ -225,7 +225,7 @@ does not do it leaves the bit set.
 | `disable-unsolicited` | `--classes L` (`1,2,3`) | DISABLE UNSOLICITED with g60v2..v4 | As `enable-unsolicited` |
 | `assign-class` | `--class C` (required, 0..3), `--group G` (required), `--start N --stop N` | ASSIGN CLASS: g60v(C+1), then group G variation 0, range or all objects | As `enable-unsolicited`. Only with the feature `assignClassClient` |
 | `freeze` | `--clear`, `--no-ack` | IMMEDIATE FREEZE (or FREEZE AND CLEAR with `--clear`) with g20v0, all objects; `--no-ack` sends the `_NR` function codes | Null response without a request error; with `--no-ack` when the request was sent. `--no-ack` only with the feature `freezeNoAckClient` |
-| `monitor` | `--duration-ms N` (1000) | Nothing | The duration passed with the connection still up. What arrived unsolicited is in `objects` |
+| `monitor` | `--duration-ms N` (1000), `--no-unsolicited-confirm` (1.5) | Nothing | The duration passed with the connection still up. What arrived unsolicited is in `objects`; with `--no-unsolicited-confirm`, `unsolicitedFragments` counts the unsolicited fragments |
 | `file-get`, `file-put`, `file-ls`, `file-info`, `file-delete` | see [file transfer](#file-transfer) | 1.1 | |
 
 `--classes` is a comma-separated list of class numbers; `event-poll` takes
@@ -249,7 +249,7 @@ time is written, so both kinds of master can run the operation against it.
 | `--on-ms N` | 100 | `g12v1`: on time |
 | `--off-ms N` | 100 | `g12v1`: off time |
 | `--value V` | required for `g41` | The value, in the range of the variation |
-| `--mode M` | `direct` | `direct` (DIRECT OPERATE), `sbo` (SELECT, then OPERATE after a successful select), `direct-no-ack` (DIRECT OPERATE NO ACK) |
+| `--mode M` | `direct` | `direct` (DIRECT OPERATE), `sbo` (SELECT, then OPERATE after a successful select), `direct-no-ack` (DIRECT OPERATE NO ACK), `operate` (an OPERATE without a SELECT, 1.5: see [timers a master can provoke](#timers-a-master-can-provoke)) |
 | `--operate-delay-ms N` | 0 | With `--mode sbo` only (exit 2 otherwise): wait N ms between the select and the operate (1.5): see [timers a master can provoke](#timers-a-master-can-provoke) |
 
 `--mode direct-no-ack` only with the feature `directOperateNoAckClient`; it
@@ -703,7 +703,7 @@ with `rejected` otherwise. Feature `activateConfigClient`. An outstation with
 `activateConfigServer` takes every specification at once (status 0, no
 delay), answers g91v1 and reports it with the `manage` event, `function` 31.
 An outstation without it refuses ACTIVATE_CONFIG with an IIN2 error and no
-`manage` event: opendnp3 with NO_FUNC_CODE_SUPPORT, dnp3py with
+`manage` event: opendnp3, dnp3py and OT Fabric go-dnp3 with
 NO_FUNC_CODE_SUPPORT. (Without an ActivateConfig handler, DSC go-dnp3 v0.8.2
 hands 31 to the management handler of 15..19, which refuses it with
 PARAMETER_ERROR: `outstation/services.go`.)
@@ -760,7 +760,7 @@ Features `deviceAttributesServer` and `deviceAttributesClient`.
 | Operation | Flags | Sends | Succeeds when | Result |
 |-----------|-------|-------|---------------|--------|
 | `attribute-read` | `--set N` (required), `--variation V` (default 254: every attribute of the set) | READ g0vV, the set as the range | The response arrived without a request error | `attributes` |
-| `attribute-write` | `--set N`, `--variation V` (required), exactly one of `--text S`, `--uint N`, `--int N` | WRITE g0vV with the value | A null response without a request error | |
+| `attribute-write` | `--set N`, `--variation V` (required), exactly one of `--text S`, `--uint N`, `--int N`, and from 1.5 `--float X` (sent in four octets), `--octets HEX`, `--bits HEX`, `--time T` (`YYYY-MM-DDTHH:MM:SS.mmmZ`) | WRITE g0vV with the value | A null response without a request error | |
 
 `attributes`: `[{ "set", "variation", "type", "value" }]` in the order they
 arrived. `type` is one of `visibleString`, `unsignedInt`, `signedInt`,
@@ -777,12 +777,14 @@ error).
 
 ## Timers a master can provoke
 
-*Contract 1.5.* Two outstation timers only show when a master does what a
-well-behaved master does not, so a master that can do it says so:
+*Contract 1.5.* Some outstation behaviour only shows when a master does what
+a well-behaved master does not, so a master that can do it says so:
 
 | Where | Flag | Meaning |
 |-------|------|---------|
 | client | `operate --mode sbo --operate-delay-ms N` | Wait N ms after a successful SELECT before the OPERATE. Against `server --select-timeout-ms` below N the outstation answers the OPERATE with TIMEOUT (the select expired) and carries nothing out: the operation fails with `command-failed`, `commandStatus` `TIMEOUT`. Feature `operateDelayClient` |
+| client | `operate --mode operate` | Send the OPERATE without a SELECT. The outstation answers NO_SELECT and carries nothing out: the operation fails with `command-failed`, `commandStatus` `NO_SELECT`. Feature `operateWithoutSelectClient`; without it, exit 2 |
+| client | `monitor --no-unsolicited-confirm` | Confirm no unsolicited response, so the outstation sends it again after `server --confirm-timeout-ms`; the result's `unsolicitedFragments` counts every unsolicited fragment that arrived, repeats included. Not with `--no-confirm`. Feature `noUnsolicitedConfirmClient` |
 | client | `--no-confirm` | Confirm no solicited response. The outstation keeps the events it sent; the next poll gets them again. Unsolicited responses are still confirmed: an outstation may answer no request until its null unsolicited response at start is confirmed. A response with more fragments stalls without a confirm, so it is meant for single-fragment responses. Feature `noConfirmClient` |
 
 ## Counters that change

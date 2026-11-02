@@ -140,6 +140,8 @@ serves it and the master sends it.
 | `activateConfigClient` | `manage --function activate-config` (1.5) | no ⁴³ | no ²⁵ | yes |
 | `operateDelayClient` | `operate --mode sbo --operate-delay-ms` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
 | `noConfirmClient` | `client --no-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
+| `operateWithoutSelectClient` | `operate --mode operate` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
+| `noUnsolicitedConfirmClient` | `monitor --no-unsolicited-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
 
 ¹ dnp3py's outstation cannot serve the baseline fixture (no double-bit
 inputs, octet strings or per-point variations); it serves the `dnp3py`
@@ -295,8 +297,12 @@ adapter decodes and encodes the values.
 `FunctionCode`, and no outstation handler). The dnp3py adapter sends 31 with
 an adapter-built g70v8.
 
-⁴⁴ The library's master operates right after a successful select and confirms
-every response that asks for it; neither can be changed.
+⁴⁴ The library's master operates only right after a successful select, and
+confirms every response and unsolicited response that asks for it; none of
+this can be changed.
+
+The own image (`own/go-dnp3`, adapter `otfabric`) is not in this table: its
+capabilities are in its image and in [own/go-dnp3/README.md](../own/go-dnp3/README.md).
 
 A capability is a property of the adapter and of the upstream version in the
 image. The self-tests read it from the image and skip what a pairing lacks
