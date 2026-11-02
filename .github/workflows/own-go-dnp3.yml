@@ -2,8 +2,9 @@ name: Own stack (go-dnp3)
 run-name: "Build dnp3-interop-otfabric from the latest go-dnp3, by @${{ github.actor }} on ${{ github.ref_name }}"
 
 # Manual only. Builds ghcr.io/otfabric/dnp3-interop-otfabric from the latest
-# go-dnp3 release, tests it against the latest released references and, when
-# run from main, publishes it as :<go-dnp3 version> and :latest.
+# go-dnp3 release, tests it with the self-tests and references of the latest
+# harness release and, when run from main, publishes it as :<go-dnp3 version>
+# and :latest.
 #
 # Nothing is committed, and nothing else waits for this: no pin to bump, no
 # release, no schedule. So no release loop can form (own/go-dnp3/README.md).
@@ -114,6 +115,15 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           [ "${reported}" = "${UPSTREAM}" ] || { echo "::error::the image reports go-dnp3 ${reported}, want ${UPSTREAM}"; exit 1; }
 
+      # The self-tests are those of the harness release whose reference images
+      # they run against: main's scripts may already check what only the next
+      # release's references do.
+      - name: Check out the self-tests of ${{ needs.version.outputs.harness }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.harness }}
+          path: harness
+
       - name: Pull the reference images of ${{ needs.version.outputs.harness }}
         run: |
           for a in opendnp3 dscsystems dnp3py; do
@@ -123,6 +133,7 @@ jobs:
           done
 
       - name: Smoke, cross-stack and feature self-tests against the references, document schemas
+        working-directory: harness
         run: |
           set -o pipefail
           mkdir -p reports
@@ -147,7 +158,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: own-go-dnp3-documents-${{ matrix.arch }}
-          path: reports/
+          path: |
+            harness/reports/
+            reports/
           if-no-files-found: ignore
 
       - name: Push the tested image as <version>-<arch>
