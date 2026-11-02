@@ -19,7 +19,10 @@ framework.
 
 - R1.1 This repository does not import, build, link against or depend on any
   library under test, and contains no test logic or expectation specific to
-  one. In particular it knows nothing about `otfabric/go-dnp3`.
+  one. The one exception is `own/` with its workflow: images of OT Fabric's
+  own stacks, published for others to test against (`own/go-dnp3/README.md`).
+  The rest of the repository does not know them, and they are not part of a
+  release.
 - R1.2 A consumer depends on published images and the documented contract
   only. It does not need a checkout of this repository to run its tests,
   except to build an image whose upstream licence forbids publishing it

@@ -57,7 +57,7 @@ Roles: `server` is a DNP3 **outstation**, `client` a DNP3 **master**.
 
 | Item | Value |
 |------|-------|
-| Image | `ghcr.io/otfabric/dnp3-interop-<adapter>` |
+| Image | `ghcr.io/otfabric/dnp3-interop-<adapter>`; OT Fabric's own stack is the adapter `otfabric` |
 | Entrypoint | `dnp3-interop` (`/usr/local/bin/dnp3-interop`) |
 | Default command | `server` |
 | Port | 20000/tcp (20000/udp with `--transport udp`) |

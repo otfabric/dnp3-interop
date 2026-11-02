@@ -52,7 +52,7 @@ An image with the feature `secureAuthentication` adds (contract 1.1):
 | `adapter` | Adapter name; the image is `dnp3-interop-<adapter>` |
 | `adapterVersion` | Release of this repository the image was built from (`dev` for a local build) |
 | `upstream` | The implementation inside: name, exact version and revision, licence, language |
-| `upstream.independentEngine` | `false` when the adapter wraps the protocol engine of another adapter. Results from such an adapter do not count as an additional independent implementation |
+| `upstream.independentEngine` | `false` when the adapter wraps the protocol engine of another adapter, or is OT Fabric's own stack (`own/`). Results from such an adapter do not count as an additional independent implementation |
 | `roles` | Which of `server` (outstation) and `client` (master) the image provides |
 | `features` | See below; every value is a boolean. Every image of this release lists every feature of the table below; a consumer treats a feature absent from a document (an image of an older release) as false |
 | `pointTypes` | Point arrays a fixture may use with this adapter as server |
