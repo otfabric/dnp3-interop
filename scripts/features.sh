@@ -101,6 +101,9 @@ SERVER_TLS=(--tls-cert /pki/server.pem --tls-key /pki/server.key --tls-ca /pki/c
 CLIENT_TLS=(--tls --tls-ca /pki/ca.pem --tls-cert /pki/client.pem --tls-key /pki/client.key --tls-server-name dnp3-interop-server)
 SA_KEY=000102030405060708090a0b0c0d0e0f
 SA=(--sa-update-key "${SA_KEY}" --sa-user 3)
+SA_KEY_256=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+# key_wrap <adapter> <algorithm>: the adapter's secure authentication has the key wrap.
+key_wrap() { jq -e --arg k "$2" '.secureAuthentication.keyWrapAlgorithms // [] | index($k) != null' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
 
 # Known upstream bugs of the versions under test: the entries of
 # tests/known-bugs.tsv whose fifth column is "features".
@@ -434,13 +437,15 @@ counter_checks() {
 SERIAL_SERVER='socat pty,link=/tmp/ttyDNP3,raw,echo=0 pty,link=/tmp/ttyLINE,raw,echo=0 &
 while [ ! -e /tmp/ttyDNP3 ] || [ ! -e /tmp/ttyLINE ]; do sleep 0.05; done
 socat -t 0.05 tcp-listen:20001,reuseaddr,fork file:/tmp/ttyLINE,raw,echo=0 &
-exec dnp3-interop server --transport serial --serial-device /tmp/ttyDNP3'
+exec dnp3-interop server --transport serial --serial-device /tmp/ttyDNP3 "$@"'
+# SERIAL_LINE: the line settings both ends use (b13: non-default ones).
+SERIAL_LINE=()
 serial_client() {  # serial_client <adapter> <server container> <client args>
     local adapter="$1" server="$2"; shift 2
     docker run --rm --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" --entrypoint /bin/sh \
         "$(image_of "${adapter}")" -c "socat pty,link=/tmp/ttyDNP3,raw,echo=0 tcp:${server}:20001 &
 while [ ! -e /tmp/ttyDNP3 ]; do sleep 0.05; done
-exec dnp3-interop client \"\$@\" --transport serial --serial-device /tmp/ttyDNP3" sh "$@" 2>/dev/null | keep
+exec dnp3-interop client \"\$@\" --transport serial --serial-device /tmp/ttyDNP3" sh "$@" ${SERIAL_LINE[@]+"${SERIAL_LINE[@]}"} 2>/dev/null | keep
 }
 
 # basics <pair> <tag> <run>: the integrity poll, a control and its events,
@@ -613,6 +618,19 @@ coverage() {
         at_pair "coverage.pulse-off-is-refused" "${pair}"
         check "${pair}: [commands] PULSE_OFF is refused" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
         want+=" direct-operate:g12v1:0:1:3/250/750:NOT_SUPPORTED direct-operate:g12v1:0:2:1/100/100:NOT_SUPPORTED"
+        # Output 2 accepts pulses (contract 1.5): SUCCESS, and the value stays.
+        doc=$(client "${client}" -- operate --type g12v1 --index 2 --code PULSE_ON --count 2 --on-ms 300 --off-ms 400 --host "${name}")
+        at_pair "coverage.pulse-on-succeeds" "${pair}"
+        check "${pair}: [commands] PULSE_ON of a pulse output succeeds" "ok=true error=- SUCCESS" \
+            "$(outcome "${doc}") $(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+        doc=$(client "${client}" -- operate --type g12v1 --index 2 --code PULSE_OFF --on-ms 150 --off-ms 250 --host "${name}")
+        at_pair "coverage.pulse-off-succeeds" "${pair}"
+        check "${pair}: [commands] PULSE_OFF of a pulse output succeeds" "ok=true error=- SUCCESS" \
+            "$(outcome "${doc}") $(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+        at_pair "coverage.pulse-keeps-the-value" "${pair}"
+        check "${pair}: [commands] a pulse output keeps its value" "false" \
+            "$(at_index "$(client "${client}" -- read --group 10 --variation 0 --start 2 --stop 2 --host "${name}")" 10 2)"
+        want+=" direct-operate:g12v1:2:1:2/300/400:SUCCESS direct-operate:g12v1:2:2:1/150/250:SUCCESS"
         if has "${client}" directOperateNoAckClient && has "${server}" directOperateNoAckServer; then
             client "${client}" -- operate --type g41v1 --index 1 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
             want+=" direct-operate-no-ack:g41v1:1:7:-/-/-:SUCCESS"
@@ -647,6 +665,29 @@ coverage() {
     else
         at_pair "skipped.select-timeout" "${pair}"
         skip "${pair}: select timeout (needs client:operateDelayClient,server:selectBeforeOperate)"
+    fi
+
+    # ---- an OPERATE without a SELECT (contract 1.0, 1.5) ----
+    if has "${client}" operateWithoutSelectClient && has "${server}" selectBeforeOperate; then
+        name="go-${server}-${RUN_ID}"
+        start "${server}" "${name}" -- --fixture "${CONTROLS}"
+        if wait_ready "${name}"; then
+            doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --mode operate --host "${name}")
+            at_pair "coverage.operate-without-select" "${pair}"
+            check "${pair}: [select] an OPERATE without a SELECT" "ok=false error=command-failed NO_SELECT" \
+                "$(outcome "${doc}") $(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+            doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 9 --mode operate --host "${name}")
+            at_pair "coverage.analog-operate-without-select" "${pair}"
+            check "${pair}: [select] an analog OPERATE without a SELECT" "ok=false error=command-failed NO_SELECT" \
+                "$(outcome "${doc}") $(jq -r '.commandStatus' <<<"${doc}" 2>/dev/null)"
+            at_pair "coverage.operate-without-select-is-not-carried-out" "${pair}"
+            check "${pair}: [select] the OPERATE without a SELECT is not carried out" "false 0" \
+                "$(at_index "$(client "${client}" -- read --group 10 --variation 0 --start 0 --stop 0 --host "${name}")" 10 0) $(at_index "$(client "${client}" -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")" 40 0)"
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.operate-without-select" "${pair}"
+        skip "${pair}: OPERATE without a SELECT (needs client:operateWithoutSelectClient,server:selectBeforeOperate)"
     fi
 
     # ---- events the master does not confirm (contract 1.0, 1.5) ----
@@ -897,6 +938,23 @@ suite() {
                 fail "${pair}: [serial] server did not start"
             fi
             stop_server "${name}"
+            # Non-default line settings at both ends. A pseudo-terminal
+            # carries the octets whatever they are: this checks that every
+            # adapter takes the settings, not their timing. Eight data bits:
+            # DNP3 octets do not fit in seven.
+            SERIAL_LINE=(--baud 19200 --data-bits 8 --parity even --stop-bits 2)
+            docker rm -f "${name}" >/dev/null 2>&1
+            docker run -d --name "${name}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" \
+                -e "DNP3_INTEROP_DEBUG=${SERVER_DEBUG:-1}" --entrypoint /bin/sh \
+                "$(image_of "${server}")" -c "${SERIAL_SERVER}" sh "${SERIAL_LINE[@]}" >/dev/null
+            if wait_ready "${name}"; then
+                basics "${pair}" serial-settings "serial_client ${client} ${name}"
+            else
+                at_pair "serial-settings.server-start" "${pair}"
+                fail "${pair}: [serial-settings] server did not start"
+            fi
+            stop_server "${name}"
+            SERIAL_LINE=()
         else
             at_pair "skipped.serial" "${pair}"
             skip "${pair}: serial (needs server:serial,client:serial)"
@@ -1400,7 +1458,7 @@ suite() {
                 doc=$(client "${client}" -- attribute-read --set 1 --host "${name}")
                 at_pair "attributes.read-a-set" "${pair}"
                 check "${pair}: [attributes] read a set" \
-                    "1:visibleString:dnp3-interop reference outstation 2:unsignedInt:4000000000 10:visibleString:writable text 11:unsignedInt:7 12:signedInt:-7" \
+                    "1:visibleString:dnp3-interop reference outstation 2:unsignedInt:4000000000 4:float:3.5 5:octetString:00ff10 6:bitString:a5 7:time:2024-01-02T03:04:05.678Z 10:visibleString:writable text 11:unsignedInt:7 12:signedInt:-7 13:float:-0.25 14:octetString:0102 15:bitString:0f 16:time:2020-01-01T00:00:00.000Z" \
                     "$(jq -r "${attrs}" <<<"${doc}" 2>/dev/null)"
                 at_pair "attributes.signed-integer" "${pair}"
                 check "${pair}: [attributes] signed integer" "signedInt:-42" \
@@ -1417,15 +1475,23 @@ suite() {
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 12 --int -300 --host "${name}")
                 at_pair "attributes.write-a-signed-integer" "${pair}"
                 check "${pair}: [attributes] write a signed integer" "ok=true error=-" "$(outcome "${doc}")"
+                # Contract 1.5: float, octet string, bit string and time.
+                local v f x
+                for w in "13 float 1.5" "14 octets a0b1c2" "15 bits 80" "16 time 2025-06-07T08:09:10.123Z"; do
+                    read -r v f x <<<"${w}"
+                    doc=$(client "${client}" -- attribute-write --set 1 --variation "${v}" "--${f}" "${x}" --host "${name}")
+                    at_pair "attributes.write-${f}" "${pair}"
+                    check "${pair}: [attributes] write --${f}" "ok=true error=-" "$(outcome "${doc}")"
+                done
                 at_pair "attributes.written-values-read-back" "${pair}"
-                check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99 12:signedInt:-300" \
+                check "${pair}: [attributes] the written values read back" "10:visibleString:changed 11:unsignedInt:99 12:signedInt:-300 13:float:1.5 14:octetString:a0b1c2 15:bitString:80 16:time:2025-06-07T08:09:10.123Z" \
                     "$(client "${client}" -- attribute-read --set 1 --host "${name}" | jq -r '[.attributes[]? | select(.variation >= 10)] | sort_by(.variation) | map("\(.variation):\(.type):\(.value)") | join(" ")')"
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 1 --text no --host "${name}")
                 at_pair "attributes.read-only-attribute-refuses-a-write" "${pair}"
                 check "${pair}: [attributes] a read-only attribute refuses a write" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
                 sleep 0.3
                 at_pair "attributes.server-events" "${pair}"
-                check "${pair}: [attributes] server events" "10:changed 11:99 12:-300" \
+                check "${pair}: [attributes] server events" "10:changed 11:99 12:-300 13:1.5 14:a0b1c2 15:80 16:2025-06-07T08:09:10.123Z" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "attribute-write") | "\(.variation):\(.value)"' | paste -sd' ' -)"
             else
                 at_pair "attributes.server-start" "${pair}"
@@ -1533,6 +1599,37 @@ suite() {
         else
             at_pair "skipped.secure-authentication" "${pair}"
             skip "${pair}: secure authentication (needs server:secureAuthentication,client:secureAuthentication)"
+        fi
+
+        # ---- secure authentication with an AES-256 update key (contract 1.1) ----
+        if has "${server}" secureAuthentication && has "${client}" secureAuthentication \
+            && key_wrap "${server}" aes-256 && key_wrap "${client}" aes-256; then
+            name="fk-${server}-${RUN_ID}"
+            local sa256=(--sa-update-key "${SA_KEY_256}" --sa-user 3)
+            if has "${server}" securityStatisticsServer; then
+                start "${server}" "${name}" -- "${sa256[@]}" --sa-statistics-threshold 1000000
+            else
+                start "${server}" "${name}" -- "${sa256[@]}"
+            fi
+            if wait_ready "${name}"; then
+                sa256_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" --sa-update-key "${SA_KEY_256}" --sa-user 3; }
+                basics "${pair}" sa-aes-256 "sa256_run ${client} ${name}"
+                sleep 0.3
+                at_pair "sa-aes-256.outstation-authenticated-the-control" "${pair}"
+                check "${pair}: [sa-aes-256] the outstation authenticated the control" "true" \
+                    "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "auth" and .user == 3 and .function == 5)')"
+                doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" \
+                    --sa-update-key "${SA_KEY}" --sa-user 3)
+                at_pair "sa-aes-256.aes-128-key-is-refused" "${pair}"
+                check "${pair}: [sa-aes-256] an AES-128 key is refused" "ok=false error=auth-failed" "$(outcome "${doc}")"
+            else
+                at_pair "sa-aes-256.server-start" "${pair}"
+                fail "${pair}: [sa-aes-256] server did not start"
+            fi
+            stop_server "${name}"
+        else
+            at_pair "skipped.secure-authentication-aes-256" "${pair}"
+            skip "${pair}: secure authentication with AES-256 (needs keyWrapAlgorithms aes-256 on both)"
         fi
     done
 

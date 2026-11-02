@@ -87,6 +87,7 @@ struct Point
     int evar = 0;
     std::optional<uint16_t> target;
     bool selectRequired = false;
+    bool pulse = false; // binary outputs: PULSE_ON and PULSE_OFF succeed and change nothing
     std::optional<double> min, max;
 };
 

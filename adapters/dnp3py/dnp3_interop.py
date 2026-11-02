@@ -110,7 +110,7 @@ USAGE = """usage: dnp3-interop <command>
       integrity-poll
       event-poll           [--classes 1,2,3]
       read                 --group G --variation V [--start N --stop N]
-      operate              --type g12v1|g41v1..4 --index N [--mode direct|sbo|direct-no-ack]
+      operate              --type g12v1|g41v1..4 --index N [--mode direct|sbo|direct-no-ack|operate]
                            [--broadcast] (direct-no-ack only) [--operate-delay-ms N] (sbo only)
                            g12v1: --code LATCH_ON|LATCH_OFF|PULSE_ON|PULSE_OFF|CLOSE|TRIP
                                   [--count N] [--on-ms N] [--off-ms N]
@@ -127,7 +127,7 @@ USAGE = """usage: dnp3-interop <command>
                                       stop-application|save-configuration|activate-config [--spec NAME]
       deadband-write       --deadbands INDEX:VALUE[,...]
       attribute-read       --set N [--variation V]
-      attribute-write      --set N --variation V (--text S | --uint N | --int N)
+      attribute-write      --set N --variation V (--text S | --uint N | --int N | --float X | --octets HEX | --bits HEX | --time T)
       file-get|file-ls|file-info|file-delete --name NAME
       file-put             --name NAME --content HEX [--append]
       file-authenticate    (with FILE)
@@ -745,9 +745,9 @@ def parse_attribute_operation(op, a):
 
         return read
     variation = a.required_integer("variation", 1, 253)
-    given = [f for f in ("text", "uint", "int") if a.has(f)]
+    given = [f for f in ("text", "uint", "int", "float", "octets", "bits", "time") if a.has(f)]
     if len(given) != 1:
-        raise UsageError("attribute-write needs exactly one of --text, --uint and --int")
+        raise UsageError("attribute-write needs exactly one of --text, --uint, --int, --float, --octets, --bits and --time")
     if given[0] == "text":
         kind, raw = 1, a.str("text", "").encode()
         if len(raw) > 255:
@@ -755,10 +755,32 @@ def parse_attribute_operation(op, a):
     elif given[0] == "uint":
         n = a.integer("uint", 0, 0, 2**64 - 1)
         kind, raw = 2, n.to_bytes(next(w for w in (1, 2, 4, 8) if n < 1 << (8 * w)), "little")
-    else:
+    elif given[0] == "int":
         n = a.integer("int", 0, -(2**63), 2**63 - 1)
         width = next(w for w in (1, 2, 4, 8) if -(1 << (8 * w - 1)) <= n < 1 << (8 * w - 1))
         kind, raw = 3, n.to_bytes(width, "little", signed=True)
+    elif given[0] == "float":
+        f = a.number("float")
+        if abs(f) > 3.4028234663852886e38:
+            raise UsageError("--float is out of the range of a 32-bit float")
+        kind, raw = 4, struct.pack("<f", f)
+    elif given[0] in ("octets", "bits"):
+        try:
+            raw = bytes.fromhex(a.str(given[0], ""))
+        except ValueError:
+            raise UsageError(f"--{given[0]} must be hex") from None
+        if len(raw) > 255:
+            raise UsageError(f"--{given[0]} is longer than 255 octets")
+        kind = 5 if given[0] == "octets" else 6
+    else:
+        try:
+            at = datetime.strptime(a.str("time", ""), "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC)
+        except ValueError:
+            raise UsageError("--time must be YYYY-MM-DDTHH:MM:SS.mmmZ") from None
+        ms = round(at.timestamp() * 1000)
+        if not 0 <= ms < 2**48:
+            raise UsageError("--time is out of the range of a DNP3 time")
+        kind, raw = 7, ms.to_bytes(6, "little")
     header = block(0, variation, RangeCode.UINT8_START_STOP, bytes([set_, set_, kind, len(raw)]) + raw)
     return lambda c: c.request(FunctionCode.WRITE, [header])
 
@@ -1013,8 +1035,8 @@ def parse_operate(a):
     kind = a.required("type")
     index = a.required_integer("index", 0, 65535)
     mode = a.str("mode", "direct")
-    if mode not in ("direct", "sbo", "direct-no-ack"):
-        raise UsageError("--mode must be direct, sbo or direct-no-ack")
+    if mode not in ("direct", "sbo", "direct-no-ack", "operate"):
+        raise UsageError("--mode must be direct, sbo, direct-no-ack or operate")
     if kind == "g12v1":
         if a.has("value"):
             raise UsageError("--value is for g41")
@@ -1056,6 +1078,10 @@ def parse_operate(a):
             return
         if mode == "direct":
             await c.request(FunctionCode.DIRECT_OPERATE, [obj])
+            return
+        if mode == "operate":
+            # An OPERATE without a SELECT (contract 1.5): the outstation answers NO_SELECT.
+            await c.request(FunctionCode.OPERATE, [obj])
             return
         await c.request(FunctionCode.SELECT, [obj])
         # The OPERATE follows only a successful SELECT, with no request between.
@@ -1351,7 +1377,7 @@ def client_main(argv):
         "time-sync": {"procedure"}, "restart": {"type"}, "assign-class": {"class", "group", "start", "stop"},
         "monitor": {"duration-ms"}, "freeze": {"group", "at", "interval-ms"},
         "manage": {"function", "spec"}, "deadband-write": {"deadbands"},
-        "attribute-read": {"set", "variation"}, "attribute-write": {"set", "variation", "text", "uint", "int"},
+        "attribute-read": {"set", "variation"}, "attribute-write": {"set", "variation", "text", "uint", "int", "float", "octets", "bits", "time"},
         "file-get": {"name", "file-user", "file-password"}, "file-ls": {"name", "file-user", "file-password"},
         "file-info": {"name", "file-user", "file-password"}, "file-delete": {"name", "file-user", "file-password"},
         "file-put": {"name", "content", "file-user", "file-password"},
@@ -1529,6 +1555,8 @@ def load_fixture(text):
             allowed = set(POINT_FIELDS)
             if kind in ("binaryOutputs", "analogOutputs"):
                 allowed |= {"target", "selectRequired"}
+            if kind == "binaryOutputs":
+                allowed |= {"pulse"}
             if kind == "analogOutputs":
                 allowed |= {"min", "max"}
             for k in p:
@@ -1574,6 +1602,8 @@ def load_fixture(text):
                     errors.append(f"{where}: {bound} must be a number")
             if "selectRequired" in p and not isinstance(p["selectRequired"], bool):
                 errors.append(f"{where}: selectRequired must be a boolean")
+            if "pulse" in p and not isinstance(p["pulse"], bool):
+                errors.append(f"{where}: pulse must be a boolean")
             points[kind][i] = dict(p, flags=flags, staticVariation=sv)
     aovars = {p["staticVariation"] for p in points["analogOutputs"].values()}
     if len(aovars) > 1:
@@ -1615,7 +1645,9 @@ class Controls:
         p = self.points[kind].get(index)
         if p is None:
             return CommandStatus.NOT_SUPPORTED
-        if code is not None and int(code) not in (CODES["LATCH_ON"], CODES["LATCH_OFF"], CODES["CLOSE"], CODES["TRIP"]):
+        latch = (CODES["LATCH_ON"], CODES["LATCH_OFF"], CODES["CLOSE"], CODES["TRIP"])
+        pulse = (CODES["PULSE_ON"], CODES["PULSE_OFF"])
+        if code is not None and int(code) not in latch and not (int(code) in pulse and p.get("pulse")):
             return CommandStatus.NOT_SUPPORTED
         if value is not None and (("min" in p and value < p["min"]) or ("max" in p and value > p["max"])):
             return CommandStatus.OUT_OF_RANGE
@@ -1649,6 +1681,8 @@ class Controls:
             update(index, value, quality=p.quality)
 
     def _apply_binary(self, index, code):
+        if int(code) in (CODES["PULSE_ON"], CODES["PULSE_OFF"]):
+            return  # a pulse ends where it began (docs/FIXTURES.md)
         value = int(code) in (CODES["LATCH_ON"], CODES["CLOSE"])
         self._set_binary("binaryOutputs", index, value)
         t = self.points["binaryOutputs"][index].get("target")
@@ -2093,6 +2127,7 @@ def print_capabilities():
             "activateConfigServer": False,
             "activateConfigClient": True,
             "operateDelayClient": True,
+            "operateWithoutSelectClient": True,
             "noConfirmClient": True,
         },
         # Contract 1.4: it raises no frozen counter events, so it has no policy.

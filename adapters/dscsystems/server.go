@@ -176,6 +176,10 @@ func (c *controls) checkCROB(index uint16, crob dnp3.ControlRelayOutputBlock, di
 	}
 	var value bool
 	switch uint8(crob.Code) {
+	case 0x01, 0x02: // PULSE_ON, PULSE_OFF: only on a pulse output, which keeps its value
+		if !p.Pulse {
+			return dnp3.CommandNotSupported, false
+		}
 	case 0x03, 0x41: // LATCH_ON; PULSE_ON with CLOSE
 		value = true
 	case 0x04, 0x81: // LATCH_OFF; PULSE_ON with TRIP
@@ -204,7 +208,8 @@ func (c *controls) SelectCROB(index uint16, crob dnp3.ControlRelayOutputBlock) d
 // OperateCROB runs on the session goroutine, which owns the database.
 func (c *controls) OperateCROB(index uint16, crob dnp3.ControlRelayOutputBlock, op outstation.OperateType) dnp3.CommandStatus {
 	status, value := c.checkCROB(index, crob, op != outstation.OperateSelected)
-	if status == dnp3.CommandSuccess {
+	// A pulse ends where it began: nothing to update (docs/FIXTURES.md).
+	if pulse := crob.Code == 0x01 || crob.Code == 0x02; status == dnp3.CommandSuccess && !pulse {
 		p := c.fx.find("binaryOutputs", index)
 		now := ts(time.Now())
 		db := c.session.Database()

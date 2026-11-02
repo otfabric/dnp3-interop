@@ -404,7 +404,7 @@ func runClient(argv []string) int {
 	case "attribute-read":
 		flags = append(flags, "set", "variation")
 	case "attribute-write":
-		flags = append(flags, "set", "variation", "text", "uint", "int")
+		flags = append(flags, "set", "variation", "text", "uint", "int", "float", "octets", "bits", "time")
 	case "event-poll", "enable-unsolicited", "disable-unsolicited":
 		flags = append(flags, "classes")
 	case "read":

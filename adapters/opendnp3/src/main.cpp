@@ -176,6 +176,7 @@ int print_capabilities()
           {"activateConfigServer", false},
           {"activateConfigClient", false},
           {"operateDelayClient", false},
+          {"operateWithoutSelectClient", false},
           {"noConfirmClient", false}}},
         // The library's freeze detects events: no setting forces one.
         {"frozenEventPolicies", {"on-change"}},
