@@ -703,10 +703,9 @@ with `rejected` otherwise. Feature `activateConfigClient`. An outstation with
 `activateConfigServer` takes every specification at once (status 0, no
 delay), answers g91v1 and reports it with the `manage` event, `function` 31.
 An outstation without it refuses ACTIVATE_CONFIG with an IIN2 error and no
-`manage` event: opendnp3, dnp3py and OT Fabric go-dnp3 with
-NO_FUNC_CODE_SUPPORT. (Without an ActivateConfig handler, DSC go-dnp3 v0.8.2
-hands 31 to the management handler of 15..19, which refuses it with
-PARAMETER_ERROR: `outstation/services.go`.)
+`manage` event: opendnp3 and dnp3py with NO_FUNC_CODE_SUPPORT. (Without an
+ActivateConfig handler, DSC go-dnp3 v0.8.2 hands 31 to the management handler
+of 15..19, which refuses it with PARAMETER_ERROR: `outstation/services.go`.)
 
 ## Broadcast
 

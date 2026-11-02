@@ -80,7 +80,7 @@ runs the self-tests on the published images, natively on linux/amd64 and
 linux/arm64, and attaches them as `compatibility-report.md` to the
 [GitHub release](https://github.com/otfabric/dnp3-interop/releases).
 
-OT Fabric's own image (`own/go-dnp3`, go-dnp3 v1.5.4) is in no release, so
+OT Fabric's own image (`own/go-dnp3`, go-dnp3 v1.6.0) is in no release, so
 no qualification runs it. Its workflow runs the same self-tests against the
 reference images of the latest release. With it as a fourth stack, on
 linux/arm64 locally on 2026-11-02 against the v0.9.0 references: smoke 63

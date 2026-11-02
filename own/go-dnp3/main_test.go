@@ -274,7 +274,8 @@ func TestCapabilities(t *testing.T) {
 		}
 	}
 	features := c["features"].(map[string]any)
-	for _, f := range []string{"tls", "udp", "serial", "secureAuthentication", "fileServer", "manageClient", "deadbandReadServer"} {
+	for _, f := range []string{"tls", "udp", "serial", "secureAuthentication", "fileServer", "manageClient", "deadbandReadServer",
+		"activateConfigServer", "activateConfigClient", "noConfirmClient", "noUnsolicitedConfirmClient"} {
 		if features[f] != true {
 			t.Errorf("feature %s is not declared", f)
 		}
@@ -305,7 +306,9 @@ func TestUsageErrors(t *testing.T) {
 		{"client", "integrity-poll", "--host", "h", "--sa-user", "2"},
 		{"client", "integrity-poll", "--transport", "udp", "--host", "h", "--tls"},
 		{"client", "integrity-poll", "--transport", "serial", "--host", "h", "--serial-device", "/dev/null"},
-		{"client", "manage", "--host", "h", "--function", "activate-config"},
+		{"client", "manage", "--host", "h", "--function", "activate-config", "--spec", strings.Repeat("a", 256)},
+		{"client", "monitor", "--host", "h", "--no-unsolicited-confirm", "--no-confirm"},
+		{"client", "integrity-poll", "--host", "h", "--no-unsolicited-confirm"},
 		{"client", "manage", "--host", "h", "--function", "save-configuration", "--spec", "a"},
 		{"client", "operate", "--host", "h", "--type", "g41v1", "--index", "0", "--value", "1", "--operate-delay-ms", "10"},
 		{"server", "--frozen-event-policy", "always"},
@@ -470,6 +473,17 @@ func TestAgainstOwnServer(t *testing.T) {
 		_, events := ok(t, out, c, "manage", "--function", "start-application")
 		if eventLine(events, "manage", "function") != "17" {
 			t.Errorf("events %v", events)
+		}
+		_, events = ok(t, out, c, "manage", "--function", "activate-config", "--spec", "a.xml")
+		if eventLine(events, "manage", "function") != "31" {
+			t.Errorf("events %v", events)
+		}
+	})
+	t.Run("no confirm", func(t *testing.T) {
+		ok(t, out, c, "event-poll", "--no-confirm")
+		r, _ := ok(t, out, c, "monitor", "--duration-ms", "100", "--no-unsolicited-confirm")
+		if _, has := r["unsolicitedFragments"]; !has {
+			t.Errorf("no unsolicitedFragments: %v", r)
 		}
 	})
 	t.Run("attributes", func(t *testing.T) {

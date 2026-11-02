@@ -202,8 +202,7 @@ func (h *controlHandler) SetTime(_ context.Context, t time.Time) {
 }
 
 // Application (server.ApplicationHandler) accepts the management functions
-// 15..19. ACTIVATE_CONFIG (contract 1.5) is refused with NO_FUNC_CODE_SUPPORT:
-// the handler can answer IIN bits only, not the g91v1 status.
+// 15..19; ACTIVATE_CONFIG goes to ActivateConfig.
 func (h *controlHandler) Application(_ context.Context, fc app.FunctionCode, _ []app.Header) app.IIN {
 	switch fc {
 	case app.FuncInitializeData, app.FuncInitializeApplication, app.FuncStartApplication,
@@ -213,6 +212,21 @@ func (h *controlHandler) Application(_ context.Context, fc app.FunctionCode, _ [
 		return 0
 	}
 	return app.IINNoFuncCodeSupport
+}
+
+// ActivateConfig (server.ActivateConfigHandler, contract 1.5) takes every
+// specification at once: status 0 for each object, no delay. The library
+// answers it in one g91v1 object.
+func (h *controlHandler) ActivateConfig(_ context.Context, headers []app.Header) (app.ActivateConfigStatus, app.IIN) {
+	var st app.ActivateConfigStatus
+	for _, hd := range headers {
+		for range hd.Objects {
+			st.Results = append(st.Results, app.ActivateConfigResult{Code: 0})
+		}
+	}
+	h.sec.flush()
+	emit(object{{"event", "manage"}, {"function", uint8(app.FuncActivateConfig)}})
+	return st, 0
 }
 
 // WriteAttributeSet (server.AttributeSetWriteHandler) reports an accepted

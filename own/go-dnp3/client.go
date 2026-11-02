@@ -114,21 +114,32 @@ func measurement(m client.Measurement, unsolicited bool) object {
 }
 
 // clientMetrics keeps the IIN of the last solicited response: the library
-// returns a control's statuses, not the IIN of its response.
+// returns a control's statuses, not the IIN of its response. It also counts
+// the unsolicited fragments, repeats included: the library hands a repeat's
+// events to the handler only once.
 type clientMetrics struct {
 	dnp3.NopMetrics
-	mu      sync.Mutex
-	lastIIN *app.IIN
+	mu          sync.Mutex
+	lastIIN     *app.IIN
+	unsolicited int
 }
 
 func (m *clientMetrics) OnFragmentReceived(_ net.Addr, f *app.Fragment, _ int) {
-	if f.Function != app.FuncResponse {
-		return
-	}
 	m.mu.Lock()
-	iin := f.IIN
-	m.lastIIN = &iin
-	m.mu.Unlock()
+	defer m.mu.Unlock()
+	switch f.Function {
+	case app.FuncResponse:
+		iin := f.IIN
+		m.lastIIN = &iin
+	case app.FuncUnsolicitedResponse:
+		m.unsolicited++
+	}
+}
+
+func (m *clientMetrics) unsolicitedFragments() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.unsolicited
 }
 
 func (m *clientMetrics) last() *app.IIN {
@@ -302,14 +313,25 @@ func parseOperation(op string, a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
-		// No activate-config (contract 1.5): the library drops the g91v1
-		// answer (see activateConfigClient in main.go).
+		if name == "activate-config" {
+			// Contract 1.5: one g70v8 specification, free format. The
+			// g91v1 status is not reported; an IIN2 error is a refusal.
+			spec := a.str("spec", "config.xml")
+			if len(spec) < 1 || len(spec) > 255 {
+				return nil, usagef("--spec must be 1..255 octets")
+			}
+			h := app.FreeFormat(app.G70V8, app.FileSpecification{Name: spec})
+			return func(ctx context.Context, c *client.Client, _ *result) error {
+				_, err := c.ActivateConfig(ctx, h)
+				return err
+			}, nil
+		}
 		fc, ok := manageFunctions[name]
 		if !ok {
-			return nil, usagef("--function must be initialize-data, initialize-application, start-application, stop-application or save-configuration")
+			return nil, usagef("--function must be initialize-data, initialize-application, start-application, stop-application, save-configuration or activate-config")
 		}
 		if a.has("spec") {
-			return nil, usagef("--spec is for --function activate-config, which this adapter does not send")
+			return nil, usagef("--spec is for --function activate-config")
 		}
 		var hs []app.Header
 		switch fc {
@@ -601,7 +623,7 @@ func runClient(argv []string) int {
 	}
 	flags := []string{"host", "port", "local-addr", "remote-addr", "connect-timeout-ms", "timeout-ms", "collect-ms", "keep-alive-ms"}
 	flags = append(append(flags, clientTransportFlags...), saFlags...)
-	switches := append([]string(nil), clientTransportSwitches...)
+	switches := append(slices.Clone(clientTransportSwitches), "no-confirm")
 	switch op {
 	case "file-get", "file-ls", "file-info", "file-delete":
 		flags = append(flags, "name", "file-user", "file-password")
@@ -636,6 +658,7 @@ func runClient(argv []string) int {
 		flags = append(flags, "group", "at", "interval-ms")
 	case "monitor":
 		flags = append(flags, "duration-ms")
+		switches = append(switches, "no-unsolicited-confirm")
 	case "manage":
 		flags = append(flags, "function", "spec")
 	}
@@ -687,6 +710,9 @@ func runClient(argv []string) int {
 	if err == nil && a.has("broadcast") && a.str("mode", "direct") != "direct-no-ack" {
 		err = usagef("--broadcast needs --mode direct-no-ack")
 	}
+	if err == nil && a.has("no-unsolicited-confirm") && a.has("no-confirm") {
+		err = usagef("--no-unsolicited-confirm and --no-confirm do not go together")
+	}
 	fileOp := slices.Contains(fileOperations, op)
 	attributeOp := slices.Contains(attributeOperations, op)
 	switch {
@@ -729,6 +755,14 @@ func runClient(argv []string) int {
 		// OPERATE is not the next request: no automatic clear of the
 		// restart bit after the SELECT's response.
 		opts = append(opts, client.WithAutoClearRestart(false))
+	}
+	// Contract 1.5: --no-confirm confirms no solicited response, but still
+	// the unsolicited ones; --no-unsolicited-confirm the reverse.
+	if a.has("no-confirm") {
+		opts = append(opts, client.WithSolicitedConfirm(false))
+	}
+	if a.has("no-unsolicited-confirm") {
+		opts = append(opts, client.WithUnsolicitedConfirm(false))
 	}
 	if sec.on {
 		opts = append(opts, client.WithSecureAuthentication(sec.user))
@@ -878,6 +912,10 @@ func runClient(argv []string) int {
 			attributes = []object{}
 		}
 		doc = append(doc, field{"attributes", attributes})
+	case "monitor":
+		if a.has("no-unsolicited-confirm") {
+			doc = append(doc, field{"unsolicitedFragments", metrics.unsolicitedFragments()})
+		}
 	}
 	if fileOp {
 		switch {

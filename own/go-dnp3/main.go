@@ -47,7 +47,7 @@ const usage = `usage: dnp3-interop <command>
          [--control-socket PATH] [--frozen-event-policy on-change]
   counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
-         [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [LINK] [TRANSPORT] [SA] [operation flags]
+         [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [--no-confirm] [LINK] [TRANSPORT] [SA] [operation flags]
          [--tls --tls-ca PATH --tls-cert PATH --tls-key PATH [--tls-server-name NAME]]
          [--udp-local-port N] [--listen [--bind-address ADDR]]
       integrity-poll
@@ -64,9 +64,10 @@ const usage = `usage: dnp3-interop <command>
       disable-unsolicited  [--classes 1,2,3]
       assign-class         --class C --group G [--start N --stop N]
       freeze               [--clear] [--no-ack] [--group 20|30] [--at immediately|+MS|EPOCH_MS [--interval-ms N]]
-      monitor              [--duration-ms N]
+      monitor              [--duration-ms N] [--no-unsolicited-confirm] (not with --no-confirm)
       manage               --function initialize-data|initialize-application|start-application|
-                                      stop-application|save-configuration
+                                      stop-application|save-configuration|
+                                      activate-config [--spec NAME]
       file-get             --name NAME
       file-put             --name NAME --content HEX [--append]
       file-ls              --name DIRECTORY
@@ -198,20 +199,13 @@ func printCapabilities() int {
 			{"counterIncrementServer", true},
 			{"frozenCounterEventsServer", true},
 			{"frozenCounterEventTimeClient", true},
-			// Contract 1.5. The library's ApplicationHandler answers
-			// ACTIVATE_CONFIG with IIN bits only, no g91v1 status
-			// (server/handler.go, ApplicationHandler). Its master could
-			// send ACTIVATE_CONFIG, but decodes g91v1 only with a
-			// free-format qualifier and drops the count-qualified answer of
-			// an outstation that serves it (app/registry.go,
-			// desc.freeFormat), so it would time out: refused (exit 2). It confirms every response that asks for it
-			// (client/transaction.go): no --no-confirm.
-			{"activateConfigServer", false},
-			{"activateConfigClient", false},
+			// Contract 1.5.
+			{"activateConfigServer", true},
+			{"activateConfigClient", true},
 			{"operateDelayClient", true},
 			{"operateWithoutSelectClient", true},
-			{"noConfirmClient", false},
-			{"noUnsolicitedConfirmClient", false},
+			{"noConfirmClient", true},
+			{"noUnsolicitedConfirmClient", true},
 		}},
 		// A freeze raises a frozen counter event when the frozen value or its
 		// flags change, by the library's design; there is no setting for it.

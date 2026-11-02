@@ -27,7 +27,7 @@ docker run -d --name go-dnp3 -p 127.0.0.1:20000:20000 ghcr.io/otfabric/dnp3-inte
 until docker exec go-dnp3 test -f /run/dnp3-interop/ready; do sleep 0.1; done
 ```
 
-`<tag>` is a go-dnp3 version such as `v1.5.4`, or `latest`, the newest one
+`<tag>` is a go-dnp3 version such as `v1.6.0`, or `latest`, the newest one
 published. A rebuild of a version replaces its tag, so pin the digest if you need
 an exact build. The digest is in the summary of the
 [workflow run](https://github.com/otfabric/dnp3-interop/actions/workflows/own-go-dnp3.yml),
@@ -71,8 +71,8 @@ make -f own/go-dnp3/Makefile image smoke interop features    # from the reposito
 
 ## What it cannot do
 
-Every feature of the contract up to 1.4 is declared `true`, with these limits
-in what the capabilities list:
+Every feature of the contract (1.5) is declared `true`, with these limits in
+what the capabilities list:
 
 - Secure authentication: no AES-GMAC (MAC algorithm 6), so `macAlgorithms`
   leaves out `aes-gmac` and `--sa-mac aes-gmac` is a usage error. No
@@ -80,18 +80,6 @@ in what the capabilities list:
 - Frozen event policy: `on-change` only. The library raises a frozen counter
   event when the frozen value or its flags change, and has no setting for it;
   `--frozen-event-policy always` is a usage error.
-- Contract 1.5, ACTIVATE_CONFIG: not served (`activateConfigServer` false).
-  The library's `server.ApplicationHandler` answers with IIN bits only and
-  cannot add the g91v1 status, so the outstation refuses it with
-  NO_FUNC_CODE_SUPPORT. Not sent either (`activateConfigClient` false,
-  `--function activate-config` is a usage error): the library decodes g91v1
-  only with a free-format qualifier (`app/registry.go`, `desc.freeFormat`)
-  and drops the count-qualified answer of an outstation that serves it, so
-  the request would time out.
-- Contract 1.5, `--no-confirm` and `monitor --no-unsolicited-confirm`: the
-  library's master confirms every response and unsolicited response that
-  asks for it (`client/transaction.go`, `client/client.go`), with no setting
-  (`noConfirmClient` and `noUnsolicitedConfirmClient` false).
 
 Where the library hands an application nothing, the adapter derives the event
 from the library's metrics callbacks (`dnp3.Metrics`): `link-status`,
@@ -106,7 +94,14 @@ less than one operation:
 - `operate-multi` sends what `client.Operate` sends: consecutive controls of
   one object type in one header, not one header per control.
 - `freeze --no-ack --at` (FREEZE AT TIME NO ACK) and the `manage` functions
-  go through `client.Request`; the library has no call of their own.
+  15..19 go through `client.Request`; the library has no call of their own.
+  `manage --function activate-config` uses `client.ActivateConfig`, and the
+  outstation answers it through `server.ActivateConfigHandler`.
+- `--no-confirm` and `monitor --no-unsolicited-confirm` (contract 1.5) are the
+  options `client.WithSolicitedConfirm(false)` and
+  `client.WithUnsolicitedConfirm(false)`. The library hands a repeated
+  unsolicited response's events to the handler once, so `unsolicitedFragments`
+  is counted from the metrics of the received fragments.
 - `operate --mode operate` and `--operate-delay-ms` (contract 1.5) send the
   SELECT and the OPERATE as separate `client.Request` calls, since
   `client.Operate` sends both in one turn; the status is read from the echo.
