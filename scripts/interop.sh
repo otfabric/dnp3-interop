@@ -535,7 +535,7 @@ suite() {
         for procedure in lan non-lan; do
             name=$(start_server "${server}" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"}); wait_ready "${name}" || exit 1
             run_client "${client}" time-sync --procedure "${procedure}" --host "${name}" >/dev/null
-            got=$(run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --host "${name}" | jq -c '.iin - ["DEVICE_RESTART"]')
+            got=$(run_client "${client}" read --group 1 --variation 0 --start 0 --stop 0 --host "${name}" | jq -c 'if .iin == null then "no IIN: \(.error.code // "no result")" else .iin - ["DEVICE_RESTART"] end')
             at_pair "values.time-sync-${procedure}-clears-need-time" "${pair}"
             check "${pair}" "time-sync ${procedure} clears NEED_TIME" "[]" "${got}"
             stop_server "${name}"

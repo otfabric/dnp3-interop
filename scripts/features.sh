@@ -185,9 +185,27 @@ start() {
     while [[ $# -gt 0 && "$1" != "--" ]]; do dargs+=("$1"); shift; done
     [[ "${1:-}" == "--" ]] && shift
     docker rm -f "${cname}" >/dev/null 2>&1
-    docker run -d --name "${cname}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" \
+    run_fixed_ip docker run -d --name "${cname}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" \
         -e "DNP3_INTEROP_DEBUG=${SERVER_DEBUG:-1}" -v "${PKI}:/pki:ro" ${dargs[@]+"${dargs[@]}"} \
         "$(image_of "${adapter}")" server "$@" >/dev/null
+}
+
+# run_fixed_ip <docker run ...>: runs it again, up to five times, while the
+# daemon answers "Address already in use". The UDP checks give containers
+# fixed addresses (--ip), and the address of a container just removed can be
+# released a moment after "docker rm" or "docker run --rm" has returned.
+# Any other failure is returned at once, with its message on stderr.
+run_fixed_ip() {
+    local err rc attempt
+    err=$(mktemp)
+    for attempt in 1 2 3 4 5; do
+        "$@" 2>"${err}"; rc=$?
+        if [[ ${rc} -eq 0 ]] || ! grep -q 'Address already in use' "${err}"; then break; fi
+        log "address in use, attempt ${attempt}: $*"
+        sleep 1
+    done
+    cat "${err}" >&2; rm -f "${err}"
+    return "${rc}"
 }
 
 # client <adapter> [docker args] -- <client args>: the result document.
@@ -196,7 +214,7 @@ client() {
     local dargs=()
     while [[ $# -gt 0 && "$1" != "--" ]]; do dargs+=("$1"); shift; done
     [[ "${1:-}" == "--" ]] && shift
-    docker run --rm --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" -v "${PKI}:/pki:ro" \
+    run_fixed_ip docker run --rm --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" -v "${PKI}:/pki:ro" \
         ${dargs[@]+"${dargs[@]}"} "$(image_of "${adapter}")" client "$@" 2>/dev/null | keep
 }
 
