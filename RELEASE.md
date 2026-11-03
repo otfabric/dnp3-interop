@@ -29,6 +29,21 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.11.1
+
+**Date:** 2026-11-03
+**Previous release:** v0.11.0
+
+### Fixed
+
+Self-test scripts only. Container contract 1.5, fixture format 1.0, the adapters and the reference stacks are unchanged.
+
+- **`scripts/features.sh`, UDP**: a container with a fixed address (`--ip`) is started again, up to five times, while Docker answers "Address already in use". The address of a container just removed can be released a moment after `docker rm` or `docker run --rm` returns.
+- **`scripts/features.sh`, secure authentication**: the refused attempts run in an order that does not depend on how many error messages the outstation still sends. The order is: unknown user; an authenticated read, which changes the session keys; wrong update key; master without authentication. cB-Sigma dnp3 stops sending error messages after two until a session key change succeeds. It answers a master without authentication with an error only while the user has no valid session keys.
+- **`scripts/interop.sh`**: the NEED_TIME check reports `no IIN: <error>` for a result without IIN, instead of printing a jq error.
+
+---
+
 ## v0.11.0
 
 **Date:** 2026-11-03
