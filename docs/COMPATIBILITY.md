@@ -411,6 +411,9 @@ Found by the self-tests, each a row of [tests/known-bugs.tsv](../tests/known-bug
   the keep-alive timer again, so keep-alives come at the interval plus that
   timeout.
 
+These four are reported upstream with fixes (cB-Sigma/dnp3#2 to #5, pull
+requests #6 to #9) and tracked here by issues with the label `upstream`.
+
 Two differ from this contract and not, as far as could be established, from
 IEEE 1815-2012: FREEZE AT TIME with a time already past is done at once
 instead of refused, and the class 0 response with secure authentication
@@ -418,7 +421,8 @@ includes the g121 security statistics.
 
 The outstation challenges with 4 octets of challenge data; the DSC go-dnp3
 master accepts only 32 and so cannot operate it with secure authentication
-(a known bug of that master). The opendnp3 master reads the coarse restart
+(a known bug of that master, reported as dscsystems/go-dnp3#22 with the fix
+in #23). The opendnp3 master reads the coarse restart
 delay (g52v1, seconds) as milliseconds (`RestartOperationTask.cpp`).
 
 ### nfm-dnp3 (1.0.1)
