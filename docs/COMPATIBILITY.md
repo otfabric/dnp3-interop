@@ -470,6 +470,34 @@ IIN and the echoed status. The contract makes such a response `rejected` with `c
 alone, such as OUT_OF_RANGE, carry no IIN bit and are `command-failed` with
 the status.
 
+### opendnp3's outstation loses a CONFIRM that arrives with another request
+
+While the opendnp3 outstation sends a response, it keeps one received request
+for later (`deferred`, a single slot, in
+[`OutstationContext.cpp#L200-L204`](https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/outstation/OutstationContext.cpp#L186-L195)).
+A CONFIRM followed by another request before the transmission completes
+fills that slot twice, and the CONFIRM is lost. When it is the confirm of
+the null unsolicited response, the outstation stays waiting for it until
+the confirm timeout ends, then repeats the null response. Only after that
+does it send the events of a class the master has enabled meanwhile.
+
+A master that confirms the null unsolicited response and sends its next
+request at once can hit this. The DSC go-dnp3 master does: it confirms the
+null response as it arrives, together with the response to its startup
+WRITE, and then sends its first request. One cross-stack run on 2026-11-03
+lost the confirm this way (dscsystems → opendnp3, "enabling class 1 delivers
+its events unsolicited"). A raw master that sends the WRITE, the CONFIRM and
+ENABLE_UNSOLICITED in one TCP segment gets the events only after the
+confirm timeout, every time; sent one after the other, at once.
+
+The repository is archived, so there is no upstream report: the fix, with a
+unit test, is on a fork
+([boeboe/opendnp3@fbe2051d](https://github.com/boeboe/opendnp3/commit/fbe2051d41f7bdf143c334994290fe7b664d3520)),
+tracked in [#76](https://github.com/otfabric/dnp3-interop/issues/76). The unsolicited
+checks of `scripts/interop.sh` start the outstation with
+`--confirm-timeout-ms 1000`, so a lost confirm costs one second, which is
+within the window in which the master collects the events.
+
 ### opendnp3 has no update for frozen counters
 
 `UpdateBuilder` has no `Update(FrozenCounter, ...)`: frozen counters change

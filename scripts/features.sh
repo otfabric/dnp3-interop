@@ -194,14 +194,21 @@ start() {
 # daemon answers "Address already in use". The UDP checks give containers
 # fixed addresses (--ip), and the address of a container just removed can be
 # released a moment after "docker rm" or "docker run --rm" has returned.
-# Any other failure is returned at once, with its message on stderr.
+# Any other failure is returned at once, with its message on stderr. The
+# daemon has created a named container before it fails to start it, so that
+# container is removed before the next attempt.
 run_fixed_ip() {
-    local err rc attempt
+    local err rc attempt arg name="" prev=""
+    for arg in "$@"; do
+        [[ "${prev}" == "--name" ]] && name="${arg}"
+        prev="${arg}"
+    done
     err=$(mktemp)
     for attempt in 1 2 3 4 5; do
         "$@" 2>"${err}"; rc=$?
         if [[ ${rc} -eq 0 ]] || ! grep -q 'Address already in use' "${err}"; then break; fi
         log "address in use, attempt ${attempt}: $*"
+        [[ -n "${name}" ]] && docker rm -f "${name}" >/dev/null 2>&1
         sleep 1
     done
     cat "${err}" >&2; rm -f "${err}"
