@@ -1639,14 +1639,24 @@ suite() {
                 at_pair "sa.outstation-authenticated-the-control" "${pair}"
                 check "${pair}: [sa] the outstation authenticated the control" "true" \
                     "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "auth" and .user == 3 and .function == 5)')"
-                doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" \
-                    --sa-update-key 0f0e0d0c0b0a09080706050403020100 --sa-user 3)
-                at_pair "sa.wrong-update-key-is-refused" "${pair}"
-                check "${pair}: [sa] a wrong update key is refused" "ok=false error=auth-failed" "$(outcome "${doc}")"
+                # An outstation may stop sending error messages after a
+                # maximum count until a session key change succeeds (cB-Sigma
+                # dnp3 sends two), and a master may make a refused attempt
+                # more than once. So the unknown user goes first, then an
+                # authenticated read changes the session keys. The wrong
+                # update key comes next: it leaves the user without valid
+                # session keys, which is when cB-Sigma dnp3 answers the
+                # master without authentication with an error rather than a
+                # challenge.
                 doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" \
                     --sa-update-key "${SA_KEY}" --sa-user 4)
                 at_pair "sa.unknown-user-is-refused" "${pair}"
                 check "${pair}: [sa] an unknown user is refused" "ok=false error=auth-failed" "$(outcome "${doc}")"
+                sa_run "${client}" "${name}" read --group 10 --variation 2 --start 0 --stop 0 >/dev/null
+                doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" \
+                    --sa-update-key 0f0e0d0c0b0a09080706050403020100 --sa-user 3)
+                at_pair "sa.wrong-update-key-is-refused" "${pair}"
+                check "${pair}: [sa] a wrong update key is refused" "ok=false error=auth-failed" "$(outcome "${doc}")"
                 doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" --timeout-ms 2000)
                 at_pair "sa.master-without-authentication-cannot-operate" "${pair}"
                 check "${pair}: [sa] a master without authentication cannot operate" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
