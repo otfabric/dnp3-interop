@@ -113,6 +113,44 @@ opendnp3 server); the cross-stack run had 1114 checks passed, none failed,
 19 known-bug hits, 117 skipped (master role, v0.1.0). The outstation role
 followed in v0.3.0 with the `dnp3py` fixture.
 
+### cB-Sigma dnp3 (done, both roles, v0.11.0)
+
+Pin cB-Sigma/dnp3 v0.3.0 (Go module, commit `03ffd5c9`, Apache-2.0, with
+iotsec v0.1.0 and goburrow/serial v0.1.0). Pure Go, both architectures build
+natively. Its own engine, master and outstation, TCP, UDP, serial and TLS,
+secure authentication v5 and file transfer: a second implementation next to
+DSC go-dnp3 for most of what contract 1.5 covers. The adapter is MIT.
+
+- The outstation serves the baseline fixture; the master clears
+  DEVICE_RESTART with a write of g80v1.
+- Declared false what the library has no call for; the reasons are in
+  `unsupportedReasons` of its capability document.
+
+**Gate:** smoke test and cross-stack self-test for both roles. Met on
+linux/arm64 (2026-11-03) with the five stacks: every smoke check passed; the
+failures of the cross-stack runs are known bugs in `tests/known-bugs.tsv`
+(a cached answer to a repeated request, FREEZE AND CLEAR without counter
+event, the name in GET_FILE_INFO, the keep-alive interval) or differences
+from this contract (a FREEZE AT TIME already past, g121 in class 0).
+Details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+### nfm-dnp3 (done, master, v0.11.0)
+
+Pin nfm-dnp3 1.0.1 (PyPI, from fxodell/dnp3py commit `8d1dc7f5`, MIT per the
+package metadata, which is the only licence statement). A master over TCP;
+the import name is `dnp3py`, unrelated to the dnp3py adapter above. Its many
+defects (link frames without data, the application confirm, qualifier 0x28,
+the destination check, DEVICE_RESTART, sizes and decoders) are reported
+upstream (fxodell/dnp3py#1 to #10, with fixes) and tracked here by issues
+with the label `upstream`. The adapter works around none of them in the
+library. Its smoke test runs against the `dnp3py` fixture, which sends no
+unsolicited response, since the null unsolicited response of the baseline
+needs a confirm it cannot send.
+
+**Gate:** smoke test and cross-stack self-test for the master role. Met on
+linux/arm64 (2026-11-03): every smoke check passed; every failure of the
+cross-stack runs is a known bug.
+
 ### Triangle MicroWorks DNP3 SCL (on hold)
 
 **On hold** since 2026-10-20, by decision of the owner of this repository:

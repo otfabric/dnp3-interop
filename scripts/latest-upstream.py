@@ -78,10 +78,24 @@ def dnp3py():
     return newest(live), "", "PyPI"
 
 
+def cbsigma():
+    # The module path has capitals, which the proxy escapes as !c!b-!sigma.
+    versions = fetch("https://proxy.golang.org/github.com/!c!b-!sigma/dnp3/@v/list").split()
+    return newest(versions), "", "Go module proxy"
+
+
+def nfmdnp3():
+    releases = json.loads(fetch("https://pypi.org/pypi/nfm-dnp3/json"))["releases"]
+    live = [v for v, files in releases.items() if files and not all(f.get("yanked") for f in files)]
+    return newest(live), "", "PyPI"
+
+
 RESOLVERS = {
     "opendnp3": opendnp3,
     "dscsystems": dscsystems,
     "dnp3py": dnp3py,
+    "cbsigma": cbsigma,
+    "nfmdnp3": nfmdnp3,
 }
 
 

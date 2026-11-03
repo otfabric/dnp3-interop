@@ -65,83 +65,83 @@ An image with the feature `secureAuthentication` adds (contract 1.1):
 A feature without a role in its name applies to both roles: the outstation
 serves it and the master sends it.
 
-| Feature | Meaning | opendnp3 | dscsystems | dnp3py ¹ |
-|---------|---------|:--------:|:----------:|:------:|
-| `integrityPoll` | Class 1, 2, 3 and 0 in one READ | yes | yes | yes |
-| `eventPoll` | READ of event classes | yes | yes | yes |
-| `read` | READ of one group and variation, all objects or a range | yes | yes | yes |
-| `readAllObjectsClient` | `read` of all objects of a group (qualifier 0x06), not only a range | yes | no ² | yes |
-| `directOperate` | DIRECT OPERATE of g12v1 and g41v1..v4 | yes | yes | yes |
-| `selectBeforeOperate` | SELECT, then OPERATE, and `selectRequired` points | yes | yes | yes |
-| `parameterErrorWithNotSupported` | Server: the outstation sets IIN2.2 PARAMETER_ERROR with every NOT_SUPPORTED command status, not only for a point that does not exist. A behaviour, not a capability: cases name it either way | yes | no | no |
-| `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | yes | yes | yes |
-| `directOperateNoAckClient` | `operate --mode direct-no-ack` | no ³ | yes | yes |
-| `timeSyncLan` | RECORD CURRENT TIME and WRITE g50v3 | yes | yes | yes |
-| `timeSyncNonLan` | DELAY MEASURE and WRITE g50v1 | yes | yes | yes |
-| `timeSyncOnDemand` | The master synchronizes whether or not the outstation sets NEED_TIME | no ⁴ | yes | yes |
-| `restart` | COLD RESTART and WARM RESTART with the delay | yes | yes | yes |
-| `restartDelayClient` | `restart` reports the announced delay in `restartDelayMs` | yes | no ⁵ | yes |
-| `unsolicited` | ENABLE and DISABLE UNSOLICITED, and events in unsolicited responses | yes | yes | yes |
-| `assignClassServer` | The outstation applies ASSIGN CLASS | yes | yes | no |
-| `assignClassClient` | `assign-class` | yes | no ⁶ | yes |
-| `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes ⁷ | yes |
-| `freezeNoAckServer` | The outstation applies the `_NR` freezes | yes | yes | yes |
-| `freezeNoAckClient` | `freeze --no-ack` | yes ³⁹ | no ⁸ | yes |
-| `octetStrings` | g110 in class 0 and reads | yes | yes | yes |
-| `tcp` | DNP3 over TCP | yes | yes | yes |
-| `udp` | DNP3 over UDP (1.1) | yes ⁹ | yes ¹⁰ | no ¹¹ |
-| `tls` | DNP3 over TLS (IEC 62351-3), mutual authentication (1.1) | yes ⁹ | yes | no ¹¹ |
-| `serial` | DNP3 over a serial line (1.1) | yes | yes | no ¹¹ |
-| `fileTransfer` | File transfer, group 70, in at least one role (`fileServer` or `fileClient`) | no ¹² | yes | yes ⁴⁰ |
-| `fileServer` | The outstation serves the files of its fixture (1.1) | no ¹² | yes | no |
-| `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | no ¹² | yes | yes ⁴⁰ |
-| `fileDeleteClient` | `file-delete` (1.1) | no ¹² | yes | yes ⁴⁰ |
-| `fileAppendServer` | The outstation opens a file for appending (1.3) | no ¹² | yes | no ¹¹ |
-| `fileAppendClient` | `file-put --append` (1.3) | no ¹² | no ¹³ | yes ⁴⁰ |
-| `fileAuthServer` | The outstation requires AUTHENTICATE_FILE with `--file-user` (1.3) | no ¹² | yes | no ¹¹ |
-| `fileAuthClient` | `file-authenticate`, `--file-user`, `--file-password` (1.3) | no ¹² | yes | yes ⁴⁰ |
-| `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ¹² | yes ¹⁴ | no ¹¹ |
-| `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁵ | yes | no |
-| `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes ¹⁶ |
-| `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | no ¹⁵ | yes | yes ¹⁶ |
-| `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | yes | no ¹⁷ | yes ¹⁶ |
-| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | yes ⁴¹ |
-| `dualEndpointClient` | `client --listen`: the master listens, over TCP (1.2) | yes | yes | yes ⁴¹ |
-| `dualEndpointClientTls` | `client --listen --tls` (1.2) | yes | yes | no ¹¹ |
-| `securityStatisticsServer` | With secure authentication on, the outstation serves g121 and raises g122 events (1.2) | no ¹² | yes | no |
-| `securityStatisticsClient` | The master reports g121 and g122 objects (1.2) | no ¹² | yes ¹⁸ | no ¹¹ |
-| `deviceAttributesServer` | The outstation serves the `deviceAttributes` of its fixture (1.3) | no ¹⁹ | yes | no |
-| `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | no ¹⁹ | yes | yes ⁴² |
-| `multipleControlsClient` | `operate-multi` (1.3) | yes | yes | yes |
-| `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | no ²⁰ |
-| `linkConfirmsServer` | `server --link-confirms` (1.3) | no ²¹ | yes | no ²² |
-| `linkConfirmsClient` | `client --link-confirms` (1.3) | no ²¹ | yes | no ²² |
-| `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | yes ²² |
-| `linkStatusEventServer` | The server event `link-status` (1.3) | no ²³ | yes ²³ | no ²³ |
-| `multipleOutstationsServer` | `server --outstations N` (1.3) | yes | yes ²⁴ | no |
-| `manageServer` | The outstation accepts the management functions (1.3) | no | yes | no |
-| `manageClient` | `manage` (1.3) | yes | no ²⁵ | yes |
-| `broadcastServer` | The outstation carries out a broadcast request and sets IIN1.0 (1.3) | yes | yes | no ²⁶ |
-| `broadcastEventServer` | The server event `broadcast` (1.3) | no ²⁷ | yes ²³ | no ²⁶ |
-| `broadcastClient` | `operate --broadcast` (1.3) | no ³ | yes | yes ²⁶ |
-| `eventBufferServer` | The outstation applies the fixture's `eventBufferSize` and sets IIN2.3 when it overflows (1.3) | yes | yes ²⁸ | yes ²⁸ |
-| `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | no ²⁹ | yes ³⁰ | no ²⁹ |
-| `freezeAtTimeClient` | `freeze --at` (1.3) | no ³¹ | yes | yes |
-| `analogFreezeServer` | The outstation freezes analog inputs into frozen analog inputs (1.3) | no ³² | yes | no ³² |
-| `analogFreezeClient` | `freeze --group 30` (1.3) | yes | no ³³ | yes |
-| `deadbandWriteServer` | The outstation applies a deadband written (g34) (1.3) | no ³⁴ | yes | no ³⁴ |
-| `deadbandWriteClient` | `deadband-write` (1.3) | no ³⁵ | yes | yes |
-| `deadbandReadServer` | The outstation serves a read of g34 (1.3) | no ³⁴ | no ³⁶ | no ³⁴ |
-| `deadbandReadClient` | A read of g34 comes back as objects (1.3) | no ³⁵ | no ³⁶ | no ³⁵ |
-| `counterIncrementServer` | `counter-increment` changes a counter of the running server (1.4) | yes ³⁷ | yes | yes |
-| `frozenCounterEventsServer` | The outstation raises frozen counter events, with g23v5 and g23v6 when asked (1.4) | yes | yes | no ³⁸ |
-| `frozenCounterEventTimeClient` | The master reports the time of g23v5 and g23v6 (1.4) | yes | yes | yes |
-| `activateConfigServer` | The outstation answers ACTIVATE_CONFIG with g91v1 and the `manage` event (1.5) | no ⁴³ | yes | no ⁴³ |
-| `activateConfigClient` | `manage --function activate-config` (1.5) | no ⁴³ | no ²⁵ | yes |
-| `operateDelayClient` | `operate --mode sbo --operate-delay-ms` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
-| `noConfirmClient` | `client --no-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
-| `operateWithoutSelectClient` | `operate --mode operate` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
-| `noUnsolicitedConfirmClient` | `monitor --no-unsolicited-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes |
+| Feature | Meaning | opendnp3 | dscsystems | dnp3py ¹ | cbsigma ⁴⁵ | nfmdnp3 ⁴⁶ |
+|---------|---------|:--------:|:----------:|:------:|:-------:|:-------:|
+| `integrityPoll` | Class 1, 2, 3 and 0 in one READ | yes | yes | yes | yes | yes |
+| `eventPoll` | READ of event classes | yes | yes | yes | yes | yes |
+| `read` | READ of one group and variation, all objects or a range | yes | yes | yes | yes | yes |
+| `readAllObjectsClient` | `read` of all objects of a group (qualifier 0x06), not only a range | yes | no ² | yes | yes | yes |
+| `directOperate` | DIRECT OPERATE of g12v1 and g41v1..v4 | yes | yes | yes | yes | yes |
+| `selectBeforeOperate` | SELECT, then OPERATE, and `selectRequired` points | yes | yes | yes | yes | yes |
+| `parameterErrorWithNotSupported` | Server: the outstation sets IIN2.2 PARAMETER_ERROR with every NOT_SUPPORTED command status, not only for a point that does not exist. A behaviour, not a capability: cases name it either way | yes | no | no | no | no |
+| `directOperateNoAckServer` | The outstation applies DIRECT OPERATE NO ACK | yes | yes | yes | yes | no |
+| `directOperateNoAckClient` | `operate --mode direct-no-ack` | no ³ | yes | yes | yes | yes |
+| `timeSyncLan` | RECORD CURRENT TIME and WRITE g50v3 | yes | yes | yes | yes | yes |
+| `timeSyncNonLan` | DELAY MEASURE and WRITE g50v1 | yes | yes | yes | yes | yes |
+| `timeSyncOnDemand` | The master synchronizes whether or not the outstation sets NEED_TIME | no ⁴ | yes | yes | yes | yes |
+| `restart` | COLD RESTART and WARM RESTART with the delay | yes | yes | yes | yes | yes |
+| `restartDelayClient` | `restart` reports the announced delay in `restartDelayMs` | yes | no ⁵ | yes | yes | yes |
+| `unsolicited` | ENABLE and DISABLE UNSOLICITED, and events in unsolicited responses | yes | yes | yes | yes | yes |
+| `assignClassServer` | The outstation applies ASSIGN CLASS | yes | yes | no | yes | no |
+| `assignClassClient` | `assign-class` | yes | no ⁶ | yes | yes | yes |
+| `freeze` | IMMEDIATE FREEZE and FREEZE AND CLEAR of g20v0 | yes | yes ⁷ | yes | yes | yes |
+| `freezeNoAckServer` | The outstation applies the `_NR` freezes | yes | yes | yes | yes | no |
+| `freezeNoAckClient` | `freeze --no-ack` | yes ³⁹ | no ⁸ | yes | yes | yes |
+| `octetStrings` | g110 in class 0 and reads | yes | yes | yes | yes | no |
+| `tcp` | DNP3 over TCP | yes | yes | yes | yes | yes |
+| `udp` | DNP3 over UDP (1.1) | yes ⁹ | yes ¹⁰ | no ¹¹ | yes | no |
+| `tls` | DNP3 over TLS (IEC 62351-3), mutual authentication (1.1) | yes ⁹ | yes | no ¹¹ | yes | no |
+| `serial` | DNP3 over a serial line (1.1) | yes | yes | no ¹¹ | yes | no |
+| `fileTransfer` | File transfer, group 70, in at least one role (`fileServer` or `fileClient`) | no ¹² | yes | yes ⁴⁰ | yes | no |
+| `fileServer` | The outstation serves the files of its fixture (1.1) | no ¹² | yes | no | yes | no |
+| `fileClient` | `file-get`, `file-put`, `file-ls`, `file-info` (1.1) | no ¹² | yes | yes ⁴⁰ | yes | no |
+| `fileDeleteClient` | `file-delete` (1.1) | no ¹² | yes | yes ⁴⁰ | yes | no |
+| `fileAppendServer` | The outstation opens a file for appending (1.3) | no ¹² | yes | no ¹¹ | yes | no |
+| `fileAppendClient` | `file-put --append` (1.3) | no ¹² | no ¹³ | yes ⁴⁰ | yes | no |
+| `fileAuthServer` | The outstation requires AUTHENTICATE_FILE with `--file-user` (1.3) | no ¹² | yes | no ¹¹ | yes | no |
+| `fileAuthClient` | `file-authenticate`, `--file-user`, `--file-password` (1.3) | no ¹² | yes | yes ⁴⁰ | yes | no |
+| `secureAuthentication` | Secure authentication v5, group 120, in every role of the image (1.1) | no ¹² | yes ¹⁴ | no ¹¹ | yes | no |
+| `commandEventsServer` | The outstation records command events (g13, g43) of outputs with a `commandEventClass` (1.2) | no ¹⁵ | yes | no | no | no |
+| `commandEventsClient` | The master reports g13 and g43 objects (1.2) | yes | yes | yes ¹⁶ | yes | no |
+| `frozenAnalogInputsClient` | The master reports g31 and g33 objects (1.2) | no ¹⁵ | yes | yes ¹⁶ | yes | yes |
+| `timeAndIntervalClient` | The master reports g50v4 objects (1.2) | yes | no ¹⁷ | yes ¹⁶ | yes | no |
+| `dualEndpointServer` | `server --connect`: the outstation dials (TCP, and TLS where `tls`) (1.2) | yes | yes | yes ⁴¹ | yes | no |
+| `dualEndpointClient` | `client --listen`: the master listens, over TCP (1.2) | yes | yes | yes ⁴¹ | yes | no |
+| `dualEndpointClientTls` | `client --listen --tls` (1.2) | yes | yes | no ¹¹ | yes | no |
+| `securityStatisticsServer` | With secure authentication on, the outstation serves g121 and raises g122 events (1.2) | no ¹² | yes | no | no | no |
+| `securityStatisticsClient` | The master reports g121 and g122 objects (1.2) | no ¹² | yes ¹⁸ | no ¹¹ | yes | no |
+| `deviceAttributesServer` | The outstation serves the `deviceAttributes` of its fixture (1.3) | no ¹⁹ | yes | no | no | no |
+| `deviceAttributesClient` | `attribute-read`, `attribute-write` (1.3) | no ¹⁹ | yes | yes ⁴² | yes | no |
+| `multipleControlsClient` | `operate-multi` (1.3) | yes | yes | yes | yes | no |
+| `maxControlsServer` | The outstation applies the fixture's `maxControlsPerRequest` (1.3) | yes | yes | no ²⁰ | yes | no |
+| `linkConfirmsServer` | `server --link-confirms` (1.3) | no ²¹ | yes | no ²² | no | no |
+| `linkConfirmsClient` | `client --link-confirms` (1.3) | no ²¹ | yes | no ²² | yes | no |
+| `keepAliveClient` | `client --keep-alive-ms` (1.3) | yes | yes | yes ²² | yes | no |
+| `linkStatusEventServer` | The server event `link-status` (1.3) | no ²³ | yes ²³ | no ²³ | yes | no |
+| `multipleOutstationsServer` | `server --outstations N` (1.3) | yes | yes ²⁴ | no | yes | no |
+| `manageServer` | The outstation accepts the management functions (1.3) | no | yes | no | no | no |
+| `manageClient` | `manage` (1.3) | yes | no ²⁵ | yes | yes | yes |
+| `broadcastServer` | The outstation carries out a broadcast request and sets IIN1.0 (1.3) | yes | yes | no ²⁶ | yes | no |
+| `broadcastEventServer` | The server event `broadcast` (1.3) | no ²⁷ | yes ²³ | no ²⁶ | yes | no |
+| `broadcastClient` | `operate --broadcast` (1.3) | no ³ | yes | yes ²⁶ | yes | no |
+| `eventBufferServer` | The outstation applies the fixture's `eventBufferSize` and sets IIN2.3 when it overflows (1.3) | yes | yes ²⁸ | yes ²⁸ | yes | no |
+| `freezeAtTimeServer` | The outstation applies FREEZE AT TIME (1.3) | no ²⁹ | yes ³⁰ | no ²⁹ | yes | no |
+| `freezeAtTimeClient` | `freeze --at` (1.3) | no ³¹ | yes | yes | yes | yes |
+| `analogFreezeServer` | The outstation freezes analog inputs into frozen analog inputs (1.3) | no ³² | yes | no ³² | no | no |
+| `analogFreezeClient` | `freeze --group 30` (1.3) | yes | no ³³ | yes | yes | yes |
+| `deadbandWriteServer` | The outstation applies a deadband written (g34) (1.3) | no ³⁴ | yes | no ³⁴ | yes | no |
+| `deadbandWriteClient` | `deadband-write` (1.3) | no ³⁵ | yes | yes | yes | yes |
+| `deadbandReadServer` | The outstation serves a read of g34 (1.3) | no ³⁴ | no ³⁶ | no ³⁴ | no | no |
+| `deadbandReadClient` | A read of g34 comes back as objects (1.3) | no ³⁵ | no ³⁶ | no ³⁵ | no | no |
+| `counterIncrementServer` | `counter-increment` changes a counter of the running server (1.4) | yes ³⁷ | yes | yes | yes | no |
+| `frozenCounterEventsServer` | The outstation raises frozen counter events, with g23v5 and g23v6 when asked (1.4) | yes | yes | no ³⁸ | yes | no |
+| `frozenCounterEventTimeClient` | The master reports the time of g23v5 and g23v6 (1.4) | yes | yes | yes | yes | no |
+| `activateConfigServer` | The outstation answers ACTIVATE_CONFIG with g91v1 and the `manage` event (1.5) | no ⁴³ | yes | no ⁴³ | yes | no |
+| `activateConfigClient` | `manage --function activate-config` (1.5) | no ⁴³ | no ²⁵ | yes | yes | no |
+| `operateDelayClient` | `operate --mode sbo --operate-delay-ms` (1.5) | no ⁴⁴ | no ⁴⁴ | yes | yes | yes |
+| `noConfirmClient` | `client --no-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes | no | no |
+| `operateWithoutSelectClient` | `operate --mode operate` (1.5) | no ⁴⁴ | no ⁴⁴ | yes | yes | yes |
+| `noUnsolicitedConfirmClient` | `monitor --no-unsolicited-confirm` (1.5) | no ⁴⁴ | no ⁴⁴ | yes | no | no |
 
 ¹ dnp3py's outstation cannot serve the baseline fixture (no double-bit
 inputs, octet strings or per-point variations); it serves the `dnp3py`
@@ -301,6 +301,22 @@ an adapter-built g70v8.
 confirms every response and unsolicited response that asks for it; none of
 this can be changed.
 
+⁴⁵ cB-Sigma dnp3 v0.3.0. Each "no" has its reason in the image's
+`unsupportedReasons` (`print-capabilities`). In short: the outstation records no
+command events (so it cannot serve the `extended` fixture, which also rules out
+testing the analog freeze it can do), answers a READ of g34 OBJECT_UNKNOWN,
+serves device attribute set 0 only, sends only UNCONFIRMED_USER_DATA, sends g122
+events at the fixed thresholds of IEEE 1815-2012 table 7-6, and answers
+INITIALIZE_DATA and SAVE_CONFIGURATION with NO_FUNC_CODE_SUPPORT; the master
+always confirms. Its known bugs are in [tests/known-bugs.tsv](../tests/known-bugs.tsv).
+
+⁴⁶ nfm-dnp3 1.0.1, a master over TCP only (no server role). The adapter sends
+requests through the library and decodes only what the library decodes; each
+"no" has its reason in `unsupportedReasons`. Several "yes" features fail
+against outstations that ask for confirmations, because of the library's data
+link and application layer defects: see
+[tests/known-bugs.tsv](../tests/known-bugs.tsv).
+
 The own image (`own/go-dnp3`, adapter `otfabric`) is not in this table: its
 capabilities are in its image and in [own/go-dnp3/README.md](../own/go-dnp3/README.md).
 
@@ -316,7 +332,8 @@ fixture format, with the static and event variations
 [FIXTURES.md](FIXTURES.md#points) lists; dscsystems also serves
 `frozenAnalogInputs` and `timeAndIntervals`, opendnp3 `timeAndIntervals`. dnp3py serves the `dnp3py`
 fixture (footnote ¹). Every adapter handles and sends all five control objects
-(`g12v1`, `g41v1`..`g41v4`).
+(`g12v1`, `g41v1`..`g41v4`). cbsigma serves the eight arrays,
+`frozenAnalogInputs` and `timeAndIntervals`; nfmdnp3 has no server role.
 
 The dscsystems server has two limits of its library: the indexes of each
 point type must run from 0 without gaps, and `outstation.needTime` must be
@@ -334,6 +351,7 @@ freeze that leaves a frozen value as it was, its default first
 | opendnp3 | `on-change` | The library does the freeze itself with event detection (`FreezeRequestHandler`, `EventMode::Detect`), and tells the application nothing that would allow another mode |
 | dscsystems | `always` | The library does the freeze itself and always raises the event (`setFrozen` with `freeze` true), with no setting |
 | dnp3py | none | No frozen counter events |
+| cbsigma | `on-change` | The library updates the frozen counter with change detection, so an unchanged frozen value raises no event |
 
 A policy that can be set is tested both ways; a fixed one as declared, and for
 being the same across freezes and masters.
@@ -341,8 +359,8 @@ being the same across freezes and masters.
 `frozenEventRetention` is a separate matter: what the outstation keeps of a
 point's frozen counter events until a master confirms them, `all` or
 `most-recent`. opendnp3 and dscsystems declare `all`, neither of them has a
-setting for it, and the self-test holds each to it. dnp3py has no such
-field: it raises none.
+setting for it, and the self-test holds each to it. cbsigma declares `all`.
+dnp3py has no such field: it raises none.
 
 ## Rules for consumers
 

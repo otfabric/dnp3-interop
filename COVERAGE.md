@@ -39,7 +39,19 @@ What a consumer can exercise against the published adapters today.
 | Broadcast (1.3) | Sent by the DSC go-dnp3 and dnp3py masters; carried out by the opendnp3 and DSC go-dnp3 outstations | yes |
 | Management functions (1.3) | Served by the DSC go-dnp3 outstation; sent by the opendnp3 and dnp3py masters | yes |
 | ACTIVATE CONFIG (1.5) | Served by the DSC go-dnp3 outstation; sent by the dnp3py master; refused by the others | yes |
-| Several outstations on one port (1.3) | opendnp3 and DSC go-dnp3 | yes |
+| Several outstations on one port (1.3) | opendnp3, DSC go-dnp3 and cB-Sigma dnp3 | yes |
+| Event read of one group | A READ of an event group (g32 variation 0) returns that group's events only; the other events stay buffered for the next event poll | yes, every master with all-objects reads against every outstation |
+
+cB-Sigma dnp3 (`cbsigma`, both roles) is a second independent implementation,
+besides DSC go-dnp3, of most of the rows above that only DSC go-dnp3 provided:
+UDP, TLS and serial, file transfer with append and authentication, secure
+authentication v5 (against itself; the DSC go-dnp3 master refuses its 4-octet
+challenges, a known bug of that master), security statistics as master, FREEZE AT TIME, the link layer,
+broadcast, management functions as master, ACTIVATE CONFIG and several
+outstations on one port. Its gaps and known bugs are in
+[docs/CAPABILITIES.md](docs/CAPABILITIES.md) and
+[tests/known-bugs.tsv](tests/known-bugs.tsv). nfm-dnp3 (`nfmdnp3`) is a
+master over TCP only.
 
 ## Not provided on purpose
 
@@ -49,26 +61,26 @@ injector; a library tests these with scripted peers of its own.
 
 ## Per adapter
 
-| | opendnp3 | dscsystems | dnp3py |
-|---|:---:|:---:|:---:|
-| Outstation (server role) | yes | yes | yes (`dnp3py` fixture only) |
-| Everything above except the rows below, as master | yes | yes | yes |
-| Assign class, outstation | yes | yes | no |
-| Assign class, master | yes | no | yes |
-| All-objects read and restart delay, master | yes | no | yes |
-| DIRECT OPERATE NO ACK, master | no | yes | yes |
-| Freeze without acknowledgement, master | yes | no | yes |
-| Time synchronization when the outstation does not ask for it | no | yes | yes |
-| FREEZE AND CLEAR of a counter without frozen counter | yes | no | — |
-| Frozen counter event for a freeze that changes no frozen value (a policy, not a requirement) | no | yes | — |
-| Fixtures with gaps in indexes, or without NEED_TIME at start | yes | no | no |
-| File transfer, attributes, deadband write, broadcast, master | no | yes | yes |
-| File append, ACTIVATE CONFIG, select expiry and unconfirmed events, master | no | no | yes |
+| | opendnp3 | dscsystems | dnp3py | cbsigma | nfmdnp3 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Outstation (server role) | yes | yes | yes (`dnp3py` fixture only) | yes | no |
+| Everything above except the rows below, as master | yes | yes | yes | yes | TCP only; polls, controls, time synchronization, restart, freezes, unsolicited responses (see [docs/CAPABILITIES.md](docs/CAPABILITIES.md), footnote 46) |
+| Assign class, outstation | yes | yes | no | yes | — |
+| Assign class, master | yes | no | yes | yes | yes |
+| All-objects read and restart delay, master | yes | no | yes | yes | yes |
+| DIRECT OPERATE NO ACK, master | no | yes | yes | yes | yes |
+| Freeze without acknowledgement, master | yes | no | yes | yes | yes |
+| Time synchronization when the outstation does not ask for it | no | yes | yes | yes | yes |
+| FREEZE AND CLEAR of a counter without frozen counter | yes | no | — | — | — |
+| Frozen counter event for a freeze that changes no frozen value (a policy, not a requirement) | no | yes | — | no | — |
+| Fixtures with gaps in indexes, or without NEED_TIME at start | yes | no | no | — | — |
+| File transfer, attributes, deadband write, broadcast, master | no | yes | yes | yes | deadband write only |
+| File append, ACTIVATE CONFIG, select expiry and unconfirmed events, master | no | no | yes | all but unconfirmed events | select expiry only |
 
 — : not tested.
 
 The own go-dnp3 image (`own/go-dnp3`, adapter `otfabric`) runs the same
-self-tests against the three reference stacks and itself, in both roles. It
+self-tests against the reference stacks and itself, in both roles. It
 is not a reference and not in these tables: see
 [own/go-dnp3/README.md](own/go-dnp3/README.md).
 

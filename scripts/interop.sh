@@ -210,10 +210,11 @@ frozen_event_policy() {
 }
 
 # check <pair> <label> <want> <got> [<operation a known bug may affect>]
+# Without an operation, a known bug is matched against the label.
 check() {
     local client="${1%%->*}" server="${1#*->}" bug
     if [[ "$4" == "$3" ]]; then ok "$1: $2"
-    elif [[ -n "${5:-}" ]] && bug=$(known_bug "${client}" "${server}" "$5"); then hit_known_bug "$1" "$2" "${bug}"
+    elif bug=$(known_bug "${client}" "${server}" "${5:-$2}"); then hit_known_bug "$1" "$2" "${bug}"
     else
         fail "$1: $2"; log "    want ${3:-<nothing>}"; log "    got  ${4:-<nothing>}"
         # The outstation's own account (its frames), while the server exists.

@@ -31,11 +31,11 @@ BUILDER ?= dnp3-interop
 
 # Every adapter, in priority order: built and self-tested everywhere. Override
 # to work on one: make smoke ADAPTERS=opendnp3
-ADAPTERS ?= opendnp3 dscsystems dnp3py
+ADAPTERS ?= opendnp3 dscsystems dnp3py cbsigma nfmdnp3
 
 # The adapters whose images are pushed to the registry. 'override': neither
 # the environment nor the command line can change it.
-override PUBLISHED_ADAPTERS := opendnp3 dscsystems dnp3py
+override PUBLISHED_ADAPTERS := opendnp3 dscsystems dnp3py cbsigma nfmdnp3
 
 # Parallel jobs for "make documents" (the smoke tests); the image builds take
 # -j on the command line, as the workflows do: make -j4 images
@@ -123,6 +123,12 @@ smoke: $(addprefix smoke-,$(ADAPTERS)) ## Container-contract smoke test of every
 
 smoke-%: FORCE ## Smoke test one adapter, e.g. smoke-opendnp3
 	@scripts/smoke.sh $*
+
+# nfm-dnp3 1.0.1 cannot poll an outstation that sends a confirmed null
+# unsolicited response after it starts (tests/known-bugs.tsv,
+# nfmdnp3-confirm-link-service): its smoke test polls the dnp3py fixture,
+# which has unsolicited responses off.
+smoke-nfmdnp3: export SMOKE_SERVER_FIXTURE := dnp3py
 
 interop: ## Cross-stack self-test: every client against every server, on the baseline and the dnp3py fixture
 	@scripts/interop.sh $(ADAPTERS)

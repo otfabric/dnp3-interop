@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+#
+# The nfm-dnp3 pin (import name dnp3py), installed with --require-hashes.
+# versions.yaml mirrors it and scripts/check-versions.sh keeps them in step.
+# nfm-dnp3 has no run-time dependencies.
+nfm-dnp3==1.0.1 \
+    --hash=sha256:aafb2416e3ad52cc1812bfd6a6dc2ee7459a92a0c95da94b6da62c70a69c3cc0

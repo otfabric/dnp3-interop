@@ -182,6 +182,12 @@ jobs:
             --arg dnp3py_version "$(arg adapters/dnp3py/Dockerfile UPSTREAM_VERSION)" \
             --arg dnp3py_sha "$(arg adapters/dnp3py/Dockerfile UPSTREAM_SHA)" \
             --arg dnp3py_digest "${{ steps.digests.outputs.dnp3py }}" \
+            --arg cbsigma_version "$(arg adapters/cbsigma/Dockerfile UPSTREAM_VERSION)" \
+            --arg cbsigma_sha "$(arg adapters/cbsigma/Dockerfile UPSTREAM_SHA)" \
+            --arg cbsigma_digest "${{ steps.digests.outputs.cbsigma }}" \
+            --arg nfmdnp3_version "$(arg adapters/nfmdnp3/Dockerfile UPSTREAM_VERSION)" \
+            --arg nfmdnp3_sha "$(arg adapters/nfmdnp3/Dockerfile UPSTREAM_SHA)" \
+            --arg nfmdnp3_digest "${{ steps.digests.outputs.nfmdnp3 }}" \
             --arg dnp3c_version "$(arg conformance/dnp3c/Dockerfile DNP3C_VERSION)" \
             '{
               version: $version,
@@ -192,12 +198,16 @@ jobs:
               upstream: {
                 opendnp3: { version: $odnp3_version, revision: $odnp3_sha },
                 "dscsystems/go-dnp3": { version: $godnp3_version, revision: $godnp3_sha },
-                dnp3py: { version: $dnp3py_version, revision: $dnp3py_sha }
+                dnp3py: { version: $dnp3py_version, revision: $dnp3py_sha },
+                "cB-Sigma/dnp3": { version: $cbsigma_version, revision: $cbsigma_sha },
+                "nfm-dnp3": { version: $nfmdnp3_version, revision: $nfmdnp3_sha }
               },
               images: {
                 opendnp3: ("ghcr.io/otfabric/dnp3-interop-opendnp3@" + $opendnp3_digest),
                 dscsystems: ("ghcr.io/otfabric/dnp3-interop-dscsystems@" + $dscsystems_digest),
-                dnp3py: ("ghcr.io/otfabric/dnp3-interop-dnp3py@" + $dnp3py_digest)
+                dnp3py: ("ghcr.io/otfabric/dnp3-interop-dnp3py@" + $dnp3py_digest),
+                cbsigma: ("ghcr.io/otfabric/dnp3-interop-cbsigma@" + $cbsigma_digest),
+                nfmdnp3: ("ghcr.io/otfabric/dnp3-interop-nfmdnp3@" + $nfmdnp3_digest)
               },
               localOnly: {
                 dnp3c: {
@@ -219,6 +229,8 @@ jobs:
           OPENDNP3: ${{ steps.digests.outputs.opendnp3 }}
           DSCSYSTEMS: ${{ steps.digests.outputs.dscsystems }}
           DNP3PY: ${{ steps.digests.outputs.dnp3py }}
+          CBSIGMA: ${{ steps.digests.outputs.cbsigma }}
+          NFMDNP3: ${{ steps.digests.outputs.nfmdnp3 }}
         run: |
           {
             scripts/release-notes.sh "${VERSION}"
@@ -230,6 +242,8 @@ jobs:
             echo "| \`${REGISTRY}/dnp3-interop-opendnp3:${VERSION}\` | \`${OPENDNP3}\` |"
             echo "| \`${REGISTRY}/dnp3-interop-dscsystems:${VERSION}\` | \`${DSCSYSTEMS}\` |"
             echo "| \`${REGISTRY}/dnp3-interop-dnp3py:${VERSION}\` | \`${DNP3PY}\` |"
+            echo "| \`${REGISTRY}/dnp3-interop-cbsigma:${VERSION}\` | \`${CBSIGMA}\` |"
+            echo "| \`${REGISTRY}/dnp3-interop-nfmdnp3:${VERSION}\` | \`${NFMDNP3}\` |"
             echo
             echo "The dnp3c runner (\`dnp3-interop-dnp3c\`, the DNP3 IED Certification Procedure as Step Function I/O's dnp3c implements it, GPL-3.0-only) is not published: \`make image-dnp3c VERSION=${VERSION}\` builds it, fetching dnp3c from Maven Central. See \`docs/CONFORMANCE.md\`."
             echo
@@ -239,6 +253,8 @@ jobs:
             echo "DNP3_INTEROP_OPENDNP3_IMAGE=${REGISTRY}/dnp3-interop-opendnp3@${OPENDNP3}"
             echo "DNP3_INTEROP_DSCSYSTEMS_IMAGE=${REGISTRY}/dnp3-interop-dscsystems@${DSCSYSTEMS}"
             echo "DNP3_INTEROP_DNP3PY_IMAGE=${REGISTRY}/dnp3-interop-dnp3py@${DNP3PY}"
+            echo "DNP3_INTEROP_CBSIGMA_IMAGE=${REGISTRY}/dnp3-interop-cbsigma@${CBSIGMA}"
+            echo "DNP3_INTEROP_NFMDNP3_IMAGE=${REGISTRY}/dnp3-interop-nfmdnp3@${NFMDNP3}"
             echo "# built locally (see above), not pulled:"
             echo "DNP3_INTEROP_DNP3C_IMAGE=${REGISTRY}/dnp3-interop-dnp3c:${VERSION}"
             echo '```'

@@ -17,16 +17,18 @@ self-tested as a candidate.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.2 | v0.8.2 | Go module `github.com/dscsystems/go-dnp3@v0.8.2` (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`), checksum in `go.sum` | independent, Go |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) | v0.3.0 | v0.3.0 | Go module `github.com/cB-Sigma/dnp3@v0.3.0` (commit `03ffd5c94f8e7a7538d2466d6b8ca27d9cd9c995`), checksum in `go.sum` | independent, Go |
+| `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) (master only) | 1.0.1 | 1.0.1 | PyPI wheel `nfm-dnp3==1.0.1`, hash in `requirements.txt` (tag commit `8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6`) | independent, Python |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
 (trixie), Go 1.27.2, Python 3.14.8.
 
-The pins live in the Dockerfiles and `adapters/dscsystems/go.mod`, and are mirrored in [versions.yaml](../versions.yaml);
+The pins live in the Dockerfiles, the adapters' `go.mod` and `requirements.txt`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream**
 workflow (`.github/workflows/upstream.yml`, daily and on demand) resolves
 the latest stable release of every stack with `scripts/latest-upstream.py`:
-opendnp3's tags on GitHub, DSC go-dnp3 on the Go
-module proxy and dnp3py on PyPI, and checks the digest of every pinned base
+opendnp3's tags on GitHub, DSC go-dnp3 and cB-Sigma dnp3 on the Go
+module proxy and dnp3py and nfm-dnp3 on PyPI, and checks the digest of every pinned base
 image. It builds the adapter on each release that differs from its pin (once
 per pin and latest version), runs the smoke and cross-stack self-tests,
 writes one pin-vs-latest table, a row per stack and per base image, to its
@@ -58,11 +60,13 @@ fixture, the events controls and freezes cause, unsolicited responses, class
 assignment and time synchronization. A case that needs a feature a pairing
 does not declare is skipped for that pairing and counted as such.
 
-| Client → Server | opendnp3 | dscsystems |
-|-----------------|:--------:|:----------:|
-| **opendnp3** | pass | pass ² |
-| **dscsystems** | pass ¹ | pass ¹ ² ³ |
-| **dnp3py** | pass ⁴ | pass ² ⁴ |
+| Client → Server | opendnp3 | dscsystems | cbsigma |
+|-----------------|:--------:|:----------:|:-------:|
+| **opendnp3** | pass | pass ² | pass ⁵ ⁶ |
+| **dscsystems** | pass ¹ | pass ¹ ² ³ | pass ¹ ⁵ |
+| **dnp3py** | pass ⁴ | pass ² ⁴ | pass ⁴ ⁵ |
+| **cbsigma** | pass | pass ² | pass ⁵ |
+| **nfmdnp3** | known bug ⁷ | known bug ⁷ | known bug ⁷ |
 
 ¹ without all-objects reads, restart delays and class assignment, which the
 DSC go-dnp3 master cannot send or report; with direct operate no ack, which it
@@ -73,6 +77,15 @@ can send.
 the dnp3py master sends. dnp3py has no server column: it cannot serve the
 baseline. How the outstations compare on the `dnp3py` fixture is below
 ([dnp3py's outstation: the dnp3py fixture](#dnp3pys-outstation-the-dnp3py-fixture)).
+⁵ with the known bug of the cB-Sigma dnp3 outstation's FREEZE AND CLEAR, below.
+⁶ with the known bug of the opendnp3 master, which reads the coarse restart
+delay (g52v1, in seconds) that the cB-Sigma dnp3 outstation sends as
+milliseconds.
+⁷ nfm-dnp3 1.0.1 sends the application confirm as CONFIRMED_USER_DATA without
+a link reset, so it stalls against every outstation that asks for a
+confirmation, as the baseline does with its null unsolicited response. On the
+`dnp3py` fixture, which sends no unsolicited responses, it passes against
+every outstation except for the defects below.
 
 The numbers of a run (checks passed and failed, known-bug hits, skips, per
 pairing and architecture) are not kept here: every release's qualification
@@ -382,6 +395,45 @@ them, not their timing. Seven data bits are not run: a DNP3 frame needs all
 eight bits of each octet.
 
 ## Findings
+
+### cB-Sigma dnp3 (v0.3.0)
+
+Found by the self-tests, each a row of [tests/known-bugs.tsv](../tests/known-bugs.tsv):
+
+- The outstation answers a request with the same sequence number and octets
+  as the previous one from its cache, READ included and across connections,
+  so a master that reconnects and polls again can get the old values and
+  events already confirmed.
+- FREEZE AND CLEAR clears the counters without a counter event.
+- GET_FILE_INFO answers with the name of the request (the full path), where
+  the other outstations answer with the name of the file.
+- After a keep-alive the master waits its response timeout before it starts
+  the keep-alive timer again, so keep-alives come at the interval plus that
+  timeout.
+
+Two differ from this contract and not, as far as could be established, from
+IEEE 1815-2012: FREEZE AT TIME with a time already past is done at once
+instead of refused, and the class 0 response with secure authentication
+includes the g121 security statistics.
+
+The outstation challenges with 4 octets of challenge data; the DSC go-dnp3
+master accepts only 32 and so cannot operate it with secure authentication
+(a known bug of that master). The opendnp3 master reads the coarse restart
+delay (g52v1, seconds) as milliseconds (`RestartOperationTask.cpp`).
+
+### nfm-dnp3 (1.0.1)
+
+A master over TCP. The self-tests found these defects, each reported upstream
+(fxodell/dnp3py#1 to #10) and tracked here by an issue with the label
+`upstream`: the application confirm is sent as CONFIRMED_USER_DATA without a
+link reset; link frames without user data (ACK, NACK) fail the request;
+qualifier 0x28 is read and written with a 1-octet count; received frames are
+not checked against the master's address; DEVICE_RESTART is never cleared;
+an unsolicited response can be taken as the answer to a request; the
+broadcast addresses are refused as a destination; the CROB trip and close
+codes are swapped; and several object sizes are wrong, with no decoders for
+some event objects. The adapter works around none of them in the library: it
+declares what cannot work false and the rest are known bugs.
 
 ### opendnp3's master cannot synchronize time on request
 
