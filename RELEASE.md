@@ -36,8 +36,9 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ### Fixed
 
-Self-test scripts only. Container contract 1.5, fixture format 1.0, the adapters and the reference stacks are unchanged.
+Self-test scripts and documentation only. Container contract 1.5, fixture format 1.0, the adapters and the reference stacks are unchanged.
 
+- **`scripts/interop.sh`, unsolicited responses**: the outstation of the unsolicited checks waits 1 s for an application confirm, instead of 5 s. The opendnp3 outstation loses a CONFIRM that arrives together with another request while it is still sending a response. A master that confirms the null unsolicited response and enables unsolicited responses at once then got its events only after the confirm timeout, after the collect window had ended. This was an intermittent failure of dscsystems → opendnp3 (see docs/COMPATIBILITY.md).
 - **`scripts/features.sh`, UDP**: when Docker answers "Address already in use", it has already created the named container (`--name`). That container is now removed before the next attempt. Before this fix, the next attempt failed with a name conflict and the check reported `[udp] server did not start`.
 
 ---
