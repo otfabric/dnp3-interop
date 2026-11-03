@@ -496,7 +496,8 @@ suite() {
         # Unsolicited responses: buffered events arrive once a class is enabled.
         # The outstation waits 1 s for an application confirm, not 5 s: the
         # opendnp3 outstation loses a CONFIRM that arrives with another
-        # request while it is still sending a response (docs/COMPATIBILITY.md),
+        # request while it is still sending a response (docs/COMPATIBILITY.md,
+        # issue 76),
         # and repeats its null unsolicited response only when the confirm
         # timeout ends. A master that confirms the null response and enables
         # unsolicited responses at once then gets its events within the

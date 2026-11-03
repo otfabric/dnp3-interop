@@ -490,7 +490,10 @@ its events unsolicited"). A raw master that sends the WRITE, the CONFIRM and
 ENABLE_UNSOLICITED in one TCP segment gets the events only after the
 confirm timeout, every time; sent one after the other, at once.
 
-The repository is archived, so there is no upstream report. The unsolicited
+The repository is archived, so there is no upstream report: the fix, with a
+unit test, is on a fork
+([boeboe/opendnp3@fbe2051d](https://github.com/boeboe/opendnp3/commit/fbe2051d41f7bdf143c334994290fe7b664d3520)),
+tracked in [#76](https://github.com/otfabric/dnp3-interop/issues/76). The unsolicited
 checks of `scripts/interop.sh` start the outstation with
 `--confirm-timeout-ms 1000`, so a lost confirm costs one second, which is
 within the window in which the master collects the events.
