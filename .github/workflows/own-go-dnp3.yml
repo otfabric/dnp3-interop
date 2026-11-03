@@ -126,7 +126,11 @@ jobs:
 
       - name: Pull the reference images of ${{ needs.version.outputs.harness }}
         run: |
-          for a in opendnp3 dscsystems dnp3py; do
+          # The references are the images that release published.
+          refs="$(make -s -C harness print-published-adapters)"
+          echo "REFS=${refs}" >> "$GITHUB_ENV"
+          read -ra list <<< "${refs}"
+          for a in "${list[@]}"; do
             scripts/retry.sh docker pull --quiet "ghcr.io/otfabric/dnp3-interop-${a}:${VERSION}"
             docker run --rm "ghcr.io/otfabric/dnp3-interop-${a}:${VERSION}" print-capabilities \
               | jq -r --arg image "${a}:${VERSION}" '"- \($image): \(.upstream.name) \(.upstream.version)"' | tee -a "$GITHUB_STEP_SUMMARY"
@@ -138,9 +142,10 @@ jobs:
           set -o pipefail
           mkdir -p reports
           REPORT_DIR=reports scripts/smoke.sh otfabric
-          REPORT_DIR=reports scripts/interop.sh otfabric opendnp3 dscsystems dnp3py 2>&1 | tee reports/interop.log
-          REPORT_DIR=reports FIXTURE=dnp3py scripts/interop.sh otfabric opendnp3 dscsystems dnp3py 2>&1 | tee reports/interop-dnp3py.log
-          REPORT_DIR=reports scripts/features.sh otfabric opendnp3 dscsystems dnp3py 2>&1 | tee reports/features.log
+          read -ra refs <<< "${REFS}"
+          REPORT_DIR=reports scripts/interop.sh otfabric "${refs[@]}" 2>&1 | tee reports/interop.log
+          REPORT_DIR=reports FIXTURE=dnp3py scripts/interop.sh otfabric "${refs[@]}" 2>&1 | tee reports/interop-dnp3py.log
+          REPORT_DIR=reports scripts/features.sh otfabric "${refs[@]}" 2>&1 | tee reports/features.log
           python3 scripts/validate-documents.py reports
           grep -hE '^\[(smoke|interop|features)\]' reports/interop.log reports/interop-dnp3py.log reports/features.log \
             | tee -a "$GITHUB_STEP_SUMMARY" || true

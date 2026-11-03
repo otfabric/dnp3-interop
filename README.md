@@ -4,7 +4,7 @@ A Docker-based interoperability testing framework for DNP3 (IEEE 1815),
 providing independent master and outstation implementations, deterministic
 fixtures, and automated protocol compatibility testing.
 Test DNP3 libraries against established implementations including
-opendnp3, DSC Systems go-dnp3 and dnp3py. Reference implementations are independently
+opendnp3, DSC Systems go-dnp3, dnp3py, cB-Sigma dnp3 and nfm-dnp3. Reference implementations are independently
 containerized, enabling reproducible testing across platforms without
 integrating third-party protocol stacks into production applications.
 
@@ -13,22 +13,27 @@ integrating third-party protocol stacks into production applications.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.2 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.0 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
+| `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) 1.0.1 ² | Python | no | yes | `ghcr.io/otfabric/dnp3-interop-nfmdnp3` |
 
 The stacks do not all do the same: the opendnp3 master sends no `_NR`
 function, opendnp3's master synchronizes time only when the outstation asks for
 it, DSC go-dnp3's master reads only ranges and classes, and dnp3py's
 outstation (¹) serves only the `dnp3py` fixture, the baseline within its
-limits. Each image says what it supports (`print-capabilities`); see
+limits. nfm-dnp3 (²) is a master over TCP only; version 1.0.1 has data link and
+application layer defects that break most exchanges with an outstation that
+asks for confirmations. They are listed in
+[tests/known-bugs.tsv](tests/known-bugs.tsv) and reported upstream. Each image says what it supports (`print-capabilities`); see
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
 Container contract 1.0 covers DNP3 over TCP. Contract 1.1 adds transports,
 file transfer and secure authentication:
 
-| | opendnp3 | dscsystems | dnp3py |
-|---|:-:|:-:|:-:|
-| TLS (mutual), UDP, serial | yes | yes | no |
-| File transfer (g70) | no | both roles | no |
-| Secure authentication v5 (g120) | no | both roles | no |
+| | opendnp3 | dscsystems | dnp3py | cbsigma | nfmdnp3 |
+|---|:-:|:-:|:-:|:-:|:-:|
+| TLS (mutual), UDP, serial | yes | yes | no | yes | no |
+| File transfer (g70) | no | both roles | no | both roles | no |
+| Secure authentication v5 (g120) | no | both roles | no | both roles | no |
 
 ¹ dnp3py's outstation serves the `dnp3py` fixture only.
 
@@ -216,6 +221,8 @@ dnp3-interop/
 │   ├── opendnp3/        C++ adapter: Dockerfile, CMakeLists.txt, src/
 │   ├── dscsystems/      Go adapter: Dockerfile, go.mod, *.go
 │   ├── dnp3py/          Python adapter: Dockerfile, requirements.txt, dnp3_interop.py
+│   ├── cbsigma/         Go adapter: Dockerfile, go.mod, *.go
+│   ├── nfmdnp3/         Python adapter (master only): Dockerfile, requirements.txt, dnp3_interop.py
 │   └── LICENSE          MIT, except adapters/dscsystems/ (GPL-3.0-or-later)
 ├── conformance/
 │   ├── dnp3c/           the dnp3c runner: Dockerfile, pom.xml, src/ (GPL-3.0-only; image built locally, never published)
@@ -252,8 +259,8 @@ VERSION=v0.5.1 make qualify                        # Trivy scan and SBOMs of a r
 ```
 
 The **Upstream** workflow resolves the latest release of every stack daily
-(opendnp3's tags, DSC go-dnp3 on the Go module
-proxy, dnp3py on PyPI) and the digest of every pinned base image, builds and
+(opendnp3's tags, DSC go-dnp3 and cB-Sigma dnp3 on the Go module
+proxy, dnp3py and nfm-dnp3 on PyPI) and the digest of every pinned base image, builds and
 self-tests the adapters whose pin is behind, reports pin versus latest in one
 table in its job summary and keeps a tracking issue open while a pin is
 behind.
@@ -281,7 +288,8 @@ only, and they must never be attached to a plant network. See
 The repository's own code and documentation, and the adapter sources, are
 MIT-licensed, except `adapters/dscsystems/`, which links a GPL-3.0-or-later
 library and is GPL-3.0-or-later. The images contain the upstream libraries
-under their own licences: opendnp3 is Apache-2.0, DSC go-dnp3 is
-GPL-3.0-or-later and dnp3py is MIT. The dnp3c runner and its image are
+under their own licences: opendnp3 and cB-Sigma dnp3 are Apache-2.0, DSC
+go-dnp3 is GPL-3.0-or-later, dnp3py is MIT and nfm-dnp3 is MIT as its package
+metadata declares. The dnp3c runner and its image are
 GPL-3.0-only. See [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

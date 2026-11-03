@@ -1,0 +1,17 @@
+nfm-dnp3 1.0.1 (import name dnp3py)
+https://pypi.org/project/nfm-dnp3/1.0.1/
+https://github.com/fxodell/dnp3py, tag v1.0.1, commit 8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6
+
+Licence: MIT, as declared in the package metadata of nfm-dnp3 1.0.1
+("License: MIT" and the classifier "License :: OSI Approved :: MIT License",
+in setup.py and on PyPI).
+
+The repository has no LICENSE file, and the package ships none. Its README
+says the software is "provided as-is for educational and development
+purposes". No copyright holder is named in the package or the repository.
+
+This image contains nfm-dnp3 1.0.1 as published on PyPI, unmodified.
+
+MIT-LICENSE.txt next to this file is the standard text of the MIT License,
+the licence the metadata names. It is included for reference; it is not a
+copy of a licence file from nfm-dnp3, which has none.

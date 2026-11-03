@@ -711,6 +711,32 @@ coverage() {
         skip "${pair}: confirm timeout (needs client:noConfirmClient)"
     fi
 
+    # ---- an event READ of one group (contract 1.0) ----
+    # A control changes a binary input (class 1, g2) and an analog input
+    # (class 2, g32). A READ of g32 variation 0 returns the analog input
+    # events only; the binary input events stay buffered for the next event
+    # poll (IEEE 1815-2012 clause 4: an event read names the object group).
+    if has "${client}" readAllObjectsClient; then
+        name="gr-${server}-${RUN_ID}"
+        read -ra fixture_args <<< "$(reverse_fixture "${server}")"
+        start "${server}" "${name}" -- ${fixture_args[@]+"${fixture_args[@]}"}
+        if wait_ready "${name}"; then
+            client "${client}" -- event-poll --classes 1,2,3 --host "${name}" >/dev/null
+            client "${client}" -- operate --type g12v1 --index 0 --code LATCH_ON --host "${name}" >/dev/null
+            client "${client}" -- operate --type g41v2 --index 0 --value 7 --host "${name}" >/dev/null
+            at_pair "coverage.event-read-by-group" "${pair}"
+            check "${pair}: [event read] a READ of g32 returns only g32" "32" \
+                "$(client "${client}" -- read --group 32 --variation 0 --host "${name}" | jq -r '[.objects[]?.group] | unique | join(",")')"
+            at_pair "coverage.event-read-by-group-keeps-others" "${pair}"
+            check "${pair}: [event read] the binary input events stay buffered" "true" \
+                "$(client "${client}" -- event-poll --classes 1,2,3 --host "${name}" | jq -r '[.objects[]?.group] | (index(2) != null and index(32) == null)')"
+        fi
+        stop_server "${name}"
+    else
+        at_pair "skipped.event-read-by-group" "${pair}"
+        skip "${pair}: event read by group (needs client:readAllObjectsClient)"
+    fi
+
     # ---- restart: the event, and DEVICE_RESTART until a master clears it (contract 1.0) ----
     if has "${client}" restart && has "${server}" restart; then
         name="gr-${server}-${RUN_ID}"
@@ -1664,8 +1690,8 @@ suite() {
             client="${f##*/${kind}-}"
             at "files.agrees-${kind}" "${client}" "${server}"
             if [[ -z "${reference}" ]]; then reference=$(cat "${f}"); ref_client="${client}"
-            elif [[ "$(cat "${f}")" == "${reference}" ]]; then ok "${client}->${server} agrees with ${ref_client}->${server}: file-${kind}"
-            else fail "${client}->${server} and ${ref_client}->${server} disagree on: file-${kind}"
+            elif ! check "${client}->${server}: [files] file-${kind} as ${ref_client}->${server} reports it" \
+                    "${reference}" "$(cat "${f}")"; then
                 diff <(jq -S . <<<"${reference}") <(jq -S . "${f}") | head -20 >&2
             fi
         done

@@ -12,7 +12,8 @@
 #
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
 #              REPORT_DIR (keeps the capability document when set),
-#              SMOKE_SERVER.
+#              SMOKE_SERVER, SMOKE_SERVER_FIXTURE (the fixture SMOKE_SERVER
+#              serves, default baseline).
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -109,7 +110,12 @@ expect_exit 2 "freeze --at with --clear" "${IMAGE}" client freeze --host nowhere
 expect_exit 2 "counter-increment without --index" "${IMAGE}" counter-increment
 expect_exit 2 "counter-increment with an unknown flag" "${IMAGE}" counter-increment --index 0 --frobnicate 1
 expect_exit 2 "counter-increment by zero" "${IMAGE}" counter-increment --index 0 --by 0
-expect_exit 3 "counter-increment without a server" "${IMAGE}" counter-increment --index 0
+# Without counterIncrementServer the command does not exist: a usage error.
+if jq -e '.features.counterIncrementServer == true' <<<"${caps}" >/dev/null 2>&1; then
+    expect_exit 3 "counter-increment without a server" "${IMAGE}" counter-increment --index 0
+else
+    expect_exit 2 "counter-increment on an image without counterIncrementServer" "${IMAGE}" counter-increment --index 0
+fi
 for policy in on-change always; do
     jq -e --arg p "${policy}" '.frozenEventPolicies | index($p)' <<<"${caps}" >/dev/null 2>&1 \
         || expect_exit 2 "--frozen-event-policy ${policy}, which the outstation does not have" "${IMAGE}" server --frozen-event-policy "${policy}"
@@ -219,8 +225,10 @@ then ok "connect failure: exit 3 and a result document"; else fail "connect fail
 # ---- server: readiness, events, operations, clean stop ----
 SERVER_FIXTURE_ARGS=()
 [[ "${SERVER_ADAPTER}" == "${ADAPTER}" ]] && SERVER_FIXTURE_ARGS=("${FIXTURE_ARGS[@]}")
-SERVER_FIXTURE=baseline
+SERVER_FIXTURE="${SMOKE_SERVER_FIXTURE:-baseline}"
 [[ "${SERVER_ADAPTER}" == "${ADAPTER}" ]] && SERVER_FIXTURE="${FIXTURE}"
+[[ "${SERVER_FIXTURE}" != baseline && "${SERVER_ADAPTER}" != "${ADAPTER}" ]] \
+    && SERVER_FIXTURE_ARGS=(--fixture "/fixtures/${SERVER_FIXTURE}/fixture.json")
 name=$(start_server "${SERVER_ADAPTER}" "${SERVER_FIXTURE_ARGS[@]}")
 if wait_ready "${name}"; then ok "server becomes ready"; else fail "server did not become ready"; finish; exit 1; fi
 first=$(docker logs "${name}" 2>/dev/null | head -1)

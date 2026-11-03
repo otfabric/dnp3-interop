@@ -4,7 +4,7 @@
 
 1. Write the notes of the version below and set `interop_version` in `versions.yaml` to it, in the same change. `make validate` (and CI) fails when RELEASE.md has no notes for `interop_version`.
 2. `make ci` on the commit to release.
-3. Run the `Release` workflow on `main` from the Actions tab and pick the bump (`patch` by default, `minor` or `major`) that gives `vX.Y.Z`, or push the tag `vX.Y.Z` yourself. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates (including the notes of the tag), builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly those of the published adapters (opendnp3, dscsystems, dnp3py: `PUBLISHED_ADAPTERS` in the Makefile) to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins, the digests of the multi-arch images, and under `localOnly` the dnp3c pin and how to build it) and `checksums.txt`.
+3. Run the `Release` workflow on `main` from the Actions tab and pick the bump (`patch` by default, `minor` or `major`) that gives `vX.Y.Z`, or push the tag `vX.Y.Z` yourself. The release workflow runs one job on an amd64 runner and one on an arm64 runner: each validates (including the notes of the tag), builds every image natively with `ADAPTER_VERSION` set to the tag, runs the smoke and cross-stack self-tests on those images and pushes exactly those of the published adapters (opendnp3, dscsystems, dnp3py, cbsigma, nfmdnp3: `PUBLISHED_ADAPTERS` in the Makefile) to GHCR as `<image>:vX.Y.Z-amd64` and `-arm64`. A last job joins the two into the multi-arch `<image>:vX.Y.Z` and creates the GitHub release with `manifest.json` (upstream pins, the digests of the multi-arch images, and under `localOnly` the dnp3c pin and how to build it) and `checksums.txt`.
 4. The release workflow then runs the **Release qualification** workflow on what it published: the smoke and cross-stack self-tests again, natively on both architectures, against the images in the registry; a compatibility report from their documents; a Trivy vulnerability scan and a CycloneDX SBOM of every published image and architecture. It attaches `compatibility-report.md`, `vulnerabilities.md`, `sboms.tar.gz` and `vulnerability-scans.tar.gz` to the release. Run it by hand (Actions → Release qualification) to qualify an earlier release again; vulnerability findings are recorded, not gated on.
 5. Consumers pin the digests from `manifest.json`, and build the dnp3c image from the tag (`make image-dnp3c VERSION=vX.Y.Z`).
 
@@ -26,6 +26,39 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 | Contract or fixture format changed incompatibly | major |
 | New operation, behaviour, fixture, adapter or document field | minor |
 | Upstream pin, base image or bug fix with unchanged contract | patch |
+
+---
+
+## v0.11.0
+
+**Date:** 2026-11-03
+**Previous release:** v0.10.0
+
+## Summary
+
+Two more reference stacks: cB-Sigma dnp3 v0.3.0 (Go, Apache-2.0, master and
+outstation) and nfm-dnp3 1.0.1 (Python, MIT, master over TCP), both
+published. Container contract 1.5 and fixture format 1.0 unchanged; the
+existing adapters are unchanged.
+
+## Changes
+
+### Adapters
+
+- **cbsigma** (`dnp3-interop-cbsigma`): both roles over TCP, UDP, serial and TLS, secure authentication v5, file transfer, device attributes (master), freezes and counter increments. Serves the baseline fixture.
+- **nfmdnp3** (`dnp3-interop-nfmdnp3`): the master over TCP. Its defects are reported upstream (fxodell/dnp3py#1 to #10) and are known bugs here.
+- `versions.yaml`, `scripts/check-versions.sh`, `scripts/latest-upstream.py`, the Release, Upstream and own-stack workflows and THIRD_PARTY_NOTICES.md cover both.
+
+### Self-test
+
+- **Event read of one group**: a READ of g32 returns only the analog input events; the binary input events stay buffered for the next event poll.
+- `scripts/smoke.sh`: `SMOKE_SERVER_FIXTURE` picks the fixture of the server (the nfmdnp3 smoke runs against the `dnp3py` fixture); the counter-increment check expects a usage error on an image without `counterIncrementServer`.
+- The value checks of `scripts/interop.sh` and the file agreement check of `scripts/features.sh` can be matched by a known bug.
+- **Known bugs** (`tests/known-bugs.tsv`): cB-Sigma's cached answer to a repeated request, FREEZE AND CLEAR without counter event, GET_FILE_INFO name and keep-alive interval, and two differences from the contract; nfm-dnp3's defects; the opendnp3 master reading the g52v1 delay as milliseconds; the DSC master ignoring challenges that are not 32 octets.
+
+### Docs
+
+- README, CAPABILITIES, COMPATIBILITY (matrix and findings), COVERAGE, PLAN and THIRD_PARTY_NOTICES describe the five stacks.
 
 ---
 

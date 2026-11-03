@@ -47,6 +47,23 @@ same "dnp3py in Dockerfile and requirements.txt" "${dockerfile_dnp3py}" "${requi
 need "dnp3py revision"   "$(arg adapters/dnp3py/Dockerfile UPSTREAM_SHA)"
 need "python digest"     "$(arg adapters/dnp3py/Dockerfile PYTHON_DIGEST)"
 
+# cbsigma: the Dockerfile and go.mod name the same cB-Sigma dnp3 version
+dockerfile_cbsigma="$(arg adapters/cbsigma/Dockerfile UPSTREAM_VERSION)"
+gomod_cbsigma="$(sed -nE 's|^[[:space:]]*(require[[:space:]]+)?github.com/cB-Sigma/dnp3 (v[^ ]+).*$|\2|p' adapters/cbsigma/go.mod)"
+need "cB-Sigma dnp3 version"  "version: \"${dockerfile_cbsigma}\""
+same "cB-Sigma dnp3 in Dockerfile and go.mod" "${dockerfile_cbsigma}" "${gomod_cbsigma}"
+need "cB-Sigma dnp3 revision" "$(arg adapters/cbsigma/Dockerfile UPSTREAM_SHA)"
+need "cbsigma golang digest"  "$(arg adapters/cbsigma/Dockerfile GOLANG_DIGEST)"
+need "cbsigma debian digest"  "$(arg adapters/cbsigma/Dockerfile DEBIAN_DIGEST)"
+
+# nfmdnp3: the Dockerfile and requirements.txt name the same nfm-dnp3 version
+dockerfile_nfmdnp3="$(arg adapters/nfmdnp3/Dockerfile UPSTREAM_VERSION)"
+requirements_nfmdnp3="$(sed -nE 's/^nfm-dnp3==([^ ]+).*$/\1/p' adapters/nfmdnp3/requirements.txt)"
+need "nfm-dnp3 version"   "version: \"${dockerfile_nfmdnp3}\""
+same "nfm-dnp3 in Dockerfile and requirements.txt" "${dockerfile_nfmdnp3}" "${requirements_nfmdnp3}"
+need "nfm-dnp3 revision"  "$(arg adapters/nfmdnp3/Dockerfile UPSTREAM_SHA)"
+need "nfmdnp3 python digest" "$(arg adapters/nfmdnp3/Dockerfile PYTHON_DIGEST)"
+
 # dnp3c: the Dockerfile and pom.xml name the same dnp3c version
 dockerfile_dnp3c="$(arg conformance/dnp3c/Dockerfile DNP3C_VERSION)"
 pom_dnp3c="$(sed -nE 's|^ *<dnp3c.version>([^<]+)</dnp3c.version>.*$|\1|p' conformance/dnp3c/pom.xml)"

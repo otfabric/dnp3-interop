@@ -2,8 +2,8 @@
 
 The images built from this repository contain third-party software.
 This file is copied into every image as `/licenses/THIRD_PARTY_NOTICES.md`,
-next to the licence texts. The opendnp3, dscsystems and dnp3py images are
-published; the dnp3c runner image is not (see
+next to the licence texts. The opendnp3, dscsystems, dnp3py, cbsigma and
+nfmdnp3 images are published; the dnp3c runner image is not (see
 [Image `dnp3-interop-dnp3c`](#image-dnp3-interop-dnp3c)).
 
 ## What is licensed how
@@ -14,11 +14,15 @@ published; the dnp3c runner image is not (see
 | `adapters/opendnp3/` (links opendnp3) | MIT |
 | `adapters/dscsystems/` (links DSC Systems go-dnp3) | GPL-3.0-or-later |
 | `adapters/dnp3py/` (imports dnp3py) | MIT |
+| `adapters/cbsigma/` (links cB-Sigma dnp3) | MIT |
+| `adapters/nfmdnp3/` (imports nfm-dnp3) | MIT |
 | `conformance/dnp3c/` (links Step Function I/O dnp3c) | GPL-3.0-only |
 | `own/go-dnp3/` (links OT Fabric go-dnp3) | MIT |
 | Image `dnp3-interop-opendnp3` | MIT and Apache-2.0 (and the licences of the components below) |
 | Image `dnp3-interop-dscsystems` | GPL-3.0-or-later (it contains DSC go-dnp3) |
 | Image `dnp3-interop-dnp3py` | MIT (and the Python licence) |
+| Image `dnp3-interop-cbsigma` | MIT and Apache-2.0 (and the licences of the components below) |
+| Image `dnp3-interop-nfmdnp3` | MIT (and the Python licence) |
 | Image `dnp3-interop-otfabric` (OT Fabric's own stack, not in a release) | MIT and BSD-3-Clause, and the licences of the components below |
 | Image `dnp3-interop-dnp3c` (not published; built locally by each user) | GPL-3.0-only (it contains dnp3c), and the licences of the components below |
 
@@ -91,6 +95,38 @@ Licence texts in the image: `/licenses/go-dnp3/LICENSE`,
 
 Licence in the image: `/licenses/dnp3py/LICENSE`.
 
+## Image `dnp3-interop-cbsigma`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| cB-Sigma dnp3 (Abhinav Gautam) | v0.3.0, commit `03ffd5c94f8e7a7538d2466d6b8ca27d9cd9c995` | Apache-2.0 | https://github.com/cB-Sigma/dnp3 |
+| cB-Sigma iotsec (Abhinav Gautam), linked by cB-Sigma dnp3 | v0.1.0, commit `ed102883f2128794b49a62a280dd400102665d91` | Apache-2.0 | https://github.com/cB-Sigma/iotsec |
+| goburrow/serial (Quoc-Viet Nguyen), linked by cB-Sigma dnp3 | v0.1.0 | MIT | https://github.com/goburrow/serial |
+| Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
+| Adapter | this repository, `adapters/cbsigma/` | MIT | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+Licences and notices in the image: `/licenses/dnp3/LICENSE`,
+`/licenses/dnp3/NOTICE`, `/licenses/iotsec/LICENSE`,
+`/licenses/iotsec/NOTICE`, `/licenses/serial/LICENSE` and
+`/licenses/dnp3-interop/LICENSE`.
+
+## Image `dnp3-interop-nfmdnp3`
+
+| Component | Version | Licence | Source |
+|-----------|---------|---------|--------|
+| nfm-dnp3 (imported as `dnp3py`) | 1.0.1 (PyPI wheel, hash in `adapters/nfmdnp3/requirements.txt`), tag commit `8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6` | MIT, as declared in its package metadata | https://github.com/fxodell/dnp3py |
+| CPython and its standard library | 3.14.8 | PSF-2.0 | https://www.python.org |
+| Adapter | this repository, `adapters/nfmdnp3/` | MIT | https://github.com/otfabric/dnp3-interop |
+| Base system | Debian trixie-slim (python:3.14.8-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+
+The nfm-dnp3 repository has no licence file: its licence is the one its
+package metadata names (`License: MIT` and the classifier
+`License :: OSI Approved :: MIT License`), and no copyright holder is named.
+The package is included unmodified. Notice and licence text in the image:
+`/licenses/nfm-dnp3/NOTICE` and `/licenses/nfm-dnp3/MIT-LICENSE.txt`.
+
 ## Image `dnp3-interop-dnp3c`
 
 **Not published.** This repository distributes the runner's source in
@@ -120,7 +156,7 @@ jars under `/opt/dnp3c/lib/`.
 
 ## Corresponding source
 
-For every published image (opendnp3, dscsystems, dnp3py) the complete
+For every published image (opendnp3, dscsystems, dnp3py, cbsigma, nfmdnp3) the complete
 corresponding source is:
 
 1. this repository at the release tag named by the image's

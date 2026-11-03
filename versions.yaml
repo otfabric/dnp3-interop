@@ -1,10 +1,10 @@
 # Machine-readable version manifest for dnp3-interop.
 # Upstream pins and base image digests are release inputs; nothing floats.
-# The Dockerfiles, adapters/dnp3py/requirements.txt and adapters/dscsystems/go.mod
-# are the source of truth for a build: scripts/check-versions.sh fails when this
+# The Dockerfiles, adapters/{dnp3py,nfmdnp3}/requirements.txt and
+# adapters/{dscsystems,cbsigma}/go.mod are the source of truth for a build: scripts/check-versions.sh fails when this
 # file disagrees with them.
 
-interop_version: "0.10.0"
+interop_version: "0.11.0"
 contract_version: "1.5"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -61,6 +61,39 @@ implementations:
     independent_engine: true
     roles: [server, client]
     note: "Experimental: the README says the API is not yet stable."
+
+  cbsigma:
+    priority: P1
+    status: implemented
+    upstream: "cB-Sigma dnp3"
+    repository: "https://github.com/cB-Sigma/dnp3"
+    module: "github.com/cB-Sigma/dnp3"
+    version: "v0.3.0"            # latest release
+    revision: "03ffd5c94f8e7a7538d2466d6b8ca27d9cd9c995"
+    license: "Apache-2.0"
+    language: "Go"
+    independent_engine: true
+    roles: [server, client]
+    dependencies:
+      iotsec: "github.com/cB-Sigma/iotsec v0.1.0 ed102883f2128794b49a62a280dd400102665d91 (Apache-2.0)"
+      serial: "github.com/goburrow/serial v0.1.0 (MIT)"
+
+  nfmdnp3:
+    priority: P2
+    status: implemented
+    upstream: "nfm-dnp3"
+    repository: "https://github.com/fxodell/dnp3py"
+    package: "nfm-dnp3"          # PyPI; imported as dnp3py
+    version: "1.0.1"             # latest release (PyPI)
+    revision: "8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6"
+    license: "MIT"               # declared in the package metadata; the repository has no LICENSE file
+    language: "Python"
+    independent_engine: true
+    roles: [client]
+    note: >-
+      A master over TCP only. 1.0.1 has data link and application layer
+      defects that break most exchanges with a confirming outstation; they
+      are recorded in tests/known-bugs.tsv and reported upstream.
 
   tmw:
     priority: P2
@@ -120,6 +153,8 @@ images:
   opendnp3: "ghcr.io/otfabric/dnp3-interop-opendnp3"
   dscsystems: "ghcr.io/otfabric/dnp3-interop-dscsystems"
   dnp3py: "ghcr.io/otfabric/dnp3-interop-dnp3py"
+  cbsigma: "ghcr.io/otfabric/dnp3-interop-cbsigma"
+  nfmdnp3: "ghcr.io/otfabric/dnp3-interop-nfmdnp3"
   # Local tag only: not published (see tools.dnp3c).
   dnp3c: "ghcr.io/otfabric/dnp3-interop-dnp3c"
 
