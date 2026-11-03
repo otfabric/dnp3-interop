@@ -29,6 +29,19 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.11.2
+
+**Date:** 2026-11-03
+**Previous release:** v0.11.1
+
+### Fixed
+
+Self-test scripts only. Container contract 1.5, fixture format 1.0, the adapters and the reference stacks are unchanged.
+
+- **`scripts/features.sh`, UDP**: when Docker answers "Address already in use", it has already created the named container (`--name`). That container is now removed before the next attempt. Before this fix, the next attempt failed with a name conflict and the check reported `[udp] server did not start`.
+
+---
+
 ## v0.11.1
 
 **Date:** 2026-11-03
