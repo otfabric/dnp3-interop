@@ -15,6 +15,7 @@ arrived in, which the SOE handler interface does not carry.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import math
@@ -25,8 +26,8 @@ import socket
 import struct
 import sys
 import time
-from functools import partial
 from datetime import UTC, datetime
+from functools import partial
 from importlib.metadata import version as package_version
 
 from dnp3.application.fragment import ObjectBlock, RequestFragment
@@ -47,6 +48,7 @@ from dnp3.database import (
     EventBufferConfig,
     EventClass,
 )
+from dnp3.datalink.builder import build_request_link_status
 from dnp3.master.config import MasterConfig
 from dnp3.master.handler import DefaultSOEHandler
 
@@ -80,7 +82,6 @@ from dnp3.transport.reassembler import ReassemblyError
 from dnp3.transport_io.channel import ChannelError, TcpConfig
 from dnp3.transport_io.tcp_client import TcpClientChannel
 from dnp3.transport_io.tcp_server import serve as tcp_serve
-from dnp3.datalink.builder import build_request_link_status
 
 ADAPTER = "dnp3py"
 SCHEMA_VERSION = "1.0"
@@ -946,10 +947,9 @@ class Files:
         await self.close(handle)
 
     async def close_quietly(self, handle):
-        try:
+        # The first error is the one reported: an error closing is dropped.
+        with contextlib.suppress(Exception):
             await self.close(handle)
-        except Exception:  # noqa: BLE001 - the first error is the one reported
-            pass
 
     async def delete(self):
         if self.credentials:
@@ -1312,9 +1312,9 @@ async def run_client(op, o, request):
             ArithmeticError,
         ) as exc:
             failure = Failure("failed", f"{type(exc).__name__}: {exc}")
-    if alive is not None and alive.done() and not alive.cancelled() and alive.exception() is not None:
-        if failure is None:
-            failure = Failure("connection-lost", f"keep-alive: {alive.exception()}")
+    if (failure is None and alive is not None and alive.done() and not alive.cancelled()
+            and alive.exception() is not None):
+        failure = Failure("connection-lost", f"keep-alive: {alive.exception()}")
 
     command_status = recorder.statuses[-1] if recorder.statuses else None
     command_statuses = None
@@ -1408,7 +1408,7 @@ def client_main(argv):
         if o.listen:
             if a.has("host"):
                 raise UsageError("--host does not go with --listen")
-            o.host, o.bind = None, a.str("bind-address", "0.0.0.0")
+            o.host, o.bind = None, a.str("bind-address", ALL_INTERFACES)
         else:
             if a.has("bind-address"):
                 raise UsageError("--bind-address goes with --listen")
@@ -1480,6 +1480,9 @@ def client_main(argv):
 
 DEFAULT_FIXTURE = "/fixtures/baseline/fixture.json"
 DEFAULT_READY_FILE = "/run/dnp3-interop/ready"
+# The default --bind-address: every interface of the container, as the
+# contract asks (bandit B104 warns of exactly this).
+ALL_INTERFACES = "0.0.0.0"  # nosec B104
 DEFAULT_CONTROL_SOCKET = "/run/dnp3-interop/control.sock"
 EXIT_FIXTURE_INVALID = 4
 
@@ -1870,7 +1873,7 @@ def server_main(argv):
         if a.has("frozen-event-policy"):
             raise UsageError("--frozen-event-policy: this outstation raises no frozen counter events")
         path = a.str("fixture", DEFAULT_FIXTURE)
-        bind = a.str("bind-address", "0.0.0.0")
+        bind = a.str("bind-address", ALL_INTERFACES)
         port = a.integer("port", 20000, 1, 65535)
         ready_file = a.str("ready-file", DEFAULT_READY_FILE)
         select_ms = a.integer("select-timeout-ms", 5000, 1, 3600000)

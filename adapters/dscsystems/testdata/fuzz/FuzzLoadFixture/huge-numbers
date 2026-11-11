@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"schemaVersion\":\"1.0\",\"name\":\"x\",\"outstation\":{\"address\":1e400,\"masterAddress\":-1},\"counters\":[{\"index\":65536,\"value\":18446744073709551616}]}")

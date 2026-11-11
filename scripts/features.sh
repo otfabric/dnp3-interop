@@ -938,6 +938,7 @@ suite() {
                 check "${pair}: [tls] ready event" "tls" "$(ready_transport "${name}")"
                 host="${name}"
                 run="tls_run ${client} ${host}"
+                # shellcheck disable=SC2329 # called by basics, through its run argument
                 tls_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" "${CLIENT_TLS[@]}"; }
                 basics "${pair}" tls "${run}"
                 doc=$(client "${client}" -- integrity-poll --host "${host}" --connect-timeout-ms 2000 --tls \
@@ -972,6 +973,7 @@ suite() {
             if wait_ready "${name}"; then
                 at_pair "udp.ready-event" "${pair}"
                 check "${pair}: [udp] ready event" "udp" "$(ready_transport "${name}")"
+                # shellcheck disable=SC2329 # called by basics, through its run argument
                 udp_run() { local a="$1" ipc="$2" ips="$3"; shift 3; client "${a}" --ip "${ipc}" -- "$@" --host "${ips}" --transport udp; }
                 basics "${pair}" udp "udp_run ${client} ${ip_client} ${ip_server}"
             else
@@ -1695,6 +1697,7 @@ suite() {
                 start "${server}" "${name}" -- "${sa256[@]}"
             fi
             if wait_ready "${name}"; then
+                # shellcheck disable=SC2329 # called by basics, through its run argument
                 sa256_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" --sa-update-key "${SA_KEY_256}" --sa-user 3; }
                 basics "${pair}" sa-aes-256 "sa256_run ${client} ${name}"
                 sleep 0.3
@@ -1722,7 +1725,7 @@ suite() {
         reference="" ref_client=""
         for f in "${WORK}/agree-${server}/${kind}-"*; do
             [[ -f "${f}" ]] || continue
-            client="${f##*/${kind}-}"
+            client="${f##*/"${kind}"-}"
             at "files.agrees-${kind}" "${client}" "${server}"
             if [[ -z "${reference}" ]]; then reference=$(cat "${f}"); ref_client="${client}"
             elif ! check "${client}->${server}: [files] file-${kind} as ${ref_client}->${server} reports it" \

@@ -17,11 +17,11 @@ self-tested as a candidate.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.2 | v0.8.2 | Go module `github.com/dscsystems/go-dnp3@v0.8.2` (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`), checksum in `go.sum` | independent, Go |
-| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) | v0.3.0 | v0.3.0 | Go module `github.com/cB-Sigma/dnp3@v0.3.0` (commit `03ffd5c94f8e7a7538d2466d6b8ca27d9cd9c995`), checksum in `go.sum` | independent, Go |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) | v0.3.1 | v0.3.1 | Go module `github.com/cB-Sigma/dnp3@v0.3.1` (commit `91f2f33c90e978e48bf67d20bca1022e769ed4d6`), checksum in `go.sum` | independent, Go |
 | `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) (master only) | 1.0.1 | 1.0.1 | PyPI wheel `nfm-dnp3==1.0.1`, hash in `requirements.txt` (tag commit `8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6`) | independent, Python |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
-(trixie), Go 1.27.2, Python 3.14.8.
+(trixie), Go 1.27.4, Python 3.14.10.
 
 The pins live in the Dockerfiles, the adapters' `go.mod` and `requirements.txt`, and are mirrored in [versions.yaml](../versions.yaml);
 `scripts/check-versions.sh` keeps them in step. The **Upstream**
@@ -62,11 +62,11 @@ does not declare is skipped for that pairing and counted as such.
 
 | Client → Server | opendnp3 | dscsystems | cbsigma |
 |-----------------|:--------:|:----------:|:-------:|
-| **opendnp3** | pass | pass ² | pass ⁵ ⁶ |
-| **dscsystems** | pass ¹ | pass ¹ ² ³ | pass ¹ ⁵ |
-| **dnp3py** | pass ⁴ | pass ² ⁴ | pass ⁴ ⁵ |
-| **cbsigma** | pass | pass ² | pass ⁵ |
-| **nfmdnp3** | known bug ⁷ | known bug ⁷ | known bug ⁷ |
+| **opendnp3** | pass | pass ² | pass ⁵ |
+| **dscsystems** | pass ¹ | pass ¹ ² ³ | pass ¹ |
+| **dnp3py** | pass ⁴ | pass ² ⁴ | pass ⁴ |
+| **cbsigma** | pass | pass ² | pass |
+| **nfmdnp3** | known bug ⁶ | known bug ⁶ | known bug ⁶ |
 
 ¹ without all-objects reads, restart delays and class assignment, which the
 DSC go-dnp3 master cannot send or report; with direct operate no ack, which it
@@ -77,11 +77,10 @@ can send.
 the dnp3py master sends. dnp3py has no server column: it cannot serve the
 baseline. How the outstations compare on the `dnp3py` fixture is below
 ([dnp3py's outstation: the dnp3py fixture](#dnp3pys-outstation-the-dnp3py-fixture)).
-⁵ with the known bug of the cB-Sigma dnp3 outstation's FREEZE AND CLEAR, below.
-⁶ with the known bug of the opendnp3 master, which reads the coarse restart
+⁵ with the known bug of the opendnp3 master, which reads the coarse restart
 delay (g52v1, in seconds) that the cB-Sigma dnp3 outstation sends as
 milliseconds.
-⁷ nfm-dnp3 1.0.1 sends the application confirm as CONFIRMED_USER_DATA without
+⁶ nfm-dnp3 1.0.1 sends the application confirm as CONFIRMED_USER_DATA without
 a link reset, so it stalls against every outstation that asks for a
 confirmation, as the baseline does with its null unsolicited response. On the
 `dnp3py` fixture, which sends no unsolicited responses, it passes against
@@ -93,8 +92,9 @@ runs the self-tests on the published images, natively on linux/amd64 and
 linux/arm64, and attaches them as `compatibility-report.md` to the
 [GitHub release](https://github.com/otfabric/dnp3-interop/releases).
 
-OT Fabric's own image (`own/go-dnp3`, go-dnp3 v1.6.0) is in no release, so
-no qualification runs it. Its workflow runs the same self-tests against the
+OT Fabric's own image (`own/go-dnp3`) is built from the latest go-dnp3
+release when its workflow runs, not from a version pinned here, and is in no
+release, so no qualification runs it. Its workflow runs the same self-tests against the
 reference images of the latest release. With it as a fourth stack, on
 linux/arm64 locally on 2026-11-02 against the v0.9.0 references: smoke 63
 passed; cross-stack on the baseline 1375 passed, 5 known bugs, 90 skipped;
@@ -396,25 +396,27 @@ eight bits of each octet.
 
 ## Findings
 
-### cB-Sigma dnp3 (v0.3.0)
+### cB-Sigma dnp3 (v0.3.1)
 
-Found by the self-tests, each a row of [tests/known-bugs.tsv](../tests/known-bugs.tsv):
+v0.3.0 had four defects the self-tests found, each fixed in v0.3.1
+(cB-Sigma/dnp3#2 to #5, pull requests #6 to #9), whose rows have left
+[tests/known-bugs.tsv](../tests/known-bugs.tsv):
 
-- The outstation answers a request with the same sequence number and octets
+- The outstation answered a request with the same sequence number and octets
   as the previous one from its cache, READ included and across connections,
-  so a master that reconnects and polls again can get the old values and
+  so a master that reconnected and polled again could get the old values and
   events already confirmed.
-- FREEZE AND CLEAR clears the counters without a counter event.
-- GET_FILE_INFO answers with the name of the request (the full path), where
+- FREEZE AND CLEAR cleared the counters without a counter event.
+- GET_FILE_INFO answered with the name of the request (the full path), where
   the other outstations answer with the name of the file.
-- After a keep-alive the master waits its response timeout before it starts
-  the keep-alive timer again, so keep-alives come at the interval plus that
+- After a keep-alive the master waited its response timeout before it started
+  the keep-alive timer again, so keep-alives came at the interval plus that
   timeout.
 
-These four are reported upstream with fixes (cB-Sigma/dnp3#2 to #5, pull
-requests #6 to #9) and tracked here by issues with the label `upstream`.
+v0.3.1 adds no API, so the adapter's capabilities are those of v0.3.0.
 
-Two differ from this contract and not, as far as could be established, from
+Two behaviours, unchanged in v0.3.1 and still rows of the known bugs, differ
+from this contract and not, as far as could be established, from
 IEEE 1815-2012: FREEZE AT TIME with a time already past is done at once
 instead of refused, and the class 0 response with secure authentication
 includes the g121 security statistics.

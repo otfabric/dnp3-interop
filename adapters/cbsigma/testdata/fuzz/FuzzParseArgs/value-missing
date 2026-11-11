@@ -1,0 +1,2 @@
+go test fuzz v1
+string("--host\x00srv\x00--port")

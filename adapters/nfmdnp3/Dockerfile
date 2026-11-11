@@ -14,9 +14,9 @@
 # Docker Hub serves exactly the same images; CI uses one to stay clear of
 # Docker Hub's pull rate limit (see the Makefile).
 ARG BASE_REGISTRY=docker.io/library
-ARG PYTHON_DIGEST=sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da3aec724f50eed4a
+ARG PYTHON_DIGEST=sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
-FROM ${BASE_REGISTRY}/python:3.14.8-slim-trixie@${PYTHON_DIGEST}
+FROM ${BASE_REGISTRY}/python:3.14.10-slim-trixie@${PYTHON_DIGEST}
 
 # The release pin. "make candidate-nfmdnp3 CANDIDATE_VERSION=<version>" overrides it to try another
 # version without touching the pin (installed without a hash then).
@@ -61,13 +61,13 @@ LABEL org.opencontainers.image.title="dnp3-interop-nfmdnp3" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${ADAPTER_VERSION}"
 
-USER interop
+USER 10001
 EXPOSE 20000
 
 # The image has no server, so the readiness file is never written; the check
 # is the contract's all the same.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=10s --retries=15 \
-  CMD test -f /run/dnp3-interop/ready
+  CMD ["test", "-f", "/run/dnp3-interop/ready"]
 
 ENTRYPOINT ["/usr/local/bin/dnp3-interop"]
 CMD ["server"]

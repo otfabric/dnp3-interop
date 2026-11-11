@@ -47,7 +47,7 @@ export REGISTRY VERSION
 
 # image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint lint-shell lint-docker lint-python test-scripts test-go fuzz vulncheck images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -55,23 +55,24 @@ help: ## Show this help
 
 all: validate images ## Validate fixtures and build the local images
 
-ci: validate lint images image-dnp3c documents ## Full local CI: validate, lint, build, smoke and cross-stack self-test, document schemas
+ci: validate lint test-scripts test-go vulncheck images image-dnp3c documents ## Full local CI: validate, lint, script and Go tests, govulncheck, build, smoke and cross-stack self-test, document schemas
 	@echo ""
 	@echo "All local CI checks passed."
 
 # ── Validation ───────────────────────────────────────────────────────────────
 
-validate: ## Validate every fixture against the schema and the cross-field rules; check versions.yaml and RELEASE.md
+validate: ## Validate every fixture against the schema and the cross-field rules; check versions.yaml, RELEASE.md and (with GH_TOKEN) that the issues of tests/known-bugs.tsv are open
 	@scripts/check-versions.sh
 	@scripts/release-notes.sh > /dev/null && echo "ok   RELEASE.md has the notes of interop_version"
+	@scripts/check-known-bugs.sh
 	@python3 -m unittest discover -q -s scripts -p 'test_*.py'
 	@echo "Validating fixtures..."
 	@if python3 -c 'import jsonschema' 2>/dev/null; then \
 		python3 scripts/validate-fixtures.py --require-schema; \
 	else \
 		echo "(jsonschema not installed locally: running the validator in a container)"; \
-		$(RETRY) docker run --rm -v "$(CURDIR):/work:ro" -w /work $(TOOLS_REGISTRY)/library/python:3.12-slim \
-			sh -c 'pip install -q --root-user-action=ignore jsonschema && python scripts/validate-fixtures.py --require-schema'; \
+		$(RETRY) docker run --rm -v "$(CURDIR):/work:ro" -w /work $(PYTHON_IMAGE) \
+			sh -c '$(PIP_INSTALL) scripts/requirements.txt && python scripts/validate-fixtures.py --require-schema'; \
 	fi
 
 documents: ## Run the self-tests keeping every document, and validate them against schemas/
@@ -83,17 +84,80 @@ documents: ## Run the self-tests keeping every document, and validate them again
 	@if python3 -c 'import jsonschema' 2>/dev/null; then \
 		python3 scripts/validate-documents.py reports; \
 	else \
-		$(RETRY) docker run --rm -v "$(CURDIR):/work:ro" -w /work $(TOOLS_REGISTRY)/library/python:3.12-slim \
-			sh -c 'pip install -q --root-user-action=ignore jsonschema && python scripts/validate-documents.py reports'; \
+		$(RETRY) docker run --rm -v "$(CURDIR):/work:ro" -w /work $(PYTHON_IMAGE) \
+			sh -c '$(PIP_INSTALL) scripts/requirements.txt && python scripts/validate-documents.py reports'; \
 	fi
 
-lint: ## Shellcheck the scripts (the installed shellcheck, or a container when there is none)
-	@echo "Linting scripts..."
-	@if command -v shellcheck >/dev/null 2>&1; then \
-		shellcheck --severity=warning -x -P scripts scripts/*.sh; \
-	else \
-		$(RETRY) docker run --rm -v "$(CURDIR):/mnt:ro" $(TOOLS_REGISTRY)/koalaman/shellcheck:stable --severity=warning -x -P scripts scripts/*.sh; \
-	fi
+# The linters, the test runner and the Python of the validators, pinned by
+# version and digest (multi-arch indexes), pulled through TOOLS_REGISTRY. The
+# Python packages are pinned with their hashes in scripts/requirements*.txt.
+SHELLCHECK_IMAGE ?= $(TOOLS_REGISTRY)/koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+HADOLINT_IMAGE   ?= $(TOOLS_REGISTRY)/hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+PYTHON_IMAGE     ?= $(TOOLS_REGISTRY)/library/python:3.12.16-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+BATS_IMAGE       ?= $(TOOLS_REGISTRY)/bats/bats:1.14.0@sha256:5322b877351fda0cc435de8c6116de7d0a2ec79d7c680132a0ef329a633bc66f
+PIP_INSTALL      := pip install -q --root-user-action=ignore --disable-pip-version-check --require-hashes --only-binary=:all: -r
+
+# What is under version control (no build output, no other worktree).
+SHELL_SCRIPTS = $(shell git ls-files '*.sh' '*.bats')
+DOCKERFILES   = $(shell git ls-files '*Dockerfile')
+PYTHON_FILES  = $(shell git ls-files '*.py')
+
+lint: lint-shell lint-docker lint-python ## Lint the shell scripts, the Dockerfiles and the Python files (pinned linters in containers)
+
+lint-shell: ## Shellcheck every shell script and test, at the default severity
+	@echo "Linting shell scripts..."
+	@$(RETRY) docker run --rm -v "$(CURDIR):/mnt:ro" -w /mnt $(SHELLCHECK_IMAGE) -x -P scripts $(SHELL_SCRIPTS)
+
+lint-docker: ## Hadolint every Dockerfile
+	@echo "Linting Dockerfiles..."
+	@for f in $(DOCKERFILES); do \
+		$(RETRY) docker run --rm -i $(HADOLINT_IMAGE) hadolint --file-path-in-report "$$f" - < "$$f" || exit 1; \
+	done
+
+lint-python: ## Ruff and bandit on every Python file
+	@echo "Linting Python..."
+	@$(RETRY) docker run --rm -v "$(CURDIR):/work:ro" -w /work $(PYTHON_IMAGE) sh -c '\
+		$(PIP_INSTALL) scripts/requirements-lint.txt \
+		&& ruff check --no-cache $(PYTHON_FILES) \
+		&& bandit -q -c bandit.yaml $(PYTHON_FILES)'
+
+test-scripts: ## Unit tests of the shell helpers and check-versions.sh (bats, in a container)
+	@echo "Testing scripts..."
+	@$(RETRY) docker run --rm -v "$(CURDIR):/code:ro" -w /code $(BATS_IMAGE) tests/scripts
+
+# ── Go modules: tests, fuzzing, vulnerabilities ─────────────────────────────
+# In the golang image the adapters are built with (the digest of the
+# Dockerfiles; scripts/check-versions.sh checks it), so the tests and
+# govulncheck see the Go of the images. The module cache is a Docker volume.
+
+GO_IMAGE ?= $(BASE_REGISTRY)/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9
+GOVULNCHECK_VERSION ?= v1.9.0
+GO_MODULES := adapters/cbsigma adapters/dscsystems own/go-dnp3
+# The modules with fuzz targets, and how long each target runs.
+FUZZ_MODULES := adapters/cbsigma adapters/dscsystems
+FUZZTIME ?= 30s
+go_run = $(RETRY) docker run --rm -v "$(CURDIR):/src" -v dnp3-interop-gomod:/go/pkg/mod -w /src/$(1) \
+	-e GOFLAGS=-mod=readonly -e GOTOOLCHAIN=local $(3) $(GO_IMAGE) sh -c '$(2)'
+
+test-go: ## Vet and test the Go modules (the fuzz targets' seeds included)
+	@for m in $(GO_MODULES); do \
+		echo "Testing $$m..."; \
+		$(call go_run,$$m,test -z "$$(gofmt -l .)" && go vet ./... && go test -count=1 ./...) || exit 1; \
+	done
+
+fuzz: ## Run every fuzz target of the Go adapters for FUZZTIME each
+	@for m in $(FUZZ_MODULES); do \
+		for t in $$(grep -ho '^func Fuzz[A-Za-z0-9]*' $$m/*_test.go | sed 's/^func //'); do \
+			echo "Fuzzing $$m $$t for $(FUZZTIME)..."; \
+			$(call go_run,$$m,go test -run "^$$" -fuzz "^$$FUZZ\$$" -fuzztime $(FUZZTIME) .,-e FUZZ=$$t) || exit 1; \
+		done; \
+	done
+
+vulncheck: ## govulncheck every Go module, with the Go of the images
+	@for m in $(GO_MODULES); do \
+		echo "govulncheck $$m..."; \
+		$(call go_run,$$m,go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...) || exit 1; \
+	done
 
 # ── Local single-arch images (loaded into Docker; used by smoke and interop) ──
 

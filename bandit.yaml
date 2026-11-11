@@ -1,0 +1,7 @@
+# Bandit (make lint). Skipped, for every Python file of this repository:
+#   B404  importing subprocess: each call is checked by B603 and B607 instead,
+#   B603  subprocess without a shell: the calls run fixed argument lists (git,
+#         docker, bash with a test's own script), never input from a document,
+#   B607  a partial executable path: git, docker and bash are taken from PATH
+#         on purpose; the scripts run on developer machines and runners alike.
+skips: ["B404", "B603", "B607"]

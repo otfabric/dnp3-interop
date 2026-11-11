@@ -29,6 +29,47 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.12.0
+
+**Date:** 2026-11-11
+**Previous release:** v0.11.2
+
+Container contract 1.5 and fixture format 1.0 are unchanged. A minor release: the cbsigma adapter moves to a new upstream version, and every image to new base images.
+
+### Changed
+
+- **cbsigma: cB-Sigma dnp3 v0.3.1** (commit `91f2f33c`), with cB-Sigma iotsec v0.2.0 (commit `c84d6be1`). v0.3.1 fixes the four defects the self-tests found in v0.3.0 (cB-Sigma/dnp3#2 to #5): FREEZE AND CLEAR now makes counter events; a repeated READ, and a request on a new connection, get a new response instead of the cached one; GET_FILE_INFO answers with the base name of the file; idle keep-alives come at the keep-alive interval. Their four rows have left `tests/known-bugs.tsv`. v0.3.1 adds no API, so the capabilities of the adapter are unchanged. iotsec v0.2.0 only adds implementations of its interfaces; cB-Sigma dnp3 uses none of them.
+- **Why the v0.3.1 candidate failed** (Upstream workflow, #77): two rows of `tests/known-bugs.tsv` record behaviour of the outstation that differs from the contract but not, as far as could be established, from IEEE 1815-2012 (FREEZE AT TIME with a time already past is done at once; the class 0 response with secure authentication includes the g121 statistics). A row names one upstream version, and these named v0.3.0, so on v0.3.1, which keeps both behaviours, five feature checks failed. Both rows now name v0.3.1, with links into its source; the notes of the Upstream issue and CONTRIBUTING.md say to carry such rows over with a pin.
+- **Base images**: `golang:1.27.4-trixie` (from 1.27.2, whose standard library has GO-2026-6809, in crypto/x509, which govulncheck finds reachable in the cbsigma and dscsystems adapters, and GO-2026-6859, in net/http, which none reaches), `python:3.14.10-slim-trixie` (from 3.14.8) and a new `debian:trixie-slim` digest. govulncheck finds nothing in the three Go modules with Go 1.27.4.
+- **Debian packages are pinned**: the Debian stages install from the snapshot of the Debian archive their base image was built from (`DEBIAN_SNAPSHOT`, 20261104T212339Z) at fixed versions, mirrored in `versions.yaml` (`debian_snapshot`, `debian_packages`) and checked by `scripts/check-versions.sh`.
+- **Dockerfiles**: `USER 10001` (the uid of the contract) instead of the user name, the HEALTHCHECK in exec form, and `pipefail` for every `RUN` with a pipe. The images behave as before.
+
+### Added
+
+- **Static checks in CI**, every tool pinned by version and digest and listed in `versions.yaml` (`tooling`): hadolint on every Dockerfile, shellcheck on every shell script at its default severity (instead of `warning`), ruff and bandit on the Python files (`make lint`), and govulncheck on the cbsigma, dscsystems and own/go-dnp3 modules in the golang image of the adapters (`make vulncheck`). The Python packages of the workflows and of `make validate` are pinned with their hashes (`scripts/requirements.txt`, `scripts/requirements-lint.txt`), and so is the Python image of the Makefile's fallback.
+- **Tests of the tooling**: bats tests of the helpers of `scripts/lib.sh`, of `scripts/check-versions.sh` (each kind of pin changed in a copy of the build files) and of `scripts/check-known-bugs.sh` (`make test-scripts`); Go tests and fuzz targets of the Go adapters' own parsing (fixtures and command lines in both, the link frames the dscsystems adapter sniffs), seeded from `fixtures/` and `testdata/fuzz/` (`make test-go fuzz`). The CI job **Go tests, fuzzing, govulncheck** runs them.
+- **Fault checks in the smoke test**: every outstation gets line noise and a frame with a bad header CRC, a frame cut off in its user data, and a connection reset with its answer unread, and must still run and answer an integrity poll afterwards.
+- **`scripts/check-known-bugs.sh`**: fails when an upstream issue that `tests/known-bugs.tsv` cites is closed. The CI validate job runs it; `make validate` skips it without `GH_TOKEN`.
+
+### Fixed
+
+- **`scripts/check-versions.sh`** could stop half-way, now and then: `sed ... | head -1` under `pipefail` ended with SIGPIPE when an `ARG` appears twice in a Dockerfile. sed now stops at the first match itself.
+- shellcheck findings at the default severity (`scripts/features.sh`: a pattern expansion that was not quoted), ruff findings in the Python scripts and the dnp3py adapter (no change in behaviour); `scripts/latest-upstream.py` fetches https URLs only.
+
+### Tooling
+
+- Trivy 0.76.2 (from 0.76.0) for the release qualification.
+- The shared `otfabric/.github` upstream actions v3.6.0 (from v3.1.1; their inputs are unchanged).
+- The Upstream workflow's base-image check reports a digest that moved for the same tag, not a newer patch tag of the same minor: that check lives in `otfabric/.github`.
+
+### Docs
+
+- docs/COMPATIBILITY.md: cB-Sigma dnp3 v0.3.1 and what it fixed; the own image is built from the latest go-dnp3 release when its workflow runs, not from a version pinned here.
+- SECURITY.md: v0.12.x supported; the static checks; Trivy sees the Go modules of the dscsystems and cbsigma binaries and the Python packages of the dnp3py and nfmdnp3 images.
+- README.md, THIRD_PARTY_NOTICES.md, CONTRIBUTING.md: the new pins, targets and how to move the Debian snapshot.
+
+---
+
 ## v0.11.2
 
 **Date:** 2026-11-03

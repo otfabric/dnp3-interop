@@ -97,8 +97,8 @@ class Records(unittest.TestCase):
 
     def run_shell(self, body):
         with tempfile.TemporaryDirectory() as d:
-            script = 'set -u; source "%s/results.sh"; D=%s; %s' % (HERE, d, body)
-            p = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+            script = f'set -u; source "{HERE}/results.sh"; D={d}; {body}'
+            p = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
             with open(os.path.join(d, "results.json")) as f:
                 return p.returncode, json.load(f)
 
@@ -107,7 +107,7 @@ class Records(unittest.TestCase):
         self.assertEqual((code, doc["summary"]["pass"], doc["reproduce"]), (0, 1, "make t"))
 
     def test_a_run_that_stops_early_is_an_infra_error(self):
-        code, doc = self.run_shell('results_open t $D "make t"; at a.b x y; result pass; results_abort')
+        _, doc = self.run_shell('results_open t $D "make t"; at a.b x y; result pass; results_abort')
         self.assertEqual(doc["summary"]["infra-error"], 1)
         self.assertEqual(doc["results"][-1]["id"], "harness.aborted")
 

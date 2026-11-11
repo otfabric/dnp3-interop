@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: otfabric/.github/actions/upstream-images@v3.1.1
+      - uses: otfabric/.github/actions/upstream-images@v3.6.0
 
   candidate:
     name: ${{ matrix.adapter }}
@@ -66,7 +66,7 @@ jobs:
       - name: Build and self-test at the latest release
         id: test
         if: steps.resolve.outputs.update == 'yes'
-        uses: otfabric/.github/actions/upstream-candidate@v3.1.1
+        uses: otfabric/.github/actions/upstream-candidate@v3.6.0
         with:
           name: ${{ matrix.adapter }}
           pinned: ${{ steps.resolve.outputs.pin }}
@@ -88,7 +88,7 @@ jobs:
 
       - name: Table row
         if: always()
-        uses: otfabric/.github/actions/upstream-row@v3.1.1
+        uses: otfabric/.github/actions/upstream-row@v3.6.0
         with:
           component: ${{ matrix.adapter }}
           source: ${{ steps.resolve.outputs.source }}
@@ -110,7 +110,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: otfabric/.github/actions/upstream-report@v3.1.1
+      - uses: otfabric/.github/actions/upstream-report@v3.6.0
         with:
           needs: ${{ toJSON(needs) }}
           notes: |
@@ -123,6 +123,9 @@ jobs:
               `CANDIDATE_SHA=<commit>`); a `failure` needs the self-test log of the run first. A
               release that fails the self-tests stays a candidate: list its bug in
               `tests/known-bugs.tsv`. A *known bug ... did not reproduce* is good news: drop it
-              from `tests/known-bugs.tsv`.
+              from `tests/known-bugs.tsv`. A row names one upstream version: a row of the pin
+              whose behaviour the new release keeps (a difference from the contract, say) does
+              not cover the candidate, which then fails on it until the row is copied for the
+              new version.
             - **Base image:** replace the digest in every file that pins it.
             - Record the change in `docs/COMPATIBILITY.md` and `RELEASE.md`.

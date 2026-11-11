@@ -4,7 +4,7 @@
 # adapters/{dscsystems,cbsigma}/go.mod are the source of truth for a build: scripts/check-versions.sh fails when this
 # file disagrees with them.
 
-interop_version: "0.11.2"
+interop_version: "0.12.0"
 contract_version: "1.5"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -68,14 +68,14 @@ implementations:
     upstream: "cB-Sigma dnp3"
     repository: "https://github.com/cB-Sigma/dnp3"
     module: "github.com/cB-Sigma/dnp3"
-    version: "v0.3.0"            # latest release
-    revision: "03ffd5c94f8e7a7538d2466d6b8ca27d9cd9c995"
+    version: "v0.3.1"            # latest release
+    revision: "91f2f33c90e978e48bf67d20bca1022e769ed4d6"
     license: "Apache-2.0"
     language: "Go"
     independent_engine: true
     roles: [server, client]
     dependencies:
-      iotsec: "github.com/cB-Sigma/iotsec v0.1.0 ed102883f2128794b49a62a280dd400102665d91 (Apache-2.0)"
+      iotsec: "github.com/cB-Sigma/iotsec v0.2.0 c84d6be103419e74e4598c2c24458f346f7718dd (Apache-2.0)"
       serial: "github.com/goburrow/serial v0.1.0 (MIT)"
 
   nfmdnp3:
@@ -122,11 +122,40 @@ own_implementations:
 dependencies:
   nlohmann_json: "debian trixie nlohmann-json3-dev"   # opendnp3 adapter, MIT, header-only
 
+# Debian packages of the debian:trixie-slim stages, installed from this
+# snapshot of the Debian archive (snapshot.debian.org; the date the base image
+# at its digest was built from) at these versions. The Dockerfiles pin them:
+# scripts/check-versions.sh fails when a Dockerfile installs a package or
+# names a snapshot that is not here. Move them with the base image digest.
+debian_snapshot: "20261104T212339Z"
+debian_packages:
+  ca-certificates: "20250419+deb13u1"
+  cmake: "3.31.6-2"
+  g++: "4:14.2.0-1"
+  git: "1:2.47.3-0+deb13u1"
+  libssl-dev: "3.5.7-1~deb13u3"
+  libssl3t64: "3.5.7-1~deb13u3"
+  make: "4.4.1-2"
+  nlohmann-json3-dev: "3.11.3-2.1"
+  socat: "1.8.0.3-1+deb13u1"
+
 base_images:
-  # Digests recorded 2026-10-30; the Dockerfiles pin these by digest.
-  debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4"
-  python_3_14_8_slim_trixie: "docker.io/library/python:3.14.8-slim-trixie@sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da3aec724f50eed4a"
-  golang_1_27_2_trixie: "docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
+  # Digests recorded 2026-11-11; the Dockerfiles pin these by digest.
+  debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2"
+  python_3_14_10_slim_trixie: "docker.io/library/python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f"
+  golang_1_27_4_trixie: "docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9"
+
+# The tooling of the Makefile and the workflows, pinned by version and digest
+# (multi-arch indexes; the Makefile pulls the images through TOOLS_REGISTRY).
+# scripts/check-versions.sh fails when the Makefile or scripts/qualify.sh
+# names another. The Python packages are in scripts/requirements*.txt.
+tooling:
+  shellcheck: "koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d"
+  hadolint: "hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d"
+  python: "library/python:3.12.16-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b"
+  bats: "bats/bats:1.14.0@sha256:5322b877351fda0cc435de8c6116de7d0a2ec79d7c680132a0ef329a633bc66f"
+  trivy: "ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
+  govulncheck: "golang.org/x/vuln/cmd/govulncheck@v1.9.0"   # run with the golang image of the adapters
 
 # Test tools: not implementations, no adapter.
 tools:
