@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: MIT
 # Unit tests of the helpers of scripts/lib.sh that need neither Docker nor jq.
 # Run with "make test-scripts".
+#
+# Every @test runs in a subshell of its own, so that what one test sets never
+# reaches another: shellcheck's warnings about exactly that are not findings.
+# shellcheck disable=SC2030,SC2031
 
 setup() {
     unset REGISTRY VERSION RUN_ID RESULTS_FILE VERBOSE SERVER_TAG
@@ -31,6 +35,7 @@ setup() {
 
 @test "the network and server names carry the run id" {
     RUN_ID=4242
+    # shellcheck source=scripts/lib.sh
     source "${BATS_TEST_DIRNAME}/../../scripts/lib.sh"
     [ "${NETWORK}" = "dnp3-interop-4242" ]
     run server_name dscsystems
