@@ -47,7 +47,7 @@ export REGISTRY VERSION
 
 # image-%, smoke-% and candidate-% are pattern rules, which make ignores for .PHONY
 # targets: they depend on FORCE instead.
-.PHONY: help all ci validate documents lint lint-shell lint-docker lint-python test-scripts test-go fuzz vulncheck images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-opendnp3 run-dscsystems capabilities clean FORCE
+.PHONY: help all ci validate documents lint lint-shell lint-docker lint-python lint-go test-scripts test-go fuzz vulncheck images smoke interop features qualify report print-adapters buildx publish buildx-setup print-published-adapters publish-arch publish-manifest digests run-opendnp3 run-dscsystems capabilities clean FORCE
 FORCE:
 
 help: ## Show this help
@@ -102,7 +102,7 @@ SHELL_SCRIPTS = $(shell git ls-files '*.sh' '*.bats')
 DOCKERFILES   = $(shell git ls-files '*Dockerfile')
 PYTHON_FILES  = $(shell git ls-files '*.py')
 
-lint: lint-shell lint-docker lint-python ## Lint the shell scripts, the Dockerfiles and the Python files (pinned linters in containers)
+lint: lint-shell lint-docker lint-python lint-go ## Lint the shell scripts, the Dockerfiles, the Python files and the Go modules (pinned linters in containers)
 
 lint-shell: ## Shellcheck every shell script and test, at the default severity
 	@echo "Linting shell scripts..."
@@ -121,6 +121,14 @@ lint-python: ## Ruff and bandit on every Python file
 		&& ruff check --no-cache $(PYTHON_FILES) \
 		&& bandit -q -c bandit.yaml $(PYTHON_FILES)'
 
+# gosec on every Go module, tests included, with the Go of the images. No
+# exclusions and no #nosec: a finding is fixed in the code.
+lint-go: ## gosec on every Go module, tests included (in the golang image of the adapters)
+	@for m in $(GO_MODULES); do \
+		echo "gosec $$m..."; \
+		$(call go_run,$$m,go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -tests ./...) || exit 1; \
+	done
+
 test-scripts: ## Unit tests of the shell helpers and check-versions.sh (bats, in a container)
 	@echo "Testing scripts..."
 	@$(RETRY) docker run --rm -v "$(CURDIR):/code:ro" -w /code $(BATS_IMAGE) tests/scripts
@@ -132,6 +140,7 @@ test-scripts: ## Unit tests of the shell helpers and check-versions.sh (bats, in
 
 GO_IMAGE ?= $(BASE_REGISTRY)/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9
 GOVULNCHECK_VERSION ?= v1.9.0
+GOSEC_VERSION ?= v2.30.0
 GO_MODULES := adapters/cbsigma adapters/dscsystems own/go-dnp3
 # The modules with fuzz targets, and how long each target runs.
 FUZZ_MODULES := adapters/cbsigma adapters/dscsystems
