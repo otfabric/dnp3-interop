@@ -27,7 +27,7 @@ docker run -d --name go-dnp3 -p 127.0.0.1:20000:20000 ghcr.io/otfabric/dnp3-inte
 until docker exec go-dnp3 test -f /run/dnp3-interop/ready; do sleep 0.1; done
 ```
 
-`<tag>` is a go-dnp3 version such as `v1.12.0`, or `latest`, the newest one
+`<tag>` is a go-dnp3 version such as `v1.13.0`, or `latest`, the newest one
 published. A rebuild of a version replaces its tag, so pin the digest if you need
 an exact build. The digest is in the summary of the
 [workflow run](https://github.com/otfabric/dnp3-interop/actions/workflows/own-go-dnp3.yml),

@@ -36,6 +36,10 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged. A patch release: every gosec v2.30.0 finding in the Go code is fixed in the code, with no exclusions and no `#nosec`. Standalone `gosec -tests ./...` per module, before: cbsigma 74, dscsystems 63, own/go-dnp3 85 (on macOS), and 2 more in own/go-dnp3's Linux-only serial code; after: 0 in each module, on macOS and on Linux. gosec findings are fixed in the code. gosec does not run in this repository's public lint or CI (otfabric/engineering policy GO-014, ADR-0011): a maintainer scans on their own machine with `make sast REPO=dnp3-interop` from otfabric/engineering before each release, and accepted findings are kept in a private repository.
 
+### Changed
+
+- **own/go-dnp3** builds on go-dnp3 v1.13.0 (from v1.12.0); the adapter's options are unchanged.
+
 ### Fixed
 
 - **Integer conversions (G115)**: flag, fixture and length values reach the protocol fields through checked conversions (`convert.go` in each module) instead of plain conversions. Every value was already bounded by the flag or fixture checks, so no input that worked before fails now; a bound that ever disagreed with a field's width is a usage error (exit 2) for a flag and an invalid fixture (exit 4) for a fixture, instead of a truncated value. A file of more than 4 GiB, which only a master could write, is an error of its size instead of a truncated size (cbsigma: the error of the store; own/go-dnp3: file status FATAL). The control handlers check the 32-bit index of a request against the 16 bits of a fixture index once, before looking the point up; the answers are unchanged. The dscsystems adapter reads the indexes of a start-stop range in 16 bits without wrapping and the 48-bit time of a security statistic directly into an int64; the own image reads a 48-bit attribute time the same way.
