@@ -2,6 +2,7 @@
 adapters/opendnp3/build/
 conformance/dnp3c/target/
 adapters/dscsystems/dnp3-interop
+own/go-dnp3/go-dnp3
 adapters/tmw/vendor/
 reports/
 qualify/
