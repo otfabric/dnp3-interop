@@ -95,12 +95,14 @@ linux/arm64, and attaches them as `compatibility-report.md` to the
 OT Fabric's own image (`own/go-dnp3`) is built from the latest go-dnp3
 release when its workflow runs, not from a version pinned here, and is in no
 release, so no qualification runs it. Its workflow runs the same self-tests against the
-reference images of the latest release. With it as a fourth stack, on
-linux/arm64 locally on 2026-11-02 against the v0.9.0 references: smoke 63
-passed; cross-stack on the baseline 1375 passed, 5 known bugs, 90 skipped;
-on the dnp3py fixture 1214 passed, 20 known bugs, 102 skipped; features 995
-passed, 9 known bugs, 180 skipped; none failed. Every known bug is one of the
-reference stacks'; go-dnp3's
+reference images of the latest release. With go-dnp3 v1.11.0 as a sixth
+stack, on linux/arm64 locally on 2026-11-12 against the five references of
+this branch (v0.12.0): smoke 75 passed; cross-stack on the baseline 2559
+passed, 164 known bugs, 124 skipped; on the dnp3py fixture 2522 passed, 38
+known bugs, 140 skipped; features 2827 passed, 92 known bugs, 405 skipped;
+none failed. Every known bug is one of the reference stacks'; one shows only
+against the own image and is in `own/go-dnp3/known-bugs.tsv` (see
+[Management functions](#management-functions)); go-dnp3's
 [permitted differences](#ot-fabric-go-dnp3-permitted-differences) pass.
 
 The cross-stack self-test runs one suite per server adapter at the same time
@@ -205,7 +207,16 @@ reference master can do it.
 
 Only DSC go-dnp3's outstation accepts the management functions (INITIALIZE DATA,
 INITIALIZE/START/STOP APPLICATION, SAVE CONFIGURATION); opendnp3's master and
-dnp3py's (requests built by the adapter) send them all. ACTIVATE CONFIG (31,
+dnp3py's (requests built by the adapter) send them all. OT Fabric's own outstation
+(`own/go-dnp3`, not a reference) accepts all five too, and answers SAVE
+CONFIGURATION with a time delay object (g52v2), as IEEE 1815-2012 4.4.12 asks;
+DSC go-dnp3 answers it with no object. opendnp3's master sends the five
+through `PerformFunction`, whose task takes a response with objects as failed
+([`EmptyResponseTask.cpp#L54-L58`](https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/master/EmptyResponseTask.cpp#L54-L58)),
+so `[manage] the five functions` fails from opendnp3 to the own image. That
+row is in `own/go-dnp3/known-bugs.tsv`, which only the own image's runs read
+(`EXTRA_KNOWN_BUGS`): a row of `tests/known-bugs.tsv` that no release run
+reproduces would be stale. ACTIVATE CONFIG (31,
 contract 1.5) is sent by dnp3py's master only (the adapter builds the g70v8
 file specification; 31 is not in dnp3py's `FunctionCode`) and answered by DSC
 go-dnp3's outstation only, through the library's `Config.ActivateConfig`,
@@ -398,8 +409,9 @@ eight bits of each octet.
 
 ### cB-Sigma dnp3 (v0.3.1)
 
-v0.3.0 had four defects the self-tests found, each fixed in v0.3.1
-(cB-Sigma/dnp3#2 to #5, pull requests #6 to #9), whose rows have left
+The self-tests found four behaviours of v0.3.0 that differed from the other
+stacks, each changed in v0.3.1 (cB-Sigma/dnp3#2 to #5, pull requests #6 to
+#9); three were defects, and the third below was not. Their rows have left
 [tests/known-bugs.tsv](../tests/known-bugs.tsv):
 
 - The outstation answered a request with the same sequence number and octets
@@ -408,7 +420,11 @@ v0.3.0 had four defects the self-tests found, each fixed in v0.3.1
   events already confirmed.
 - FREEZE AND CLEAR cleared the counters without a counter event.
 - GET_FILE_INFO answered with the name of the request (the full path), where
-  the other outstations answer with the name of the file.
+  the other outstations answered with the name of the file. This was not a
+  defect: IEEE 1815-2012 4.4.18 has the File Descriptor of the answer carry
+  the file name of the request. v0.3.1 answers with the last path element, as
+  DSC go-dnp3 and dnp3py do; the `[files] file-info` check takes both since
+  v0.12.0.
 - After a keep-alive the master waited its response timeout before it started
   the keep-alive timer again, so keep-alives came at the interval plus that
   timeout.
@@ -719,7 +735,7 @@ outstations in three ways that the standard and the contract leave open. None
 is a bug, and none is in `tests/known-bugs.tsv`: the checks accept both.
 
 **Binary events with relative time while unsynchronized.** An outstation of
-go-dnp3 v1.5.4 that requests time synchronization (`needTime` in the fixture,
+go-dnp3 v1.11.0 that requests time synchronization (`needTime` in the fixture,
 which the adapter maps to `server.WithTimeSync`) counts its time as
 unsynchronized until a master writes the time. A binary or double-bit input
 event recorded in that time and read by a class poll goes out with relative
@@ -736,16 +752,26 @@ between the control and the poll, with a second of slack. Result documents do
 not show the CTO, so the g51v2 is not checked. The dnp3py master leaves the
 time of a relative-time object null: such an object is taken at its value.
 
-**The association of security statistics.** go-dnp3 reports its security
-statistics (g121) and statistic events (g122) with the master's DNP3 address as
-the association (`server/auth.go`), 1 in the self-test; DSC go-dnp3, the only
-other outstation with them, reports 0. The check of `scripts/features.sh`
-requires an association on every statistic, the same for all 18, not a value.
+**The file name of GET_FILE_INFO.** Since go-dnp3 v1.11.0 the File Descriptor
+(g70v7) of the answer carries the file name of the request (`/readme.txt`), as
+IEEE 1815-2012 4.4.18 asks; the other outstations answer with the last path
+element (`readme.txt`). The `[files] file-info` checks of `scripts/features.sh`
+take the name without its leading slash.
 
 **The order of the attributes of a set.** The contract keeps the attributes in
 the order they arrived and does not fix that order: go-dnp3 serves g0v254 from
 the highest variation down, DSC go-dnp3 from the lowest up. The attribute
 checks of `scripts/features.sh` compare the attributes by variation.
+
+**Secure authentication, since go-dnp3 v1.11.0.** Two more behaviours follow
+IEEE 1815-2012 where the reference outstations do not, and the `[sa]` checks
+take both since v0.12.0. At every session key change the outstation reports
+the Authentication Failures statistic as an event (g122v2, index 2), whatever
+its threshold, as Table 7-6 asks; the `[sa]` checks leave g122 out of the
+polls they compare. A session key status request for a user it does not know
+is answered with the key status AUTH_FAIL (A.45.5), not with error 11, so
+the check of the reported refusals asks for error 1 (the wrong update key)
+only.
 
 ### dnp3py's outstation: master address, select expiry, event confirms
 

@@ -271,10 +271,11 @@ func runServer(argv []string) int {
 	if err == nil {
 		count, err = a.integer("outstations", 1, 1, 16)
 	}
-	// The library raises a frozen counter event when a freeze changes the
-	// frozen value and has no setting for it (contract 1.4).
-	if policy := a.str("frozen-event-policy", "on-change"); err == nil && policy != "on-change" {
-		err = usagef("--frozen-event-policy: this outstation has only the policy on-change")
+	// Since go-dnp3 v1.11.0 a freeze raises a frozen event for every frozen
+	// point with an event class, also when the value did not change
+	// (IEEE 1815-2012 11.9.5.2, 11.9.1.2), with no setting for it (contract 1.4).
+	if policy := a.str("frozen-event-policy", "always"); err == nil && policy != "always" {
+		err = usagef("--frozen-event-policy: this outstation has only the policy always")
 	}
 	_, hasUser := a["file-user"]
 	if _, hasPassword := a["file-password"]; err == nil && hasUser != hasPassword {

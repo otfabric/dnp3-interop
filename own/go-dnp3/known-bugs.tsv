@@ -1,0 +1,7 @@
+# Known bugs of the reference stacks that show only against this image, in the
+# format of tests/known-bugs.tsv (its header has the columns). The scripts read
+# it through EXTRA_KNOWN_BUGS, which own/go-dnp3/Makefile and the Own stack
+# workflow set. It is apart from tests/known-bugs.tsv because a row there that
+# no run reproduces is stale and fails the run, and the release runs do not
+# include this image.
+opendnp3:client	3.1.2	\[manage\] the five functions	the master takes SAVE_CONFIGURATION (and every function it sends through PerformFunction) as failed when the response carries objects, but IEEE 1815-2012 4.4.12 has the outstation answer SAVE_CONFIG with a time delay object (g52v1 or g52v2), as go-dnp3 does; the other outstations answer with no object	features	opendnp3-save-config-delay-refused	https://github.com/dnp3/opendnp3/blob/26b4c01e4839bbbda8866655e086471c4917ee53/cpp/lib/src/master/EmptyResponseTask.cpp#L54-L58

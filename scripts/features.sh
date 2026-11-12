@@ -67,6 +67,8 @@
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
 #              REPORT_DIR (keeps the outcome of every check when set, and adds
 #              them to results.json, interop-result-v1),
+#              EXTRA_KNOWN_BUGS (a further table of known bugs in the format
+#              of tests/known-bugs.tsv, for an image outside the release),
 #              ONLY=counters (runs the counters checks alone, for working on
 #              them; a release runs everything).
 
@@ -119,7 +121,7 @@ for adapter in "${ADAPTERS[@]}"; do
             printf '%s\t%s\t%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" "${bug_id}" "${bug_url}" >> "${WORK}/active"
             log "known bug in ${adapter} ${version}: ${bug_text}"
         fi
-    done < "${ROOT}/tests/known-bugs.tsv"
+    done < <(cat "${ROOT}/tests/known-bugs.tsv" ${EXTRA_KNOWN_BUGS:+"${EXTRA_KNOWN_BUGS}"})
 done
 has() { jq -e --arg f "$2" '.features[$f] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
 has_role() { jq -e --arg r "$2" '.roles[$r] == true' "${WORK}/caps-$1.json" >/dev/null 2>&1; }
@@ -493,14 +495,25 @@ basics() {
     check "${pair}: [${tag}] confirmed events are gone" "" "$(objects "$(${run} event-poll)")"
 }
 
+# without_statistic_events: a result document without its security statistic
+# events (g122); anything that is not one goes through as it is.
+without_statistic_events() {
+    local doc
+    doc=$(cat)
+    jq -c 'if (.objects | type) == "array" then .objects |= map(select(.group != 122)) else . end' <<<"${doc}" 2>/dev/null \
+        || printf '%s\n' "${doc}"
+}
+
 # ready_transport <container>: the transport of the ready event.
 ready_transport() { docker logs "$1" 2>&1 | jq -Rr 'fromjson? | select(.event? == "ready") | .transport' 2>/dev/null | head -1; }
 
 # Fixture values the file checks expect.
 README_HEX=$(jq -r '.files[] | select(.name == "/readme.txt") | .content' "${FILES_FIXTURE}")
 BLOCKS_HEX=$(jq -r '.files[] | select(.name == "/data/blocks.bin") | .content' "${FILES_FIXTURE}")
+# The file-info name without its leading slash: see the [files] file-info check.
 NORMALIZE_FILES='del(.adapter, .elapsedMs, .error.message?) | (.file?.time?) |= empty | (.files[]?.time?) |= empty
-  | (if .files then .files |= sort_by(.name) else . end)'
+  | (if .files then .files |= sort_by(.name) else . end)
+  | (if (.file.name? | type) == "string" then .file.name |= sub("^/"; "") else . end)'
 
 # reverse_op <server> <client> <tag> <client args...>: one operation with the
 # roles of the connection reversed; prints the master's result document. The
@@ -1055,8 +1068,11 @@ suite() {
                 jq -cS "${NORMALIZE_FILES}" <<<"${doc}" > "${WORK}/agree-${server}/ls-${client}" 2>/dev/null
                 doc=$(client "${client}" -- file-info --name /readme.txt --host "${name}")
                 at_pair "files.file-info" "${pair}"
+                # IEEE 1815-2012 4.4.18: the descriptor of the answer carries
+                # the file name of the request (/readme.txt); some outstations
+                # answer with the last path element. Both are taken.
                 check "${pair}: [files] file-info" "readme.txt file 43 rw-r--r--" \
-                    "$(jq -r '"\(.file.name) \(.file.type) \(.file.size) \(.file.permissions)"' <<<"${doc}" 2>/dev/null)"
+                    "$(jq -r '"\(.file.name | sub("^/"; "")) \(.file.type) \(.file.size) \(.file.permissions)"' <<<"${doc}" 2>/dev/null)"
                 jq -cS "${NORMALIZE_FILES}" <<<"${doc}" > "${WORK}/agree-${server}/info-${client}" 2>/dev/null
                 doc=$(client "${client}" -- file-put --name /logs/new.txt --content 0001fe --host "${name}")
                 at_pair "files.file-put" "${pair}"
@@ -1635,14 +1651,18 @@ suite() {
         # ---- secure authentication ----
         if has "${server}" secureAuthentication && has "${client}" secureAuthentication; then
             name="fa-${server}-${RUN_ID}"
-            # No statistics events (contract 1.2) in the polls of these checks.
+            # No statistics events (contract 1.2) in the polls of these checks:
+            # the highest threshold IEEE 1815-2012 7.6.1.4.2 allows. Table 7-6
+            # still has the outstation report Authentication Failures at
+            # every session key change, so sa_run leaves g122 out of what it
+            # prints.
             if has "${server}" securityStatisticsServer; then
-                start "${server}" "${name}" -- "${SA[@]}" --sa-statistics-threshold 1000000
+                start "${server}" "${name}" -- "${SA[@]}" --sa-statistics-threshold 65535
             else
                 start "${server}" "${name}" -- "${SA[@]}"
             fi
             if wait_ready "${name}"; then
-                sa_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" "${SA[@]}"; }
+                sa_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" "${SA[@]}" | without_statistic_events; }
                 basics "${pair}" sa "sa_run ${client} ${name}"
                 sleep 0.3
                 at_pair "sa.outstation-authenticated-the-control" "${pair}"
@@ -1671,8 +1691,13 @@ suite() {
                 check "${pair}: [sa] a master without authentication cannot operate" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
                 sleep 0.3
                 at_pair "sa.outstation-reported-the-refusals" "${pair}"
-                check "${pair}: [sa] the outstation reported the refusals" "1 11" \
-                    "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "auth-error") | .code' | sort -un | paste -sd' ' -)"
+                # The wrong update key: error 1. The unknown user may get an
+                # error 11 (UNKNOWN_USER) or the key status AUTH_FAIL, which
+                # IEEE 1815-2012 A.45.5 asks for when the user number of a key
+                # status request is invalid and which is no error message, so
+                # 11 is not required.
+                check "${pair}: [sa] the outstation reported the refusals" "1" \
+                    "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "auth-error" and .code != 11) | .code' | sort -un | paste -sd' ' -)"
                 at_pair "sa.refused-controls-did-not-operate" "${pair}"
                 check "${pair}: [sa] the refused controls did not operate" "g10v2:0=true" \
                     "$(sa_run "${client}" "${name}" read --group 10 --variation 2 --start 0 --stop 0 | jq -r '[.objects[] | "g\(.group)v\(.variation):\(.index)=\(.value)"] | join(" ")')"
@@ -1692,13 +1717,13 @@ suite() {
             name="fk-${server}-${RUN_ID}"
             local sa256=(--sa-update-key "${SA_KEY_256}" --sa-user 3)
             if has "${server}" securityStatisticsServer; then
-                start "${server}" "${name}" -- "${sa256[@]}" --sa-statistics-threshold 1000000
+                start "${server}" "${name}" -- "${sa256[@]}" --sa-statistics-threshold 65535
             else
                 start "${server}" "${name}" -- "${sa256[@]}"
             fi
             if wait_ready "${name}"; then
                 # shellcheck disable=SC2329 # called by basics, through its run argument
-                sa256_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" --sa-update-key "${SA_KEY_256}" --sa-user 3; }
+                sa256_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" --sa-update-key "${SA_KEY_256}" --sa-user 3 | without_statistic_events; }
                 basics "${pair}" sa-aes-256 "sa256_run ${client} ${name}"
                 sleep 0.3
                 at_pair "sa-aes-256.outstation-authenticated-the-control" "${pair}"

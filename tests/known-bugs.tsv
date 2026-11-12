@@ -23,6 +23,10 @@
 # may fail and is counted as "known bug" rather than as a failure. If no
 # matching case fails any more, the run fails: the entry is stale and the pin
 # can move.
+#
+# Bugs that show only against an image outside the release are in a table of
+# their own, which the scripts read through EXTRA_KNOWN_BUGS
+# (own/go-dnp3/known-bugs.tsv).
 dscsystems:server	v0.8.2	^freeze --clear	FREEZE AND CLEAR leaves a counter that has no frozen counter of the same index uncleared	baseline	dscsystems-freeze-clear-uncleared	https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/database.go#L703-L713
 dscsystems:client	v0.8.2	--local-addr	the outstation processes requests from a master address other than its own master's and answers to that address, and the master takes the answer; together, a master with a wrong address reads an IIN instead of timing out	baseline	dscsystems-master-address-client	https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/internal/stack/stack.go#L305-L342
 dscsystems:server	v0.8.2	--local-addr	with unsolicited responses off, the outstation answers requests from any master address, to that address	dnp3py	dscsystems-master-address-server	https://github.com/dscsystems/go-dnp3/blob/1fcec1d7881541d794fe257d2ede3ba46587b500/outstation/session.go#L1709-L1716

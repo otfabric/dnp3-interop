@@ -744,6 +744,10 @@ func runClient(argv []string) int {
 		client.WithAutoIntegrity(false),
 		client.WithAutoEventPoll(false),
 		client.WithTimeSync(client.TimeSyncNone),
+		// No startup sequence at Connect (go-dnp3 v1.11.0 runs an integrity
+		// poll by default), which would read and confirm the events a case
+		// checks.
+		client.WithStartup(client.Startup{}),
 		client.WithHandler(h),
 		client.WithMetrics(metrics),
 		client.WithLogger(libraryLog()),

@@ -27,7 +27,7 @@ docker run -d --name go-dnp3 -p 127.0.0.1:20000:20000 ghcr.io/otfabric/dnp3-inte
 until docker exec go-dnp3 test -f /run/dnp3-interop/ready; do sleep 0.1; done
 ```
 
-`<tag>` is a go-dnp3 version such as `v1.6.0`, or `latest`, the newest one
+`<tag>` is a go-dnp3 version such as `v1.11.0`, or `latest`, the newest one
 published. A rebuild of a version replaces its tag, so pin the digest if you need
 an exact build. The digest is in the summary of the
 [workflow run](https://github.com/otfabric/dnp3-interop/actions/workflows/own-go-dnp3.yml),
@@ -77,9 +77,10 @@ what the capabilities list:
 - Secure authentication: no AES-GMAC (MAC algorithm 6), so `macAlgorithms`
   leaves out `aes-gmac` and `--sa-mac aes-gmac` is a usage error. No
   aggressive mode. One user per outstation.
-- Frozen event policy: `on-change` only. The library raises a frozen counter
-  event when the frozen value or its flags change, and has no setting for it;
-  `--frozen-event-policy always` is a usage error.
+- Frozen event policy: `always` only. Since go-dnp3 v1.11.0 a freeze raises a
+  frozen event for every frozen point with an event class, also when the value
+  did not change (IEEE 1815-2012 11.9.5.2), and the library has no setting for
+  it; `--frozen-event-policy on-change` is a usage error.
 
 Where the library hands an application nothing, the adapter derives the event
 from the library's metrics callbacks (`dnp3.Metrics`): `link-status`,
@@ -87,6 +88,15 @@ from the library's metrics callbacks (`dnp3.Metrics`): `link-status`,
 outstation. The `broadcast` event matches a fragment to the frames that carried
 it by sequence number and function code, since a fragment's metrics do not say
 its destination address.
+
+The master runs no startup sequence and no automatic time synchronization:
+since go-dnp3 v1.11.0 `Connect` runs an integrity poll and a time
+synchronization on NEED_TIME by default, which would read and confirm the
+events and the time a check looks at. The adapter turns both off
+(`client.WithStartup(client.Startup{})`, `client.WithTimeSync(client.TimeSyncNone)`),
+and the automatic integrity and event polls too. All it does on its own is
+clear IIN1.7 DEVICE_RESTART with a WRITE of g80v1 when an outstation reports
+it, as the contract asks of a master.
 
 The client follows the contract with library calls that do a little more or
 less than one operation:
@@ -122,9 +132,15 @@ checks accept them:
   time under an unsynchronized CTO (g2v3 after g51v2), not in the point's event
   variation. This is on purpose: g2v2 cannot say that its time is
   unsynchronized.
-- The security statistics carry the master's address as their association;
-  DSC go-dnp3 uses 0.
+- GET_FILE_INFO is answered with the file name of the request
+  (`/readme.txt`), as IEEE 1815-2012 4.4.18 asks; the other outstations answer
+  with the last path element.
 - A read of every attribute of a set (g0v254) returns them from the highest
   variation down.
+
+With secure authentication, the Authentication Failures statistic is reported
+as an event at every session key change (IEEE 1815-2012 Table 7-6), and a key
+status request for an unknown user is answered with the key status AUTH_FAIL
+(A.45.5) rather than error 11; the checks take both.
 
 See [COMPATIBILITY.md](../../docs/COMPATIBILITY.md#ot-fabric-go-dnp3-permitted-differences).
