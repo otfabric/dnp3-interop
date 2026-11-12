@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"slices"
 	"strconv"
@@ -32,27 +33,31 @@ func attributeTypeName(t app.AttrType) string {
 }
 
 // libraryAttribute is the library's value of an attribute of the fixture.
-func libraryAttribute(a attribute) app.Attribute {
+// The fixture check bounds the integers; one that does not fit its 32 bits
+// is an invalid fixture.
+func libraryAttribute(a attribute) (app.Attribute, error) {
 	switch a.Type {
 	case "unsignedInt":
-		return app.UintAttribute(uint32(a.Number))
+		n, err := toUint32(a.Number)
+		return app.UintAttribute(n), err
 	case "signedInt":
-		return app.IntAttribute(int32(a.Number))
+		n, err := toInt32(a.Number)
+		return app.IntAttribute(n), err
 	case "float":
-		return app.FloatAttribute(a.Real)
+		return app.FloatAttribute(a.Real), nil
 	case "octetString":
-		return app.Attribute{Type: app.AttrOctetString, Data: a.Octets}
+		return app.Attribute{Type: app.AttrOctetString, Data: a.Octets}, nil
 	case "bitString":
-		return app.Attribute{Type: app.AttrBitString, Data: a.Octets}
+		return app.Attribute{Type: app.AttrBitString, Data: a.Octets}, nil
 	case "time":
-		return app.TimeAttribute(app.TimestampOf(a.Time))
+		return app.TimeAttribute(app.TimestampOf(a.Time)), nil
 	}
-	return app.StringAttribute(a.Text)
+	return app.StringAttribute(a.Text), nil
 }
 
 // attributeOptions gives the outstation the fixture's attributes, a set at
 // a time; the handler reports accepted writes.
-func attributeOptions(fx *fixture) []server.Option {
+func attributeOptions(fx *fixture) ([]server.Option, error) {
 	sets := map[uint8]map[uint8]app.Attribute{}
 	writable := map[uint8][]uint8{}
 	var order []uint8
@@ -61,7 +66,11 @@ func attributeOptions(fx *fixture) []server.Option {
 			sets[a.Set] = map[uint8]app.Attribute{}
 			order = append(order, a.Set)
 		}
-		sets[a.Set][a.Variation] = libraryAttribute(a)
+		v, err := libraryAttribute(a)
+		if err != nil {
+			return nil, fmt.Errorf("device attribute set %d variation %d: %w", a.Set, a.Variation, err)
+		}
+		sets[a.Set][a.Variation] = v
 		if a.Writable {
 			writable[a.Set] = append(writable[a.Set], a.Variation)
 		}
@@ -71,7 +80,7 @@ func attributeOptions(fx *fixture) []server.Option {
 	for _, set := range order {
 		opts = append(opts, server.WithAttributeSet(uint16(set), sets[set], writable[set]...))
 	}
-	return opts
+	return opts, nil
 }
 
 // attributeValue is the value of an attribute document.
@@ -93,9 +102,13 @@ func attributeValue(a app.Attribute) any {
 		}
 	case app.AttrTime:
 		if len(a.Data) == 6 {
-			var b [8]byte
-			copy(b[:], a.Data)
-			return formatTime(time.UnixMilli(int64(binary.LittleEndian.Uint64(b[:]))))
+			// 48 bits of milliseconds, least significant octet first: an
+			// int64 holds them.
+			var ms int64
+			for i := 5; i >= 0; i-- {
+				ms = ms<<8 | int64(a.Data[i])
+			}
+			return formatTime(time.UnixMilli(ms))
 		}
 	case app.AttrList, app.AttrExtList:
 		return nil // the contract gives lists no value
@@ -108,19 +121,19 @@ var attributeOperations = []string{"attribute-read", "attribute-write"}
 type attributeRequest func(ctx context.Context, c *client.Client, r *[]object) error
 
 func parseAttributeOperation(op string, a args) (attributeRequest, error) {
-	set, err := a.requiredInteger("set", 0, 255)
+	set, err := a.requiredUint8Flag("set", 0, 255)
 	if err != nil {
 		return nil, err
 	}
 	if op == "attribute-read" {
-		variation, err := a.integer("variation", 254, 1, 254)
+		variation, err := a.uint8Flag("variation", 254, 1, 254)
 		if err != nil {
 			return nil, err
 		}
 		// A READ of the set as the range; the attributes in the order
 		// they arrived (Client.ReadAttributeSet returns a map).
 		return func(ctx context.Context, c *client.Client, r *[]object) error {
-			res, err := c.Read(ctx, app.IndexRange(app.GV(0, uint8(variation)), uint32(set), uint32(set)))
+			res, err := c.Read(ctx, app.IndexRange(app.GV(0, variation), uint32(set), uint32(set)))
 			if res == nil {
 				return err
 			}
@@ -138,7 +151,7 @@ func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 			return err
 		}, nil
 	}
-	variation, err := a.requiredInteger("variation", 1, 253)
+	variation, err := a.requiredUint8Flag("variation", 1, 253)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +204,6 @@ func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 		return nil, usagef("attribute-write takes exactly one of --text, --uint, --int, --float, --octets, --bits, --time")
 	}
 	return func(ctx context.Context, c *client.Client, _ *[]object) error {
-		return c.WriteAttributeSet(ctx, uint16(set), uint8(variation), w)
+		return c.WriteAttributeSet(ctx, uint16(set), variation, w)
 	}, nil
 }

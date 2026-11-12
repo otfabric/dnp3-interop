@@ -125,16 +125,24 @@ func parent(name string) string {
 	return d
 }
 
-func (s *fileServer) descriptor(name string) (app.FileDescriptor, bool) {
+// descriptor is the descriptor of a file or directory: FileNotFound when
+// there is none, FileFatal for a file whose size does not fit the 32 bits of
+// the descriptor (a fixture file has at most 65536 octets, so only a master
+// that wrote 4 GiB gets that).
+func (s *fileServer) descriptor(name string) (app.FileDescriptor, app.FileStatus) {
 	base := path.Base(name)
 	if s.dirs[name] {
-		return app.FileDescriptor{Name: base, Type: app.FileTypeDirectory, Created: s.created, Permissions: dirPermissions}, true
+		return app.FileDescriptor{Name: base, Type: app.FileTypeDirectory, Created: s.created, Permissions: dirPermissions}, app.FileSuccess
 	}
 	if data, ok := s.files[name]; ok {
-		return app.FileDescriptor{Name: base, Type: app.FileTypeSimple, Size: uint32(len(data)), Created: s.created,
-			Permissions: filePermissions}, true
+		size, err := intToUint32(len(data))
+		if err != nil {
+			return app.FileDescriptor{}, app.FileFatal
+		}
+		return app.FileDescriptor{Name: base, Type: app.FileTypeSimple, Size: size, Created: s.created,
+			Permissions: filePermissions}, app.FileSuccess
 	}
-	return app.FileDescriptor{}, false
+	return app.FileDescriptor{}, app.FileNotFound
 }
 
 // listing is the content of a directory opened for reading: the
@@ -154,7 +162,10 @@ func (s *fileServer) listing(dir string) []byte {
 	slices.Sort(names)
 	var b []byte
 	for _, n := range names {
-		d, _ := s.descriptor(n)
+		d, status := s.descriptor(n)
+		if status != app.FileSuccess {
+			continue
+		}
 		if nb, err := app.AppendFileDescriptor(b, d); err == nil {
 			b = nb
 		}
@@ -184,11 +195,15 @@ func (s *fileServer) Open(_ context.Context, req server.FileRequest) (server.Fil
 		default:
 			status = app.FileNotFound
 		}
+		size, err := intToUint32(len(data))
+		if status == app.FileSuccess && err != nil {
+			status = app.FileFatal
+		}
 		fileEvent(action, name, status)
 		if status != app.FileSuccess {
 			return nil, status
 		}
-		return &readFile{r: bytes.NewReader(data), size: uint32(len(data))}, status
+		return &readFile{r: bytes.NewReader(data), size: size}, status
 	case app.FileModeWrite, app.FileModeAppend:
 		action := "write"
 		if req.Mode == app.FileModeAppend {
@@ -233,11 +248,7 @@ func (s *fileServer) Delete(_ context.Context, name string, key uint32) app.File
 func (s *fileServer) Info(_ context.Context, name string) (app.FileDescriptor, app.FileStatus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	d, ok := s.descriptor(name)
-	status := app.FileSuccess
-	if !ok {
-		status = app.FileNotFound
-	}
+	d, status := s.descriptor(name)
 	fileEvent("info", name, status)
 	return d, status
 }
@@ -390,10 +401,14 @@ func parseFileOperation(op string, a args, creds *fileCredentials) (fileRequest,
 		if err != nil {
 			return nil, usagef("--content must be hex")
 		}
+		size, err := intToUint32(len(data))
+		if err != nil {
+			return nil, usagef("--content: %v", err)
+		}
 		appendTo := a.has("append")
 		return withKey(creds, func(ctx context.Context, c *client.Client, o client.FileOptions, _ *fileResult) error {
 			o.Append = appendTo
-			_, err := c.WriteFile(ctx, name, bytes.NewReader(data), uint32(len(data)), o)
+			_, err := c.WriteFile(ctx, name, bytes.NewReader(data), size, o)
 			return err
 		}), nil
 	case "file-ls":

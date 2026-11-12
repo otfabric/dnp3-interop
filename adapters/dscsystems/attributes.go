@@ -69,22 +69,22 @@ var attributeOperations = []string{"attribute-read", "attribute-write"}
 type attributeRequest func(ctx context.Context, s *master.Session, r *[]object) error
 
 func parseAttributeOperation(op string, a args) (attributeRequest, error) {
-	set, err := a.requiredInteger("set", 0, 255)
+	set, err := a.requiredUint8Flag("set", 0, 255)
 	if err != nil {
 		return nil, err
 	}
 	if op == "attribute-read" {
-		variation, err := a.integer("variation", 254, 1, 254)
+		variation, err := a.uint8Flag("variation", 254, 1, 254)
 		if err != nil {
 			return nil, err
 		}
 		return func(ctx context.Context, s *master.Session, r *[]object) error {
 			var list []dnp3.Attribute
 			if variation == 254 {
-				list, err = s.ReadAttributeSet(ctx, uint8(set))
+				list, err = s.ReadAttributeSet(ctx, set)
 			} else {
 				var one dnp3.Attribute
-				if one, err = s.ReadAttribute(ctx, uint8(set), uint8(variation)); err == nil {
+				if one, err = s.ReadAttribute(ctx, set, variation); err == nil {
 					list = []dnp3.Attribute{one}
 				}
 			}
@@ -95,11 +95,11 @@ func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 			return err
 		}, nil
 	}
-	variation, err := a.requiredInteger("variation", 1, 253)
+	variation, err := a.requiredUint8Flag("variation", 1, 253)
 	if err != nil {
 		return nil, err
 	}
-	w := dnp3.Attribute{Set: uint8(set), Variation: uint8(variation)}
+	w := dnp3.Attribute{Set: set, Variation: variation}
 	given := 0
 	if a.has("text") {
 		w.Type, w.Text, given = dnp3.AttrVisibleString, a.str("text", ""), given+1

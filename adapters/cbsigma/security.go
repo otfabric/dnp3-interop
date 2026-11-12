@@ -71,11 +71,11 @@ func parseSecurity(a args, server bool) (security, error) {
 	if err != nil || (len(key) != 16 && len(key) != 32) {
 		return security{}, usagef("--sa-update-key must be 16 or 32 octets of hex")
 	}
-	user, err := a.integer("sa-user", 1, 1, 65535)
+	user, err := a.uint16Flag("sa-user", 1, 1, 65535)
 	if err != nil {
 		return security{}, err
 	}
-	return security{on: true, user: uint16(user), key: key, mac: dnp3.MACByName(mac)}, nil
+	return security{on: true, user: user, key: key, mac: dnp3.MACByName(mac)}, nil
 }
 
 // outstation is the association's secure authentication. The library

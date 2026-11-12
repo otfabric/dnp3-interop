@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -115,9 +116,13 @@ func controlFunction(c dnp3.ControlRequest) string {
 func (s *station) check(c dnp3.ControlRequest) (uint8, float64) {
 	const notSupported, outOfRange = 4, 12
 	direct := c.Func == dnp3.FCDirectOperate || c.Func == dnp3.FCDirectOperateNR
+	index, ok := indexToUint16(c.Index)
+	if !ok {
+		return notSupported, 0
+	}
 	if c.Group == 12 {
-		p := s.fx.find("binaryOutputs", uint16(c.Index))
-		if p == nil || c.Index > 65535 {
+		p := s.fx.find("binaryOutputs", index)
+		if p == nil {
 			return notSupported, 0
 		}
 		var v float64
@@ -138,8 +143,8 @@ func (s *station) check(c dnp3.ControlRequest) (uint8, float64) {
 		}
 		return 0, v
 	}
-	p := s.fx.find("analogOutputs", uint16(c.Index))
-	if p == nil || c.Index > 65535 {
+	p := s.fx.find("analogOutputs", index)
+	if p == nil {
 		return notSupported, 0
 	}
 	if (p.Min != nil && c.Value < *p.Min) || (p.Max != nil && c.Value > *p.Max) {
@@ -176,12 +181,13 @@ func (s *station) Control(ctx context.Context, c dnp3.ControlRequest) uint8 {
 	if tooMany {
 		status = 8 // TOO_MANY_OPS
 	}
-	if status == 0 && !c.Select {
+	// check answers 0 only for an index of the fixture.
+	if index, ok := indexToUint16(c.Index); ok && status == 0 && !c.Select {
 		switch {
 		case c.Group == 41:
-			s.follow(ctx, "analogOutputs", "analogInputs", uint16(c.Index), v)
+			s.follow(ctx, "analogOutputs", "analogInputs", index, v)
 		case v >= 0:
-			s.follow(ctx, "binaryOutputs", "binaryInputs", uint16(c.Index), v)
+			s.follow(ctx, "binaryOutputs", "binaryInputs", index, v)
 		}
 	}
 	ev := object{{"event", "command"}, {"function", controlFunction(c)}}
@@ -330,7 +336,7 @@ func runServer(argv []string) int {
 		return exitUsage
 	}
 	path := a.str("fixture", defaultFixture)
-	text, err := os.ReadFile(path)
+	text, err := os.ReadFile(filepath.Clean(path))
 	var fx *fixture
 	if err == nil {
 		fx, err = loadFixture(text)
@@ -360,9 +366,20 @@ func runServer(argv []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	// The link addresses are bounded above; the conversions cannot fail.
+	master, err := usageUint16("remote-addr", remote)
+	if err != nil {
+		logf("server: %v", err)
+		return exitUsage
+	}
 	r := &router{}
 	for i := range count {
-		s := &station{addr: uint16(local + i), master: uint16(remote), first: i == 0, fx: fx, db: dnp3.NewPointDB()}
+		addr, err := usageUint16("local-addr", local+i)
+		if err != nil {
+			logf("server: %v", err)
+			return exitUsage
+		}
+		s := &station{addr: addr, master: master, first: i == 0, fx: fx, db: dnp3.NewPointDB()}
 		s.sniff.st = s
 		if err := load(ctx, s.db, fx); err != nil {
 			logf("server: fixture %s: %v", path, err)
@@ -428,7 +445,7 @@ func runServer(argv []string) int {
 		}()
 	}
 	readyFile := a.str("ready-file", defaultReadyFile)
-	if err := os.WriteFile(readyFile, nil, 0o644); err != nil {
+	if err := os.WriteFile(readyFile, nil, readyFileMode); err != nil {
 		logf("server: cannot write the readiness file %s: %v", readyFile, err)
 		return exitFailed
 	}

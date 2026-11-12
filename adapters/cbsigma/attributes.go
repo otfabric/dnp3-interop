@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -37,24 +38,17 @@ type attributeRequest struct {
 
 func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 	r := attributeRequest{write: op == "attribute-write"}
-	set, err := a.requiredInteger("set", 0, 255)
-	if err != nil {
+	var err error
+	if r.set, err = a.requiredUint8Flag("set", 0, 255); err != nil {
 		return r, err
 	}
-	r.set = uint8(set)
 	if !r.write {
-		v, err := a.integer("variation", 254, 1, 255)
-		if err != nil {
-			return r, err
-		}
-		r.variation = uint8(v)
-		return r, nil
-	}
-	v, err := a.requiredInteger("variation", 1, 253)
-	if err != nil {
+		r.variation, err = a.uint8Flag("variation", 254, 1, 255)
 		return r, err
 	}
-	r.variation = uint8(v)
+	if r.variation, err = a.requiredUint8Flag("variation", 1, 253); err != nil {
+		return r, err
+	}
 	given := 0
 	for _, n := range []string{"text", "uint", "int", "float", "octets", "bits", "time"} {
 		if a.has(n) {
@@ -82,7 +76,11 @@ func parseAttributeOperation(op string, a args) (attributeRequest, error) {
 		if err != nil {
 			return r, usagef("--int must be -2147483648..2147483647")
 		}
-		r.code, r.data = dnp3.AttrINT, binary.LittleEndian.AppendUint32(nil, uint32(int32(n)))
+		data, err := binary.Append(nil, binary.LittleEndian, int32(n))
+		if err != nil {
+			return r, err
+		}
+		r.code, r.data = dnp3.AttrINT, data
 	case a.has("float"):
 		f, err := strconv.ParseFloat(a.str("float", ""), 64)
 		if err != nil || math.IsInf(f, 0) || math.IsNaN(f) || math.Abs(f) > math.MaxFloat32 {
@@ -136,8 +134,12 @@ func attributeDoc(p dnp3.Point) object {
 func (c *master) runAttribute(ctx context.Context, r attributeRequest, out *[]object) error {
 	if r.write {
 		objs := dnp3.AppendHeader(nil, 0, r.variation, dnp3.Q8StartStop, uint32(r.set), uint32(r.set))
-		objs = append(append(objs, r.code, byte(len(r.data))), r.data...)
-		_, err := c.request(ctx, dnp3.FCWrite, objs)
+		size, err := intToUint8(len(r.data))
+		if err != nil {
+			return fmt.Errorf("attribute value: %w", err)
+		}
+		objs = append(append(objs, r.code, size), r.data...)
+		_, err = c.request(ctx, dnp3.FCWrite, objs)
 		return err
 	}
 	frags, err := c.request(ctx, dnp3.FCRead, dnp3.AppendHeader(nil, 0, r.variation, dnp3.Q8StartStop, uint32(r.set), uint32(r.set)))

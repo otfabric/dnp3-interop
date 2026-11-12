@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -237,7 +238,11 @@ func checkPoint(kind string, raw any, position int, errs *[]string) point {
 		case p.CmdClass == 0 && obj["commandEventClass"] == nil:
 			add("%s: commandEventVariation needs commandEventClass", where)
 		default:
-			p.CmdVar = uint8(n)
+			if cv, err := toUint8(n); err != nil {
+				add("%s: commandEventVariation: %v", where, err)
+			} else {
+				p.CmdVar = cv
+			}
 		}
 	}
 	if v, present := obj["selectRequired"]; present {
@@ -653,7 +658,7 @@ func checkAttributes(fx *fixture, top map[string]any, add func(string, ...any)) 
 		set, okS := integer(o["set"])
 		variation, okV := integer(o["variation"])
 		kind, _ := o["type"].(string)
-		a := attribute{Set: uint8(set), Variation: uint8(variation), Type: kind}
+		a := attribute{Type: kind}
 		if w, present := o["writable"]; present {
 			b, ok := w.(bool)
 			if !ok {
@@ -663,6 +668,13 @@ func checkAttributes(fx *fixture, top map[string]any, add func(string, ...any)) 
 		}
 		if !okS || set < 1 || set > 255 || !okV || variation < 1 || variation > 253 {
 			add("deviceAttributes[%d]: set must be 1..255 and variation 1..253", i)
+			continue
+		}
+		var errS, errV error
+		a.Set, errS = toUint8(set)
+		a.Variation, errV = toUint8(variation)
+		if err := errors.Join(errS, errV); err != nil {
+			add("deviceAttributes[%d]: %v", i, err)
 			continue
 		}
 		switch kind {

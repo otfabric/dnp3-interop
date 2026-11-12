@@ -300,7 +300,7 @@ func (a args) number(name string) (float64, error) {
 func (a args) classes(name, def string, minimum int) ([]int, error) {
 	var out []int
 	for item := range strings.SplitSeq(a.str(name, def), ",") {
-		if len(item) != 1 || item[0] < byte('0'+minimum) || item[0] > '3' {
+		if len(item) != 1 || int(item[0])-'0' < minimum || item[0] > '3' {
 			return nil, usagef("--%s is a comma-separated list of classes %d..3", name, minimum)
 		}
 		out = append(out, int(item[0]-'0'))

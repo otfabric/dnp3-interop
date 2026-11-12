@@ -226,15 +226,15 @@ func parseOperation(op string, a args) (request, error) {
 			return r.read(c.EventPoll(ctx, classes...))
 		}, nil
 	case "read":
-		g, err := a.requiredInteger("group", 0, 255)
+		g, err := a.requiredUint8Flag("group", 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		v, err := a.requiredInteger("variation", 0, 255)
+		v, err := a.requiredUint8Flag("variation", 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		h, err := objectHeader(a, uint8(g), uint8(v))
+		h, err := objectHeader(a, g, v)
 		if err != nil {
 			return nil, err
 		}
@@ -297,11 +297,11 @@ func parseOperation(op string, a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
-		g, err := a.requiredInteger("group", 0, 255)
+		g, err := a.requiredUint8Flag("group", 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		h, err := objectHeader(a, uint8(g), 0)
+		h, err := objectHeader(a, g, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -355,11 +355,11 @@ func objectHeader(a args, g, v uint8) (app.Header, error) {
 	if !a.has("start") {
 		return app.AllObjects(app.GV(g, v)), nil
 	}
-	start, err := a.integer("start", 0, 0, 65535)
+	start, err := a.uint16Flag("start", 0, 0, 65535)
 	if err != nil {
 		return app.Header{}, err
 	}
-	stop, err := a.integer("stop", 0, 0, 65535)
+	stop, err := a.uint16Flag("stop", 0, 0, 65535)
 	if err != nil {
 		return app.Header{}, err
 	}
@@ -384,14 +384,14 @@ func parseFreeze(a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
-		interval, err := a.integer("interval-ms", 0, 0, 4294967295)
+		interval, err := a.uint32Flag("interval-ms", 0, 0, 4294967295)
 		if err != nil {
 			return nil, err
 		}
 		if noAck {
 			// The library has FreezeAtTime with a response only; the
 			// _NR function code goes through Request.
-			when := app.Counted(app.G50V2, app.AbsoluteTime{Time: app.TimestampOf(at), Interval: uint32(interval)})
+			when := app.Counted(app.G50V2, app.AbsoluteTime{Time: app.TimestampOf(at), Interval: interval})
 			return func(ctx context.Context, c *client.Client, _ *result) error {
 				_, err := c.Request(ctx, app.FuncFreezeAtTimeNoAck, when, h)
 				return err
@@ -412,7 +412,7 @@ func parseOperate(a args) (request, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := a.requiredInteger("index", 0, 65535)
+	index, err := a.requiredUint16Flag("index", 0, 65535)
 	if err != nil {
 		return nil, err
 	}
@@ -442,19 +442,19 @@ func parseOperate(a args) (request, error) {
 		if !ok {
 			return nil, usagef("--code must be LATCH_ON, LATCH_OFF, PULSE_ON, PULSE_OFF, CLOSE or TRIP")
 		}
-		count, err := a.integer("count", 1, 0, 255)
+		count, err := a.uint8Flag("count", 1, 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		on, err := a.integer("on-ms", 100, 0, math.MaxUint32)
+		on, err := a.uint32Flag("on-ms", 100, 0, math.MaxUint32)
 		if err != nil {
 			return nil, err
 		}
-		off, err := a.integer("off-ms", 100, 0, math.MaxUint32)
+		off, err := a.uint32Flag("off-ms", 100, 0, math.MaxUint32)
 		if err != nil {
 			return nil, err
 		}
-		crob.Count, crob.OnTime, crob.OffTime = uint8(count), uint32(on), uint32(off)
+		crob.Count, crob.OnTime, crob.OffTime = count, on, off
 		cmd = client.Command{Index: uint32(index), Value: crob, GV: app.G12V1}
 	} else {
 		if slices.ContainsFunc([]string{"code", "count", "on-ms", "off-ms"}, a.has) {
@@ -468,7 +468,7 @@ func parseOperate(a args) (request, error) {
 			return nil, err
 		}
 		var ok bool
-		if cmd, ok = analogCommand(kind, uint16(index), value); !ok {
+		if cmd, ok = analogCommand(kind, index, value); !ok {
 			return nil, usagef("--value is out of the range of %s", kind)
 		}
 	}
@@ -672,6 +672,7 @@ func runClient(argv []string) int {
 		tr                                                              transport
 		sec                                                             security
 		creds                                                           *fileCredentials
+		localAddr, remoteAddr                                           uint16
 	)
 	a, err := parseArgs(argv[1:], flags, switches)
 	if err == nil {
@@ -711,6 +712,12 @@ func runClient(argv []string) int {
 	if err == nil && a.has("no-unsolicited-confirm") && a.has("no-confirm") {
 		err = usagef("--no-unsolicited-confirm and --no-confirm do not go together")
 	}
+	if err == nil {
+		localAddr, err = usageUint16("local-addr", local)
+	}
+	if err == nil {
+		remoteAddr, err = usageUint16("remote-addr", remote)
+	}
 	fileOp := slices.Contains(fileOperations, op)
 	attributeOp := slices.Contains(attributeOperations, op)
 	switch {
@@ -736,7 +743,7 @@ func runClient(argv []string) int {
 		ka = -1
 	}
 	opts := []client.Option{
-		client.WithAddresses(link.Address(local), link.Address(remote)),
+		client.WithAddresses(link.Address(localAddr), link.Address(remoteAddr)),
 		client.WithResponseTimeout(time.Duration(timeout) * time.Millisecond),
 		// The master does nothing on its own but clear the restart bit.
 		client.WithAutoIntegrity(false),

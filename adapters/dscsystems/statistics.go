@@ -111,8 +111,14 @@ func (h *handler) statistics(fragment []byte) {
 				start, stop = binary.LittleEndian.Uint16(data), binary.LittleEndian.Uint16(data[2:])
 			}
 			data = data[2*w:]
-			for i := int(start); i <= int(stop); i++ {
-				indexes = append(indexes, uint16(i))
+			// From start to stop in uint16, without wrapping past 65535.
+			if start <= stop {
+				for i := start; ; i++ {
+					indexes = append(indexes, i)
+					if i == stop {
+						break
+					}
+				}
 			}
 		case 0x07, 0x08: // count, 8 or 16 bits, with an index prefix
 			w := int(q&0x0F) - 6
@@ -149,9 +155,10 @@ func (h *handler) statistics(fragment []byte) {
 				{"value", binary.LittleEndian.Uint32(data[3:7])}, {"flags", flagNames(g, data[0])},
 				{"association", binary.LittleEndian.Uint16(data[1:3])}}
 			if size == 13 {
-				ms := uint64(data[7]) | uint64(data[8])<<8 | uint64(data[9])<<16 | uint64(data[10])<<24 |
-					uint64(data[11])<<32 | uint64(data[12])<<40
-				o = append(o, field{"time", formatTime(time.UnixMilli(int64(ms)).UTC())})
+				// 48 bits: an int64 holds them.
+				ms := int64(data[7]) | int64(data[8])<<8 | int64(data[9])<<16 | int64(data[10])<<24 |
+					int64(data[11])<<32 | int64(data[12])<<40
+				o = append(o, field{"time", formatTime(time.UnixMilli(ms).UTC())})
 			}
 			found = append(found, append(o, field{"unsolicited", unsolicited}))
 			data = data[size:]

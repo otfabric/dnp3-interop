@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -54,8 +55,16 @@ func initialValue(kind string, p point) app.Value {
 func populate(db *server.Database, fx *fixture) error {
 	for _, kind := range pointTypes {
 		for _, p := range fx.Points[kind] {
-			cfg := server.PointConfig{Class: server.Class(p.Class), StaticVariation: p.SVar, EventVariation: p.EVar,
-				CommandEventClass: server.Class(p.CmdClass), CommandEventVariation: p.CmdVar}
+			class, err := intToUint8(p.Class)
+			if err != nil {
+				return fmt.Errorf("%s[%d]: class: %w", kind, p.Index, err)
+			}
+			cmdClass, err := intToUint8(p.CmdClass)
+			if err != nil {
+				return fmt.Errorf("%s[%d]: commandEventClass: %w", kind, p.Index, err)
+			}
+			cfg := server.PointConfig{Class: server.Class(class), StaticVariation: p.SVar, EventVariation: p.EVar,
+				CommandEventClass: server.Class(cmdClass), CommandEventVariation: p.CmdVar}
 			if kind == "octetStrings" {
 				cfg.StaticVariation, cfg.EventVariation = 0, 0
 			}
@@ -94,10 +103,14 @@ func functionName(op server.OperateType) string {
 
 // check decides a control: the status, and the value it sets.
 func (h *controlHandler) check(c server.Command, direct bool) (app.CommandStatus, app.Value) {
+	index, ok := indexToUint16(c.Index)
+	if !ok {
+		return app.StatusNotSupported, nil
+	}
 	switch v := c.Value.(type) {
 	case app.CROB:
-		p := h.fx.find("binaryOutputs", uint16(c.Index))
-		if c.GV != app.G12V1 || p == nil || c.Index > 65535 {
+		p := h.fx.find("binaryOutputs", index)
+		if c.GV != app.G12V1 || p == nil {
 			return app.StatusNotSupported, nil
 		}
 		var on bool
@@ -121,8 +134,8 @@ func (h *controlHandler) check(c server.Command, direct bool) (app.CommandStatus
 		}
 		return app.StatusSuccess, app.Binary{Value: on}
 	case app.AnalogOutput:
-		p := h.fx.find("analogOutputs", uint16(c.Index))
-		if p == nil || c.Index > 65535 {
+		p := h.fx.find("analogOutputs", index)
+		if p == nil {
 			return app.StatusNotSupported, nil
 		}
 		if (p.Min != nil && v.Value < *p.Min) || (p.Max != nil && v.Value > *p.Max) {
@@ -157,18 +170,19 @@ func (h *controlHandler) Select(_ context.Context, c server.Command) app.Command
 
 func (h *controlHandler) Operate(_ context.Context, c server.Command, op server.OperateType) app.CommandStatus {
 	status, value := h.check(c, op != server.SelectBeforeOperate)
-	if status == app.StatusSuccess {
+	// check succeeds only for an index of the fixture.
+	if index, ok := indexToUint16(c.Index); ok && status == app.StatusSuccess {
 		db := h.db()
 		switch v := value.(type) {
 		case app.Binary:
-			p := h.fx.find("binaryOutputs", uint16(c.Index))
+			p := h.fx.find("binaryOutputs", index)
 			_ = db.Update(server.BinaryOutput, c.Index, app.Binary{Value: v.Value, Flags: app.Flags(p.Flags)}, server.EventOnChange)
 			if p.Target != nil {
 				t := h.fx.find("binaryInputs", *p.Target)
 				_ = db.Update(server.BinaryInput, uint32(t.Index), app.Binary{Value: v.Value, Flags: app.Flags(t.Flags)}, server.EventOnChange)
 			}
 		case app.Analog:
-			p := h.fx.find("analogOutputs", uint16(c.Index))
+			p := h.fx.find("analogOutputs", index)
 			_ = db.Update(server.AnalogOutput, c.Index, app.Analog{Value: v.Value, Flags: app.Flags(p.Flags)}, server.EventOnChange)
 			if p.Target != nil {
 				t := h.fx.find("analogInputs", *p.Target)
@@ -292,7 +306,7 @@ func runServer(argv []string) int {
 	bind := a.str("bind-address", "0.0.0.0")
 	readyFile := a.str("ready-file", defaultReadyFile)
 
-	text, err := os.ReadFile(path)
+	text, err := os.ReadFile(filepath.Clean(path))
 	var fx *fixture
 	if err == nil {
 		fx, err = loadFixture(text)
@@ -377,7 +391,12 @@ func runServer(argv []string) int {
 		if serverTLS != nil && tr.connect != "" {
 			opts = append(opts, server.WithTLS(serverTLS))
 		}
-		opts = append(opts, attributeOptions(fx)...)
+		attributes, err := attributeOptions(fx)
+		if err != nil {
+			logf("server: fixture %s: %v", path, err)
+			return exitFixtureInvalid
+		}
+		opts = append(opts, attributes...)
 		srv, err := server.New(opts...)
 		if err != nil {
 			logf("server: %v", err)
@@ -487,7 +506,7 @@ func runServer(argv []string) int {
 			_ = os.Remove(control)
 		}()
 	}
-	if err := os.WriteFile(readyFile, nil, 0o644); err != nil {
+	if err := os.WriteFile(readyFile, nil, readyFileMode); err != nil {
 		logf("server: cannot write the readiness file %s: %v", readyFile, err)
 		closeAll()
 		return exitFailed

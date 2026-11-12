@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -385,7 +386,7 @@ func runServer(argv []string) int {
 	bind := a.str("bind-address", "0.0.0.0")
 	readyFile := a.str("ready-file", defaultReadyFile)
 
-	text, err := os.ReadFile(path)
+	text, err := os.ReadFile(filepath.Clean(path))
 	var fx *fixture
 	if err == nil {
 		fx, err = loadFixture(text)
@@ -529,7 +530,7 @@ func runServer(argv []string) int {
 			_ = os.Remove(control)
 		}()
 	}
-	if err := os.WriteFile(readyFile, nil, 0o644); err != nil {
+	if err := os.WriteFile(readyFile, nil, readyFileMode); err != nil {
 		logf("server: cannot write the readiness file %s: %v", readyFile, err)
 		return exitFailed
 	}

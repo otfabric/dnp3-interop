@@ -97,12 +97,16 @@ func serveControl(conn net.Conn, db *server.Database) {
 func runCounterIncrement(argv []string) int {
 	start := time.Now()
 	a, err := parseArgs(argv, []string{"index", "by", "control-socket", "timeout-ms"}, nil)
-	var index, by, timeout int64
+	var (
+		index   uint16
+		by      uint32
+		timeout int64
+	)
 	if err == nil {
-		index, err = a.requiredInteger("index", 0, 65535)
+		index, err = a.requiredUint16Flag("index", 0, 65535)
 	}
 	if err == nil {
-		by, err = a.integer("by", 1, 1, 4294967295)
+		by, err = a.uint32Flag("by", 1, 1, 4294967295)
 	}
 	if err == nil {
 		timeout, err = a.integer("timeout-ms", 5000, 1, 3600000)
@@ -128,7 +132,7 @@ func runCounterIncrement(argv []string) int {
 	}
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(wait))
-	out, _ := json.Marshal(controlRequest{Operation: "counter-increment", Index: uint16(index), By: uint32(by)})
+	out, _ := json.Marshal(controlRequest{Operation: "counter-increment", Index: index, By: by})
 	_, err = conn.Write(append(out, '\n'))
 	var res controlResponse
 	var line []byte
