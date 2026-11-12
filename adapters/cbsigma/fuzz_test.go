@@ -8,37 +8,67 @@
 package main
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
+// repositoryFixture is a fixture file of the repository.
+type repositoryFixture struct {
+	path string
+	text []byte
+}
+
+// repositoryFixtures reads every fixtures/*/fixture.json of the repository
+// through an os.Root of fixtures/. Outside a checkout there are none.
+func repositoryFixtures() ([]repositoryFixture, error) {
+	root, err := os.OpenRoot(filepath.Join("..", "..", "fixtures"))
+	if err != nil {
+		return nil, nil
+	}
+	defer func() { _ = root.Close() }()
+	paths, err := fs.Glob(root.FS(), "*/fixture.json")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]repositoryFixture, 0, len(paths))
+	for _, p := range paths {
+		text, err := root.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, repositoryFixture{path: p, text: text})
+	}
+	return out, nil
+}
+
 // addFixtureSeeds adds every fixture of the repository as a seed; outside a
 // checkout there are none, and testdata/fuzz still has some.
 func addFixtureSeeds(f *testing.F) {
-	paths, _ := filepath.Glob(filepath.Join("..", "..", "fixtures", "*", "fixture.json"))
-	for _, p := range paths {
-		if text, err := os.ReadFile(p); err == nil {
-			f.Add(text)
-		}
+	fixtures, err := repositoryFixtures()
+	if err != nil {
+		f.Fatal(err)
+	}
+	for _, fx := range fixtures {
+		f.Add(fx.text)
 	}
 }
 
 // TestFixturesLoad: every fixture of the repository is valid for the adapter,
 // so the fuzz seeds start from inputs that get past the first checks.
 func TestFixturesLoad(t *testing.T) {
-	paths, _ := filepath.Glob(filepath.Join("..", "..", "fixtures", "*", "fixture.json"))
-	if len(paths) == 0 {
+	fixtures, err := repositoryFixtures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fixtures) == 0 {
 		t.Skip("no fixtures: not in a checkout of the repository")
 	}
-	for _, p := range paths {
-		text, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := loadFixture(text); err != nil {
-			t.Errorf("%s: %v", p, err)
+	for _, fx := range fixtures {
+		if _, err := loadFixture(fx.text); err != nil {
+			t.Errorf("%s: %v", fx.path, err)
 		}
 	}
 }

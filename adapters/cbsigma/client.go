@@ -86,11 +86,11 @@ func startStop(group, variation uint8, a args) ([]byte, error) {
 	if !a.has("start") {
 		return dnp3.AppendHeader(nil, group, variation, dnp3.QAll, 0, 0), nil
 	}
-	start, err := a.integer("start", 0, 0, 65535)
+	start, err := a.uint16Flag("start", 0, 0, 65535)
 	if err != nil {
 		return nil, err
 	}
-	stop, err := a.integer("stop", 0, 0, 65535)
+	stop, err := a.uint16Flag("stop", 0, 0, 65535)
 	if err != nil {
 		return nil, err
 	}
@@ -122,15 +122,15 @@ func parseOperation(op string, a args) (request, error) {
 		}
 		return send(dnp3.FCRead, dnp3.ClassRequest(c...)), nil
 	case "read":
-		g, err := a.requiredInteger("group", 0, 255)
+		g, err := a.requiredUint8Flag("group", 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		v, err := a.requiredInteger("variation", 0, 255)
+		v, err := a.requiredUint8Flag("variation", 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		objs, err := startStop(uint8(g), uint8(v), a)
+		objs, err := startStop(g, v, a)
 		if err != nil {
 			return nil, err
 		}
@@ -196,11 +196,11 @@ func parseOperation(op string, a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
-		g, err := a.requiredInteger("group", 1, 255)
+		g, err := a.requiredUint8Flag("group", 1, 255)
 		if err != nil {
 			return nil, err
 		}
-		header, err := startStop(uint8(g), 0, a)
+		header, err := startStop(g, 0, a)
 		if err != nil {
 			return nil, err
 		}
@@ -234,11 +234,11 @@ func parseFreeze(a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
-		interval, err := a.integer("interval-ms", 0, 0, 4294967295)
+		interval, err := a.uint32Flag("interval-ms", 0, 0, 4294967295)
 		if err != nil {
 			return nil, err
 		}
-		schedule, err := dnp3.EncodeBlock(50, 2, dnp3.Q8Count, []dnp3.Point{{Value: at, Interval: uint32(interval)}})
+		schedule, err := dnp3.EncodeBlock(50, 2, dnp3.Q8Count, []dnp3.Point{{Value: at, Interval: interval}})
 		if err != nil {
 			return nil, err
 		}
@@ -412,7 +412,7 @@ func parseOperate(a args) (request, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := a.requiredInteger("index", 0, 65535)
+	index, err := a.requiredUint16Flag("index", 0, 65535)
 	if err != nil {
 		return nil, err
 	}
@@ -440,20 +440,20 @@ func parseOperate(a args) (request, error) {
 		if !ok {
 			return nil, usagef("--code must be LATCH_ON, LATCH_OFF, PULSE_ON, PULSE_OFF, CLOSE or TRIP")
 		}
-		count, err := a.integer("count", 1, 0, 255)
+		count, err := a.uint8Flag("count", 1, 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		on, err := a.integer("on-ms", 100, 0, math.MaxUint32)
+		on, err := a.uint32Flag("on-ms", 100, 0, math.MaxUint32)
 		if err != nil {
 			return nil, err
 		}
-		off, err := a.integer("off-ms", 100, 0, math.MaxUint32)
+		off, err := a.uint32Flag("off-ms", 100, 0, math.MaxUint32)
 		if err != nil {
 			return nil, err
 		}
 		ctl = control{group: 12, variation: 1, point: dnp3.Point{Index: uint32(index),
-			CROB: dnp3.CROB{Code: code, Count: uint8(count), OnTime: uint32(on), OffTime: uint32(off)}}}
+			CROB: dnp3.CROB{Code: code, Count: count, OnTime: on, OffTime: off}}}
 	} else {
 		for _, f := range []string{"code", "count", "on-ms", "off-ms"} {
 			if a.has(f) {
@@ -464,7 +464,7 @@ func parseOperate(a args) (request, error) {
 		if err != nil {
 			return nil, err
 		}
-		if ctl, err = analogControl(kind, uint16(index), value); err != nil {
+		if ctl, err = analogControl(kind, index, value); err != nil {
 			return nil, err
 		}
 	}
@@ -685,6 +685,7 @@ func runClient(argv []string) int {
 		host                                                            string
 		port, local, remote, connectTimeout, timeout, collect, duration int64
 		keepAlive                                                       int64
+		localAddr, remoteAddr                                           uint16
 		req                                                             request
 		freq                                                            fileRequest
 		areq                                                            attributeRequest
@@ -728,6 +729,12 @@ func runClient(argv []string) int {
 		}
 		remote = dnp3.AddrBroadcastOptional
 	}
+	if err == nil {
+		localAddr, err = usageUint16("local-addr", local)
+	}
+	if err == nil {
+		remoteAddr, err = usageUint16("remote-addr", remote)
+	}
 	fileOp := slices.Contains(fileOperations, op)
 	attributeOp := slices.Contains(attributeOperations, op)
 	switch {
@@ -754,8 +761,8 @@ func runClient(argv []string) int {
 
 	addr := net.JoinHostPort(host, strconv.Itoa(int(port)))
 	cfg := dnp3.MasterConfig{
-		MasterAddress:     uint16(local),
-		OutstationAddress: uint16(remote),
+		MasterAddress:     localAddr,
+		OutstationAddress: remoteAddr,
 		Timeout:           c.timeout,
 		Log:               libraryLog(),
 		OnUnsolicited:     func(f dnp3.Fragment) { c.record([]dnp3.Fragment{f}, true) },

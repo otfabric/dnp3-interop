@@ -91,12 +91,19 @@ func (s *memStore) children(dir string) []string {
 	return out
 }
 
-func (s *memStore) info(p string, e *storeEntry) dnp3.FileInfo {
-	size := uint32(len(e.data))
+// info is the file information of an entry. The size of a file, or the
+// number of entries of a directory, is a 32-bit field (g70v7): a file that
+// does not fit is an error, not a truncated size.
+func (s *memStore) info(p string, e *storeEntry) (dnp3.FileInfo, error) {
+	n := len(e.data)
 	if e.dir {
-		size = uint32(len(s.children(p)))
+		n = len(s.children(p))
 	}
-	return dnp3.FileInfo{Name: path.Base("/" + p), Dir: e.dir, Size: size, Created: e.created, Permissions: e.perms}
+	size, err := intToUint32(n)
+	if err != nil {
+		return dnp3.FileInfo{}, fmt.Errorf("%s: size: %w", p, err)
+	}
+	return dnp3.FileInfo{Name: path.Base("/" + p), Dir: e.dir, Size: size, Created: e.created, Permissions: e.perms}, nil
 }
 
 func (s *memStore) Stat(_ context.Context, p string) (dnp3.FileInfo, error) {
@@ -106,7 +113,7 @@ func (s *memStore) Stat(_ context.Context, p string) (dnp3.FileInfo, error) {
 	if e == nil {
 		return dnp3.FileInfo{}, dnp3.ErrFileNotFound
 	}
-	return s.info(p, e), nil
+	return s.info(p, e)
 }
 
 func (s *memStore) List(_ context.Context, dir string) ([]dnp3.FileInfo, error) {
@@ -117,7 +124,11 @@ func (s *memStore) List(_ context.Context, dir string) ([]dnp3.FileInfo, error) 
 	}
 	var out []dnp3.FileInfo
 	for _, p := range s.children(dir) {
-		out = append(out, s.info(p, s.entries[p]))
+		info, err := s.info(p, s.entries[p])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, info)
 	}
 	return out, nil
 }
@@ -393,8 +404,12 @@ func (c *master) writeFile(ctx context.Context, req fileRequest, key uint32, r *
 	if req.append {
 		mode = dnp3.FileModeAppend
 	}
+	fileSize, err := intToUint32(len(req.content))
+	if err != nil {
+		return fmt.Errorf("file size: %w", err)
+	}
 	open, err := c.fileStatus(ctx, dnp3.FCOpenFile, fileObject(3, dnp3.FileCommand{Name: req.name, Mode: mode,
-		Size: uint32(len(req.content)), Permissions: filePerms, Created: time.Now(), MaxBlock: 1024, RequestID: 1, AuthKey: key}.Encode()), r)
+		Size: fileSize, Permissions: filePerms, Created: time.Now(), MaxBlock: 1024, RequestID: 1, AuthKey: key}.Encode()), r)
 	if err != nil {
 		return err
 	}
