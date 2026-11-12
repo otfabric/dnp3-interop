@@ -34,7 +34,7 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 **Date:** 2026-11-12
 **Previous release:** v0.12.0
 
-Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged. A patch release: every gosec v2.30.0 finding in the Go code (`gosec -tests ./...` in each module) is fixed in the code, with no exclusions and no `#nosec`. Before: cbsigma 74, dscsystems 63, own/go-dnp3 85 (on macOS), and 2 more in own/go-dnp3's Linux-only serial code; after: 0 in each module.
+Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged. A patch release: every gosec v2.30.0 finding in the Go code is fixed in the code, with no exclusions and no `#nosec`. Standalone `gosec -tests ./...` per module, before: cbsigma 74, dscsystems 63, own/go-dnp3 85 (on macOS), and 2 more in own/go-dnp3's Linux-only serial code; after: 0 in each module, on macOS and on Linux. gosec findings are fixed in the code. gosec does not run in this repository's public lint or CI (otfabric/engineering policy GO-014, ADR-0011): a maintainer scans on their own machine with `make sast REPO=dnp3-interop` from otfabric/engineering before each release, and accepted findings are kept in a private repository.
 
 ### Fixed
 
@@ -45,7 +45,8 @@ Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged.
 
 ### Docs
 
-- CONTRIBUTING.md: the Go style rule (gosec-clean, no `#nosec`, checked conversions, `os.Root`).
+- CONTRIBUTING.md: the Go style rule (gosec findings fixed in code, no `#nosec`, checked conversions, `os.Root`).
+- SECURITY.md: how gosec findings are handled: fixed in code; scanned before each release with `make sast REPO=dnp3-interop` from otfabric/engineering (ADR-0011), not in public CI (GO-014); accepted findings in a private repository.
 
 ---
 
