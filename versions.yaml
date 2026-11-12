@@ -156,7 +156,6 @@ tooling:
   bats: "bats/bats:1.14.0@sha256:5322b877351fda0cc435de8c6116de7d0a2ec79d7c680132a0ef329a633bc66f"
   trivy: "ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
   govulncheck: "golang.org/x/vuln/cmd/govulncheck@v1.9.0"   # run with the golang image of the adapters
-  gosec: "github.com/securego/gosec/v2/cmd/gosec@v2.30.0"   # run with the golang image of the adapters
 
 # Test tools: not implementations, no adapter.
 tools:

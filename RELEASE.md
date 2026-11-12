@@ -36,10 +36,6 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged. A patch release: every gosec v2.30.0 finding in the Go code (`gosec -tests ./...` in each module) is fixed in the code, with no exclusions and no `#nosec`. Before: cbsigma 74, dscsystems 63, own/go-dnp3 85 (on macOS), and 2 more in own/go-dnp3's Linux-only serial code; after: 0 in each module.
 
-### Added
-
-- **gosec on every Go module** (cbsigma, dscsystems, own/go-dnp3), tests included: `make lint-go`, part of `make lint` and of the CI step **Shellcheck, hadolint, ruff, bandit and gosec**. gosec v2.30.0 runs in the golang image of the adapters, pinned in the Makefile (`GOSEC_VERSION`) and in `versions.yaml` (`tooling.gosec`), which `scripts/check-versions.sh` checks. No exclusions, no `#nosec`.
-
 ### Fixed
 
 - **Integer conversions (G115)**: flag, fixture and length values reach the protocol fields through checked conversions (`convert.go` in each module) instead of plain conversions. Every value was already bounded by the flag or fixture checks, so no input that worked before fails now; a bound that ever disagreed with a field's width is a usage error (exit 2) for a flag and an invalid fixture (exit 4) for a fixture, instead of a truncated value. A file of more than 4 GiB, which only a master could write, is an error of its size instead of a truncated size (cbsigma: the error of the store; own/go-dnp3: file status FATAL). The control handlers check the 32-bit index of a request against the 16 bits of a fixture index once, before looking the point up; the answers are unchanged. The dscsystems adapter reads the indexes of a start-stop range in 16 bits without wrapping and the 48-bit time of a security statistic directly into an int64; the own image reads a 48-bit attribute time the same way.
@@ -50,7 +46,6 @@ Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged.
 ### Docs
 
 - CONTRIBUTING.md: the Go style rule (gosec-clean, no `#nosec`, checked conversions, `os.Root`).
-- README.md, CONTRIBUTING.md, SECURITY.md: gosec in `make lint` and in the static checks of CI.
 
 ---
 

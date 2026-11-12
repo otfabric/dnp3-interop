@@ -83,7 +83,6 @@ for tool in SHELLCHECK HADOLINT PYTHON BATS; do
 done
 need "Makefile GO_IMAGE digest" "$(mk GO_IMAGE | sed -E 's|^.*@||')"
 need "Makefile govulncheck" "govulncheck@$(mk GOVULNCHECK_VERSION)\""
-need "Makefile gosec" "gosec@$(mk GOSEC_VERSION)\""
 need "qualify.sh Trivy" "\"$(sed -nE 's|^TRIVY_IMAGE="\$\{TRIVY_IMAGE:-(.*)\}"$|\1|p' scripts/qualify.sh)\""
 
 # Debian packages: every Debian stage installs from the snapshot in

@@ -9,7 +9,7 @@
 
 ## Setup
 
-Docker (with buildx), `jq`, GNU make and Python 3. Nothing else: compilers, Maven and the Go and Python toolchains run inside the image builds, and the linters (shellcheck, hadolint, ruff, bandit, gosec), bats, the Go tests and govulncheck run in containers pinned in the Makefile.
+Docker (with buildx), `jq`, GNU make and Python 3. Nothing else: compilers, Maven and the Go and Python toolchains run inside the image builds, and the linters (shellcheck, hadolint, ruff, bandit), bats, the Go tests and govulncheck run in containers pinned in the Makefile.
 
 ```sh
 make ci     # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
@@ -82,7 +82,7 @@ Do not build a shared adapter framework. Adapters in different languages share a
 
 - Shell: `bash`, `set -uo pipefail`, shellcheck-clean (`make lint`). No associative arrays or other bash 4+ features in code paths macOS's `/bin/bash` could run.
 - C++: C++17, `-Wall -Wextra -Werror` on the adapter's own sources.
-- Go: `gofmt`, `go vet`, gosec-clean with the tests included (`make lint-go`, part of `make lint`). A finding is fixed in the code: no `#nosec`, no exclusions. Fixture, flag and length integers reach a protocol field through the checked conversions of `convert.go`, which fail with the contract's exit code (2 for a flag, 4 for a fixture) instead of truncating; a fixture name, or a file name of a fixture, is opened through an `os.Root`, which it cannot leave.
+- Go: `gofmt`, `go vet`, gosec-clean with the tests included (`gosec -tests ./...` in each module). A finding is fixed in the code: no `#nosec`, no exclusions. Fixture, flag and length integers reach a protocol field through the checked conversions of `convert.go`, which fail with the contract's exit code (2 for a flag, 4 for a fixture) instead of truncating; a fixture name, or a file name of a fixture, is opened through an `os.Root`, which it cannot leave.
 - Python: `python -I`, standard library only besides the upstream package.
 - Documentation states what was verified. If something is assumed or untested, say so.
 

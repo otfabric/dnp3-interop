@@ -251,7 +251,7 @@ make help        # all targets
 make ci          # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
 make features    # cross-stack self-test of the contract 1.1..1.5 features (TLS, UDP, serial, files, SAv5, ...)
 make validate    # fixtures against the schema and the cross-field rules, versions.yaml against the build files
-make lint        # shellcheck, hadolint, ruff, bandit and gosec, pinned, in containers
+make lint        # shellcheck, hadolint, ruff and bandit, pinned, in containers
 make test-scripts test-go fuzz vulncheck   # bats tests of the scripts; Go tests, fuzz targets and govulncheck of the Go modules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release

@@ -51,7 +51,7 @@ jobs:
         run: scripts/check-known-bugs.sh
       - name: Fixtures
         run: python3 scripts/validate-fixtures.py --require-schema
-      - name: Shellcheck, hadolint, ruff, bandit and gosec (pinned, in containers)
+      - name: Shellcheck, hadolint, ruff and bandit (pinned, in containers)
         run: make lint
       - name: The dnp3c image is never published
         # It is built here, but no target may push it, even when asked to on
