@@ -18,6 +18,10 @@ const (
 	schemaVersion    = "1.0"
 	defaultFixture   = "/fixtures/baseline/fixture.json"
 	defaultReadyFile = "/run/dnp3-interop/ready"
+	fixturesDir      = "/fixtures"
+	// readyFileMode: the readiness file is empty and only its existence
+	// counts (the health check is test -f), so only its owner needs access.
+	readyFileMode = 0o600
 
 	exitOK             = 0
 	exitFailed         = 1
@@ -242,7 +246,14 @@ func printFixture(name string) int {
 		logf("print-fixture: '%s' is not a fixture name", name)
 		return exitUsage
 	}
-	f, err := os.Open("/fixtures/" + name + "/fixture.json")
+	// The name is opened in an os.Root of the fixtures: it cannot leave them.
+	root, err := os.OpenRoot(fixturesDir)
+	if err != nil {
+		logf("print-fixture: no fixtures: %v", err)
+		return exitFailed
+	}
+	defer func() { _ = root.Close() }()
+	f, err := root.Open(name + "/fixture.json")
 	if err != nil {
 		logf("print-fixture: no fixture '%s'", name)
 		return exitFailed

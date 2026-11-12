@@ -37,24 +37,53 @@ func fileStatusName(s dnp3.FileStatus) string {
 
 // ---- outstation ----
 
+// The modes of the served tree. The library's directory handler reports the
+// nine permission bits of a file to the master (g70v7), and the contract's
+// file-info self-test expects rw-r--r-- for a fixture file
+// (scripts/features.sh); the directories are rwxr-xr-x to match. The tree
+// is a fresh temporary directory (0700) of the adapter's own user.
+const (
+	servedFileMode = 0o644
+	servedDirMode  = 0o755
+)
+
 // fileTree writes the files of the fixture into a fresh directory, which the
-// library's directory handler then serves.
+// library's directory handler then serves. The fixture's names are written
+// through an os.Root of that directory, so none can leave it.
 func fileTree(fx *fixture) (string, error) {
-	root, err := os.MkdirTemp("", "dnp3-interop-files-")
+	dir, err := os.MkdirTemp("", "dnp3-interop-files-")
 	if err != nil {
 		return "", err
 	}
+	if err := writeTree(dir, fx); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", err
+	}
+	return dir, nil
+}
+
+func writeTree(dir string, fx *fixture) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
 	for _, d := range fx.Directories {
-		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(d)), 0o755); err != nil {
-			return "", err
+		if err := root.MkdirAll(rootPath(d), servedDirMode); err != nil {
+			return err
 		}
 	}
 	for name, content := range fx.Files {
-		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(name)), content, 0o644); err != nil {
-			return "", err
+		if err := root.WriteFile(rootPath(name), content, servedFileMode); err != nil {
+			return err
 		}
 	}
-	return root, nil
+	return nil
+}
+
+// rootPath is a fixture name ("/dir/a.txt") relative to the served tree.
+func rootPath(name string) string {
+	return filepath.FromSlash(strings.TrimPrefix(name, "/"))
 }
 
 func fileEvent(action, name string, status dnp3.FileStatus) {

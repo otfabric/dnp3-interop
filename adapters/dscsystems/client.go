@@ -172,11 +172,11 @@ func parseOperation(op string, a args) (request, error) {
 			return s.ScanClasses(ctx, classMask(c))
 		}, nil
 	case "read":
-		g, err := a.requiredInteger("group", 0, 255)
+		g, err := a.requiredUint8Flag("group", 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		v, err := a.requiredInteger("variation", 0, 255)
+		v, err := a.requiredUint8Flag("variation", 0, 255)
 		if err != nil {
 			return nil, err
 		}
@@ -192,11 +192,11 @@ func parseOperation(op string, a args) (request, error) {
 			}
 			return nil, usagef("read without --start/--stop: the library's master cannot read all objects of a group")
 		}
-		start, err := a.integer("start", 0, 0, 65535)
+		start, err := a.uint16Flag("start", 0, 0, 65535)
 		if err != nil {
 			return nil, err
 		}
-		stop, err := a.integer("stop", 0, 0, 65535)
+		stop, err := a.uint16Flag("stop", 0, 0, 65535)
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +204,7 @@ func parseOperation(op string, a args) (request, error) {
 			return nil, usagef("--start is larger than --stop")
 		}
 		return func(ctx context.Context, s *master.Session, _ *result) error {
-			return s.ScanRange(ctx, uint8(g), uint8(v), uint16(start), uint16(stop))
+			return s.ScanRange(ctx, g, v, start, stop)
 		}, nil
 	case "operate":
 		return parseOperate(a)
@@ -287,11 +287,10 @@ func parseOperate(a args) (request, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := a.requiredInteger("index", 0, 65535)
+	idx, err := a.requiredUint16Flag("index", 0, 65535)
 	if err != nil {
 		return nil, err
 	}
-	idx := uint16(index)
 	mode := a.str("mode", "direct")
 	if mode != "direct" && mode != "sbo" && mode != "direct-no-ack" {
 		return nil, usagef("--mode must be direct, sbo or direct-no-ack")
@@ -311,19 +310,19 @@ func parseOperate(a args) (request, error) {
 		if !ok {
 			return nil, usagef("--code must be LATCH_ON, LATCH_OFF, PULSE_ON, PULSE_OFF, CLOSE or TRIP")
 		}
-		count, err := a.integer("count", 1, 0, 255)
+		count, err := a.uint8Flag("count", 1, 0, 255)
 		if err != nil {
 			return nil, err
 		}
-		on, err := a.integer("on-ms", 100, 0, math.MaxUint32)
+		on, err := a.uint32Flag("on-ms", 100, 0, math.MaxUint32)
 		if err != nil {
 			return nil, err
 		}
-		off, err := a.integer("off-ms", 100, 0, math.MaxUint32)
+		off, err := a.uint32Flag("off-ms", 100, 0, math.MaxUint32)
 		if err != nil {
 			return nil, err
 		}
-		cmd = master.CROB(idx, dnp3.ControlRelayOutputBlock{Code: code, Count: uint8(count), OnTime: uint32(on), OffTime: uint32(off)})
+		cmd = master.CROB(idx, dnp3.ControlRelayOutputBlock{Code: code, Count: count, OnTime: on, OffTime: off})
 	} else {
 		for _, f := range []string{"code", "count", "on-ms", "off-ms"} {
 			if a.has(f) {
@@ -440,6 +439,7 @@ func runClient(argv []string) int {
 		tr                                                              transport
 		sec                                                             security
 		credentials                                                     *master.FileCredentials
+		localAddr, remoteAddr                                           uint16
 	)
 	a, err := parseArgs(argv[1:], flags, switches)
 	if err == nil {
@@ -479,6 +479,12 @@ func runClient(argv []string) int {
 		}
 		remote = 0xFFFF
 	}
+	if err == nil {
+		localAddr, err = usageUint16("local-addr", local)
+	}
+	if err == nil {
+		remoteAddr, err = usageUint16("remote-addr", remote)
+	}
 	fileOp := slices.Contains(fileOperations, op)
 	attributeOp := slices.Contains(attributeOperations, op)
 	switch {
@@ -498,8 +504,8 @@ func runClient(argv []string) int {
 	started := time.Now()
 	h := &handler{}
 	session := master.New(master.Config{
-		LocalAddr:       uint16(local),
-		RemoteAddr:      uint16(remote),
+		LocalAddr:       localAddr,
+		RemoteAddr:      remoteAddr,
 		ResponseTimeout: time.Duration(timeout) * time.Millisecond,
 		Log:             libraryLog(),
 

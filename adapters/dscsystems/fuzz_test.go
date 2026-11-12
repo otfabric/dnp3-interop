@@ -10,6 +10,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +20,16 @@ import (
 
 // frame builds a link frame with dummy CRCs (frames does not check them) and
 // user data split into blocks of 16 octets.
-func frame(control byte, dest, src uint16, data []byte) []byte {
-	out := []byte{0x05, 0x64, byte(5 + len(data)), control, byte(dest), byte(dest >> 8), byte(src), byte(src >> 8), 0, 0}
+func frame(tb testing.TB, control byte, dest, src uint16, data []byte) []byte {
+	tb.Helper()
+	length, err := intToUint8(5 + len(data))
+	if err != nil {
+		tb.Fatalf("frame: %d octets of user data do not fit a link frame: %v", len(data), err)
+	}
+	out := []byte{0x05, 0x64, length, control}
+	out = binary.LittleEndian.AppendUint16(out, dest)
+	out = binary.LittleEndian.AppendUint16(out, src)
+	out = append(out, 0, 0)
 	for len(data) > 0 {
 		k := min(16, len(data))
 		out = append(out, data[:k]...)
@@ -31,7 +41,7 @@ func frame(control byte, dest, src uint16, data []byte) []byte {
 
 func TestFramesReassemblesSplitInput(t *testing.T) {
 	user := bytes.Repeat([]byte{0xC0, 0xC1, 0x81, 0x00, 0x00}, 9) // 45 octets: three blocks
-	stream := append(append([]byte{0xFF, 0x05}, frame(0x44, 1024, 1, user)...), frame(0xC9, 1024, 1, nil)...)
+	stream := append(append([]byte{0xFF, 0x05}, frame(t, 0x44, 1024, 1, user)...), frame(t, 0xC9, 1024, 1, nil)...)
 	for split := range len(stream) {
 		var got [][]byte
 		var headers int
@@ -48,10 +58,10 @@ func TestFramesReassemblesSplitInput(t *testing.T) {
 // octets and user data no longer than a frame can carry, never a panic; and
 // the buffer never holds more than the largest frame.
 func FuzzFrames(f *testing.F) {
-	f.Add(frame(0x44, 1024, 1, []byte{0xC0, 0xC1, 0x01, 0x3C, 0x01, 0x06}), 3)
-	f.Add(frame(0xC9, 0xFFFF, 1, nil), 0)
+	f.Add(frame(f, 0x44, 1024, 1, []byte{0xC0, 0xC1, 0x01, 0x3C, 0x01, 0x06}), 3)
+	f.Add(frame(f, 0xC9, 0xFFFF, 1, nil), 0)
 	f.Add([]byte{0x05, 0x64, 0x04, 0x05, 0x64, 0xFF}, 2)
-	f.Add(append([]byte{0x05}, frame(0x73, 1, 1024, bytes.Repeat([]byte{0xAA}, 250))...), 100)
+	f.Add(append([]byte{0x05}, frame(f, 0x73, 1, 1024, bytes.Repeat([]byte{0xAA}, 250))...), 100)
 	f.Fuzz(func(t *testing.T, stream []byte, split int) {
 		f := &frames{
 			fn: func(app []byte) {
@@ -108,29 +118,58 @@ func outboundSilenced(app []byte) bool {
 	return len(app) < 19 || app[1] != fcAuthResponse || app[4] != 120 || app[5] != 7 || app[6] != 0x5B
 }
 
+// repositoryFixture is a fixture file of the repository.
+type repositoryFixture struct {
+	path string
+	text []byte
+}
+
+// repositoryFixtures reads every fixtures/*/fixture.json of the repository
+// through an os.Root of fixtures/. Outside a checkout there are none.
+func repositoryFixtures() ([]repositoryFixture, error) {
+	root, err := os.OpenRoot(filepath.Join("..", "..", "fixtures"))
+	if err != nil {
+		return nil, nil
+	}
+	defer func() { _ = root.Close() }()
+	paths, err := fs.Glob(root.FS(), "*/fixture.json")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]repositoryFixture, 0, len(paths))
+	for _, p := range paths {
+		text, err := root.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, repositoryFixture{path: p, text: text})
+	}
+	return out, nil
+}
+
 func TestFixturesLoad(t *testing.T) {
-	paths, _ := filepath.Glob(filepath.Join("..", "..", "fixtures", "*", "fixture.json"))
-	if len(paths) == 0 {
+	fixtures, err := repositoryFixtures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fixtures) == 0 {
 		t.Skip("no fixtures: not in a checkout of the repository")
 	}
-	for _, p := range paths {
-		text, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := loadFixture(text); err != nil {
-			t.Errorf("%s: %v", p, err)
+	for _, fx := range fixtures {
+		if _, err := loadFixture(fx.text); err != nil {
+			t.Errorf("%s: %v", fx.path, err)
 		}
 	}
 }
 
 // FuzzLoadFixture: any input is either a fixture or an error, never a panic.
 func FuzzLoadFixture(f *testing.F) {
-	paths, _ := filepath.Glob(filepath.Join("..", "..", "fixtures", "*", "fixture.json"))
-	for _, p := range paths {
-		if text, err := os.ReadFile(p); err == nil {
-			f.Add(text)
-		}
+	fixtures, err := repositoryFixtures()
+	if err != nil {
+		f.Fatal(err)
+	}
+	for _, fx := range fixtures {
+		f.Add(fx.text)
 	}
 	f.Fuzz(func(t *testing.T, text []byte) {
 		fx, err := loadFixture(text)
