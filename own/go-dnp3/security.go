@@ -48,7 +48,7 @@ type security struct {
 	user secauth.User
 	// Security statistics: the class of the g122 events and how many
 	// increments of a statistic raise one.
-	statisticsClass     int
+	statisticsClass     server.Class
 	statisticsThreshold uint32
 }
 
@@ -72,24 +72,24 @@ func parseSecurity(a args) (security, error) {
 	if err != nil || (len(key) != 16 && len(key) != 32) {
 		return security{}, usagef("--sa-update-key must be 16 or 32 octets of hex")
 	}
-	user, err := a.integer("sa-user", 1, 1, 65535)
+	user, err := a.uint16Flag("sa-user", 1, 1, 65535)
 	if err != nil {
 		return security{}, err
 	}
-	class, err := a.integer("sa-statistics-class", 1, 1, 3)
+	class, err := a.uint8Flag("sa-statistics-class", 1, 1, 3)
 	if err != nil {
 		return security{}, err
 	}
 	// At most 65 535 (IEEE 1815-2012 7.6.1.4.2), which go-dnp3 enforces.
-	threshold, err := a.integer("sa-statistics-threshold", 10, 1, 65535)
+	threshold, err := a.uint32Flag("sa-statistics-threshold", 10, 1, 65535)
 	if err != nil {
 		return security{}, err
 	}
-	return security{on: true, user: secauth.User{Number: uint16(user), UpdateKey: key, MAC: macCodes[mac]},
-		statisticsClass: int(class), statisticsThreshold: uint32(threshold)}, nil
+	return security{on: true, user: secauth.User{Number: user, UpdateKey: key, MAC: macCodes[mac]},
+		statisticsClass: server.Class(class), statisticsThreshold: threshold}, nil
 }
 
 func (s security) server() server.SecureAuth {
-	return server.SecureAuth{User: s.user, StatisticsClass: server.Class(s.statisticsClass),
+	return server.SecureAuth{User: s.user, StatisticsClass: s.statisticsClass,
 		StatisticsThreshold: s.statisticsThreshold}
 }
