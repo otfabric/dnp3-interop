@@ -510,10 +510,11 @@ ready_transport() { docker logs "$1" 2>&1 | jq -Rr 'fromjson? | select(.event? =
 # Fixture values the file checks expect.
 README_HEX=$(jq -r '.files[] | select(.name == "/readme.txt") | .content' "${FILES_FIXTURE}")
 BLOCKS_HEX=$(jq -r '.files[] | select(.name == "/data/blocks.bin") | .content' "${FILES_FIXTURE}")
-# The file-info name without its leading slash: see the [files] file-info check.
+# A result document without what differs from run to run. The name of a
+# file-info answer is kept as it is: every master reports the name of the
+# descriptor the outstation sent, so the masters of one outstation agree.
 NORMALIZE_FILES='del(.adapter, .elapsedMs, .error.message?) | (.file?.time?) |= empty | (.files[]?.time?) |= empty
-  | (if .files then .files |= sort_by(.name) else . end)
-  | (if (.file.name? | type) == "string" then .file.name |= sub("^/"; "") else . end)'
+  | (if .files then .files |= sort_by(.name) else . end)'
 
 # reverse_op <server> <client> <tag> <client args...>: one operation with the
 # roles of the connection reversed; prints the master's result document. The
@@ -1068,11 +1069,10 @@ suite() {
                 jq -cS "${NORMALIZE_FILES}" <<<"${doc}" > "${WORK}/agree-${server}/ls-${client}" 2>/dev/null
                 doc=$(client "${client}" -- file-info --name /readme.txt --host "${name}")
                 at_pair "files.file-info" "${pair}"
-                # IEEE 1815-2012 4.4.18: the descriptor of the answer carries
-                # the file name of the request (/readme.txt); some outstations
-                # answer with the last path element. Both are taken.
-                check "${pair}: [files] file-info" "readme.txt file 43 rw-r--r--" \
-                    "$(jq -r '"\(.file.name | sub("^/"; "")) \(.file.type) \(.file.size) \(.file.permissions)"' <<<"${doc}" 2>/dev/null)"
+                # IEEE 1815-2012 4.4.18: the file name of the answer's
+                # descriptor is the one of the request (/readme.txt).
+                check "${pair}: [files] file-info" "/readme.txt file 43 rw-r--r--" \
+                    "$(jq -r '"\(.file.name) \(.file.type) \(.file.size) \(.file.permissions)"' <<<"${doc}" 2>/dev/null)"
                 jq -cS "${NORMALIZE_FILES}" <<<"${doc}" > "${WORK}/agree-${server}/info-${client}" 2>/dev/null
                 doc=$(client "${client}" -- file-put --name /logs/new.txt --content 0001fe --host "${name}")
                 at_pair "files.file-put" "${pair}"

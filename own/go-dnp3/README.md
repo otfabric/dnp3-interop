@@ -27,7 +27,7 @@ docker run -d --name go-dnp3 -p 127.0.0.1:20000:20000 ghcr.io/otfabric/dnp3-inte
 until docker exec go-dnp3 test -f /run/dnp3-interop/ready; do sleep 0.1; done
 ```
 
-`<tag>` is a go-dnp3 version such as `v1.11.0`, or `latest`, the newest one
+`<tag>` is a go-dnp3 version such as `v1.12.0`, or `latest`, the newest one
 published. A rebuild of a version replaces its tag, so pin the digest if you need
 an exact build. The digest is in the summary of the
 [workflow run](https://github.com/otfabric/dnp3-interop/actions/workflows/own-go-dnp3.yml),
@@ -124,7 +124,7 @@ less than one operation:
   `ONLINE`, as the other masters do; the library decodes them with flags 0.
 - `--transport udp` binds the local port itself: `client.UDP` cannot.
 
-Three differences from the reference outstations are permitted, and the
+Two differences from the reference outstations are permitted, and the
 checks accept them:
 
 - While its time is unsynchronized (`needTime` in the fixture, until a master
@@ -132,11 +132,13 @@ checks accept them:
   time under an unsynchronized CTO (g2v3 after g51v2), not in the point's event
   variation. This is on purpose: g2v2 cannot say that its time is
   unsynchronized.
-- GET_FILE_INFO is answered with the file name of the request
-  (`/readme.txt`), as IEEE 1815-2012 4.4.18 asks; the other outstations answer
-  with the last path element.
 - A read of every attribute of a set (g0v254) returns them from the highest
   variation down.
+
+GET_FILE_INFO is answered with the file name of the request (`/readme.txt`),
+as IEEE 1815-2012 4.4.18 asks and the `[files] file-info` check requires; the
+DSC go-dnp3 and cB-Sigma v0.3.1 outstations answer with the last path element,
+which are known differences in `tests/known-bugs.tsv`.
 
 With secure authentication, the Authentication Failures statistic is reported
 as an event at every session key change (IEEE 1815-2012 Table 7-6), and a key

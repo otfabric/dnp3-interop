@@ -370,7 +370,12 @@ answers the first endpoint it hears from for its whole life.
 
 The DSC go-dnp3 outstation serves a directory: entries report the file system's
 sizes (a directory its block size, 4096) and modification times as creation
-times. It handles one transfer at a time.
+times. It handles one transfer at a time. GET_FILE_INFO is answered with the
+name the file handler gives, which for the library's directory handler is the
+last path element (`readme.txt`), not the name of the request (`/readme.txt`)
+that IEEE 1815-2012 4.4.18 asks for (`outstation/file.go`, `onGetFileInfo`):
+a known difference (`dscsystems-file-info-base-name`) of the `[files]
+file-info` check.
 
 ### DSC go-dnp3: secure authentication, against itself only
 
@@ -411,8 +416,8 @@ eight bits of each octet.
 
 The self-tests found four behaviours of v0.3.0 that differed from the other
 stacks, each changed in v0.3.1 (cB-Sigma/dnp3#2 to #5, pull requests #6 to
-#9); three were defects, and the third below was not. Their rows have left
-[tests/known-bugs.tsv](../tests/known-bugs.tsv):
+#9); three were defects, and the third below was not. Their rows of v0.3.0
+have left [tests/known-bugs.tsv](../tests/known-bugs.tsv):
 
 - The outstation answered a request with the same sequence number and octets
   as the previous one from its cache, READ included and across connections,
@@ -420,11 +425,14 @@ stacks, each changed in v0.3.1 (cB-Sigma/dnp3#2 to #5, pull requests #6 to
   events already confirmed.
 - FREEZE AND CLEAR cleared the counters without a counter event.
 - GET_FILE_INFO answered with the name of the request (the full path), where
-  the other outstations answered with the name of the file. This was not a
-  defect: IEEE 1815-2012 4.4.18 has the File Descriptor of the answer carry
-  the file name of the request. v0.3.1 answers with the last path element, as
-  DSC go-dnp3 and dnp3py do; the `[files] file-info` check takes both since
-  v0.12.0.
+  DSC go-dnp3 answered with the last path element. v0.3.0 was right: IEEE
+  1815-2012 4.4.18 has the filename offset, file name size, request ID and
+  file name octets of the answer filled in with the same data as in the
+  request, so the answer for `/readme.txt` names `/readme.txt`. The report
+  was mistaken, and v0.3.1 now answers with the last path element
+  (`readme.txt`, `outfile.go`, `fileInfo`). Since v0.12.0 the `[files]
+  file-info` check asks for the name of the request, and the answer of v0.3.1
+  is a known difference (`cbsigma-file-info-base-name`).
 - After a keep-alive the master waited its response timeout before it started
   the keep-alive timer again, so keep-alives came at the interval plus that
   timeout.
@@ -731,7 +739,7 @@ opendnp3 and DSC go-dnp3 masters.
 
 OT Fabric's own stack (`own/go-dnp3`, not a reference; see
 [own/go-dnp3/README.md](../own/go-dnp3/README.md)) differs from the reference
-outstations in three ways that the standard and the contract leave open. None
+outstations in two ways that the standard and the contract leave open. None
 is a bug, and none is in `tests/known-bugs.tsv`: the checks accept both.
 
 **Binary events with relative time while unsynchronized.** An outstation of
@@ -752,11 +760,12 @@ between the control and the poll, with a second of slack. Result documents do
 not show the CTO, so the g51v2 is not checked. The dnp3py master leaves the
 time of a relative-time object null: such an object is taken at its value.
 
-**The file name of GET_FILE_INFO.** Since go-dnp3 v1.11.0 the File Descriptor
-(g70v7) of the answer carries the file name of the request (`/readme.txt`), as
-IEEE 1815-2012 4.4.18 asks; the other outstations answer with the last path
-element (`readme.txt`). The `[files] file-info` checks of `scripts/features.sh`
-take the name without its leading slash.
+**The file name of GET_FILE_INFO** is no longer a difference. Since go-dnp3
+v1.11.0 the File Descriptor (g70v7) of the answer carries the file name of the
+request (`/readme.txt`), as IEEE 1815-2012 4.4.18 asks, and since v0.12.0 the
+`[files] file-info` checks of `scripts/features.sh` ask for exactly that. The
+DSC go-dnp3 and cB-Sigma v0.3.1 outstations answer with the last path element
+(`readme.txt`), which are known differences in `tests/known-bugs.tsv`.
 
 **The order of the attributes of a set.** The contract keeps the attributes in
 the order they arrived and does not fix that order: go-dnp3 serves g0v254 from

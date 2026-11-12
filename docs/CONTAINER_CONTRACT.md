@@ -518,8 +518,11 @@ An entry (`file-ls`, `file-info`) is
 directory), `permissions` the nine permission bits as `rwxr-x---`, `time` the
 creation time the outstation reports. `name` is the entry's name as the
 outstation sends it: in a directory listing the last path element; in the
-answer to `file-info` the name of the request (`/readme.txt`, IEEE 1815-2012
-4.4.18), which some outstations give as the last path element. `content` is lower-case hex.
+answer to `file-info` the name of the request (`/readme.txt`): IEEE 1815-2012
+4.4.18 has the file name of the answer's descriptor filled in with the same
+data as in the request. An outstation that answers `file-info` with the last
+path element differs from 4.4.18; the self-tests count that as a known
+difference. `content` is lower-case hex.
 `file-get` of a directory fails with whatever status the outstation answers.
 
 `fileStatus` (string or null): the file status of the outstation's last
