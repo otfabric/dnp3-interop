@@ -62,6 +62,7 @@ last release.
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
 | OT Fabric go-dnp3 | latest release when built | MIT | https://github.com/otfabric/go-dnp3 |
+| golang.org/x/sys (the serial line's termios ioctl) | the version in `own/go-dnp3/go.mod` | BSD-3-Clause | https://go.googlesource.com/sys |
 | Go standard library and runtime | 1.27.4 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Adapter | this repository, `own/go-dnp3/` | MIT | https://github.com/otfabric/dnp3-interop |

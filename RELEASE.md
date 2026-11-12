@@ -29,6 +29,26 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.12.1
+
+**Date:** 2026-11-12
+**Previous release:** v0.12.0
+
+Container contract 1.5, fixture format 1.0 and every upstream pin are unchanged. A patch release: every gosec v2.30.0 finding in the Go code (`gosec -tests ./...` in each module) is fixed in the code, with no exclusions and no `#nosec`. Before: cbsigma 74, dscsystems 63, own/go-dnp3 85 (on macOS), and 2 more in own/go-dnp3's Linux-only serial code; after: 0 in each module.
+
+### Fixed
+
+- **Integer conversions (G115)**: flag, fixture and length values reach the protocol fields through checked conversions (`convert.go` in each module) instead of plain conversions. Every value was already bounded by the flag or fixture checks, so no input that worked before fails now; a bound that ever disagreed with a field's width is a usage error (exit 2) for a flag and an invalid fixture (exit 4) for a fixture, instead of a truncated value. A file of more than 4 GiB, which only a master could write, is an error of its size instead of a truncated size (cbsigma: the error of the store; own/go-dnp3: file status FATAL). The control handlers check the 32-bit index of a request against the 16 bits of a fixture index once, before looking the point up; the answers are unchanged. The dscsystems adapter reads the indexes of a start-stop range in 16 bits without wrapping and the 48-bit time of a security statistic directly into an int64; the own image reads a 48-bit attribute time the same way.
+- **Paths (G304, G703)**: `print-fixture` opens `<name>/fixture.json` in an `os.Root` of `/fixtures`, which the name cannot leave even through a symbolic link; `--fixture` is cleaned (`filepath.Clean`). The dscsystems adapter writes the fixture's files into its served tree through an `os.Root` of that tree, and removes the tree when that fails. The Go tests read the repository's fixtures through an `os.Root` of `fixtures/`.
+- **File modes (G301, G306)**: the readiness file is written with mode 0600 instead of 0644; it is empty and only its existence counts (`test -f`, by the image's own user). The tests' temporary files are 0600. The files and directories the dscsystems outstation serves keep 0644 and 0755, now named constants (`servedFileMode`, `servedDirMode`): the library reports those bits to the master, and the `[files] file-info` check wants `rw-r--r--`. gosec flags a named constant mode in `os.WriteFile` and `os.MkdirAll` as well as a later `os.Chmod`; it does not check the modes of `os.Root`'s methods, through which the tree is written.
+- **Unsafe (G103, own/go-dnp3)**: the serial line's termios ioctl goes through `golang.org/x/sys/unix` (`IoctlSetTermios`, BSD-3-Clause, now in THIRD_PARTY_NOTICES.md) instead of `syscall.Syscall` with an `unsafe.Pointer`; the line settings are unchanged.
+
+### Docs
+
+- CONTRIBUTING.md: the Go style rule (gosec-clean, no `#nosec`, checked conversions, `os.Root`).
+
+---
+
 ## v0.12.0
 
 **Date:** 2026-11-11
