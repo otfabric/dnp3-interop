@@ -36,6 +36,8 @@
 #
 # Environment: REGISTRY, VERSION (image tag, default dev), VERBOSE=1,
 #              REPORT_DIR (keeps every result document when set),
+#              EXTRA_KNOWN_BUGS (a further table of known bugs in the format
+#              of tests/known-bugs.tsv, for an image outside the release),
 #              FIXTURE (default baseline): the fixture the servers serve, with
 #              the cases of tests/cases-<fixture>.tsv (tests/cases.tsv for the
 #              baseline). Only adapters whose pointTypes cover the fixture
@@ -84,7 +86,7 @@ for adapter in "${ADAPTERS[@]}"; do
             printf '%s\t%s\t%s\t%s\t%s\n' "${bug_adapter}" "${bug_regex}" "${bug_text}" "${bug_id}" "${bug_url}" >> "${WORK}/active"
             log "known bug in ${adapter} ${version}: ${bug_text}"
         fi
-    done < "${KNOWN_BUGS}"
+    done < <(cat "${KNOWN_BUGS}" ${EXTRA_KNOWN_BUGS:+"${EXTRA_KNOWN_BUGS}"})
 done
 
 # has <adapter> <feature>: the adapter declares the feature.

@@ -457,10 +457,8 @@ func parseOperate(a args) (request, error) {
 		crob.Count, crob.OnTime, crob.OffTime = uint8(count), uint32(on), uint32(off)
 		cmd = client.Command{Index: uint32(index), Value: crob, GV: app.G12V1}
 	} else {
-		for _, f := range []string{"code", "count", "on-ms", "off-ms"} {
-			if a.has(f) {
-				return nil, usagef("--code, --count, --on-ms and --off-ms are for g12v1")
-			}
+		if slices.ContainsFunc([]string{"code", "count", "on-ms", "off-ms"}, a.has) {
+			return nil, usagef("--code, --count, --on-ms and --off-ms are for g12v1")
 		}
 		if _, ok := analogTypes[kind]; !ok {
 			return nil, usagef("--type must be g12v1, g41v1, g41v2, g41v3 or g41v4")
@@ -546,7 +544,7 @@ func controlStep(ctx context.Context, c *client.Client, fc app.FunctionCode, h a
 // items, comma-separated.
 func parseControls(text string) ([]client.Command, error) {
 	var cmds []client.Command
-	for _, item := range strings.Split(text, ",") {
+	for item := range strings.SplitSeq(text, ",") {
 		parts := strings.Split(item, ":")
 		if len(parts) != 3 {
 			return nil, usagef("--controls items are TYPE:INDEX:CODE or TYPE:INDEX:VALUE")
@@ -744,6 +742,10 @@ func runClient(argv []string) int {
 		client.WithAutoIntegrity(false),
 		client.WithAutoEventPoll(false),
 		client.WithTimeSync(client.TimeSyncNone),
+		// No startup sequence at Connect (go-dnp3 v1.11.0 runs an integrity
+		// poll by default), which would read and confirm the events a case
+		// checks.
+		client.WithStartup(client.Startup{}),
 		client.WithHandler(h),
 		client.WithMetrics(metrics),
 		client.WithLogger(libraryLog()),
@@ -994,7 +996,7 @@ func parseDeadbands(a args) ([]app.Object, error) {
 		return nil, err
 	}
 	values := map[uint32]float64{}
-	for _, item := range strings.Split(text, ",") {
+	for item := range strings.SplitSeq(text, ",") {
 		index, value, ok := strings.Cut(item, ":")
 		i, ierr := strconv.ParseUint(index, 10, 16)
 		v, verr := strconv.ParseFloat(value, 32)

@@ -62,7 +62,7 @@ last release.
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
 | OT Fabric go-dnp3 | latest release when built | MIT | https://github.com/otfabric/go-dnp3 |
-| Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| Go standard library and runtime | 1.27.4 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Adapter | this repository, `own/go-dnp3/` | MIT | https://github.com/otfabric/dnp3-interop |
 | Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
@@ -76,7 +76,7 @@ and `/licenses/dnp3-interop/LICENSE`.
 |-----------|---------|---------|--------|
 | DSC go-dnp3 (DSC Systems) | v0.8.2, commit `1fcec1d7881541d794fe257d2ede3ba46587b500` | GPL-3.0-or-later | https://github.com/dscsystems/go-dnp3 |
 | go.bug.st/serial, golang.org/x/sys (linked by DSC go-dnp3's channel package) | the versions in `adapters/dscsystems/go.sum` | BSD-3-Clause | https://github.com/bugst/go-serial, https://go.googlesource.com/sys |
-| Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| Go standard library and runtime | 1.27.4 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Adapter | this repository, `adapters/dscsystems/` | GPL-3.0-or-later | https://github.com/otfabric/dnp3-interop |
 | Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
@@ -89,9 +89,9 @@ Licence texts in the image: `/licenses/go-dnp3/LICENSE`,
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
 | dnp3py | 0.6.0 (PyPI wheel, hash in `adapters/dnp3py/requirements.txt`), tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d` | MIT | https://github.com/craigpnnl/dnp3py |
-| CPython and its standard library | 3.14.8 | PSF-2.0 | https://www.python.org |
+| CPython and its standard library | 3.14.10 | PSF-2.0 | https://www.python.org |
 | Adapter | this repository, `adapters/dnp3py/` | MIT | https://github.com/otfabric/dnp3-interop |
-| Base system | Debian trixie-slim (python:3.14.8-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+| Base system | Debian trixie-slim (python:3.14.10-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
 
 Licence in the image: `/licenses/dnp3py/LICENSE`.
 
@@ -99,10 +99,10 @@ Licence in the image: `/licenses/dnp3py/LICENSE`.
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| cB-Sigma dnp3 (Abhinav Gautam) | v0.3.0, commit `03ffd5c94f8e7a7538d2466d6b8ca27d9cd9c995` | Apache-2.0 | https://github.com/cB-Sigma/dnp3 |
-| cB-Sigma iotsec (Abhinav Gautam), linked by cB-Sigma dnp3 | v0.1.0, commit `ed102883f2128794b49a62a280dd400102665d91` | Apache-2.0 | https://github.com/cB-Sigma/iotsec |
+| cB-Sigma dnp3 (Abhinav Gautam) | v0.3.1, commit `91f2f33c90e978e48bf67d20bca1022e769ed4d6` | Apache-2.0 | https://github.com/cB-Sigma/dnp3 |
+| cB-Sigma iotsec (Abhinav Gautam), linked by cB-Sigma dnp3 | v0.2.0, commit `c84d6be103419e74e4598c2c24458f346f7718dd` | Apache-2.0 | https://github.com/cB-Sigma/iotsec |
 | goburrow/serial (Quoc-Viet Nguyen), linked by cB-Sigma dnp3 | v0.1.0 | MIT | https://github.com/goburrow/serial |
-| Go standard library and runtime | 1.27.2 | BSD-3-Clause | https://go.dev |
+| Go standard library and runtime | 1.27.4 | BSD-3-Clause | https://go.dev |
 | socat (Debian `socat`), for bridging a serial line in tests | Debian trixie | GPL-2.0 | http://www.dest-unreach.org/socat/ |
 | Adapter | this repository, `adapters/cbsigma/` | MIT | https://github.com/otfabric/dnp3-interop |
 | Base system | Debian trixie-slim | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
@@ -117,9 +117,9 @@ Licences and notices in the image: `/licenses/dnp3/LICENSE`,
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
 | nfm-dnp3 (imported as `dnp3py`) | 1.0.1 (PyPI wheel, hash in `adapters/nfmdnp3/requirements.txt`), tag commit `8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6` | MIT, as declared in its package metadata | https://github.com/fxodell/dnp3py |
-| CPython and its standard library | 3.14.8 | PSF-2.0 | https://www.python.org |
+| CPython and its standard library | 3.14.10 | PSF-2.0 | https://www.python.org |
 | Adapter | this repository, `adapters/nfmdnp3/` | MIT | https://github.com/otfabric/dnp3-interop |
-| Base system | Debian trixie-slim (python:3.14.8-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
+| Base system | Debian trixie-slim (python:3.14.10-slim-trixie) | various; see `/usr/share/doc/*/copyright` in the image | https://www.debian.org |
 
 The nfm-dnp3 repository has no licence file: its licence is the one its
 package metadata names (`License: MIT` and the classifier

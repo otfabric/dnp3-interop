@@ -12,12 +12,19 @@
 # main. go.mod and go.sum here are only a starting point for local work.
 
 ARG BASE_REGISTRY=docker.io/library
-# golang:1.27.2-trixie and debian:trixie-slim, multi-arch indexes
+# golang:1.27.4-trixie and debian:trixie-slim, multi-arch indexes
 # (linux/amd64 and linux/arm64): the digests of the reference images.
-ARG GOLANG_DIGEST=sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e
-ARG DEBIAN_DIGEST=sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+ARG GOLANG_DIGEST=sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9
+ARG DEBIAN_DIGEST=sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
+# The snapshot of the Debian archive that debian:trixie-slim at that digest was
+# built from (its /etc/apt/sources.list.d/debian.sources names it). Packages
+# are installed from that snapshot at pinned versions, so a build gets the
+# same packages every time; versions.yaml mirrors them.
+ARG DEBIAN_SNAPSHOT=20261104T212339Z
 
-FROM ${BASE_REGISTRY}/golang:1.27.2-trixie@${GOLANG_DIGEST} AS build
+FROM ${BASE_REGISTRY}/golang:1.27.4-trixie@${GOLANG_DIGEST} AS build
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG UPSTREAM_VERSION
 ARG UPSTREAM_SHA
@@ -66,11 +73,18 @@ RUN set -eu; \
 
 FROM ${BASE_REGISTRY}/debian:trixie-slim@${DEBIAN_DIGEST} AS runtime
 
+ARG DEBIAN_SNAPSHOT
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG ADAPTER_VERSION=dev
 ARG UPSTREAM_VERSION
 
 # socat bridges a pseudo-terminal to TCP for DNP3 over serial (contract 1.1).
-RUN apt-get update && apt-get install -y --no-install-recommends socat \
+RUN sed -i -e "s|^URIs: http://deb.debian.org/debian\$|URIs: http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}|" \
+              -e "s|^URIs: http://deb.debian.org/debian-security\$|URIs: http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}|" \
+              /etc/apt/sources.list.d/debian.sources \
+    && ! grep -q "^URIs: http://deb.debian.org" /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Check-Valid-Until=false update && apt-get install -y --no-install-recommends socat=1.8.0.3-1+deb13u1 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin interop \
     && mkdir -p /run/dnp3-interop \
@@ -88,11 +102,11 @@ LABEL org.opencontainers.image.title="dnp3-interop-otfabric" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${UPSTREAM_VERSION}"
 
-USER interop
+USER 10001
 EXPOSE 20000
 
 HEALTHCHECK --interval=2s --timeout=2s --start-period=10s --retries=15 \
-  CMD test -f /run/dnp3-interop/ready
+  CMD ["test", "-f", "/run/dnp3-interop/ready"]
 
 ENTRYPOINT ["/usr/local/bin/dnp3-interop"]
 CMD ["server"]

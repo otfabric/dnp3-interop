@@ -137,13 +137,19 @@ type testServer struct {
 // startServer runs the server until the test ends.
 func startServer(t *testing.T, out *output, extra ...string) testServer {
 	t.Helper()
+	return startServerFixture(t, out, testFixture, extra...)
+}
+
+// startServerFixture runs the server on a fixture of its own.
+func startServerFixture(t *testing.T, out *output, fixture string, extra ...string) testServer {
+	t.Helper()
 	port := freePort(t)
 	readyFile := filepath.Join(t.TempDir(), "ready")
 	control := filepath.Join(shortDir(t), "c.sock")
 	done := make(chan int, 1)
 	go func() {
 		done <- run(append([]string{"server", "--bind-address", "127.0.0.1", "--port", port,
-			"--fixture", tempFile(t, "fixture.json", testFixture), "--ready-file", readyFile,
+			"--fixture", tempFile(t, "fixture.json", fixture), "--ready-file", readyFile,
 			"--control-socket", control}, extra...))
 	}()
 	t.Cleanup(func() {
@@ -311,7 +317,8 @@ func TestUsageErrors(t *testing.T) {
 		{"client", "integrity-poll", "--host", "h", "--no-unsolicited-confirm"},
 		{"client", "manage", "--host", "h", "--function", "save-configuration", "--spec", "a"},
 		{"client", "operate", "--host", "h", "--type", "g41v1", "--index", "0", "--value", "1", "--operate-delay-ms", "10"},
-		{"server", "--frozen-event-policy", "always"},
+		{"server", "--frozen-event-policy", "on-change"},
+		{"server", "--sa-update-key", updateKey, "--sa-statistics-threshold", "65536"},
 		{"server", "--tls-cert", "c.pem"},
 		{"server", "--outstations", "2", "--connect", "h:1"},
 		{"counter-increment"},
@@ -538,23 +545,32 @@ func TestAgainstOwnServer(t *testing.T) {
 			t.Errorf("deleted file: exit %d, result %v", code, r)
 		}
 	})
-	t.Run("broadcast", func(t *testing.T) {
-		_, events := ok(t, out, c, "operate", "--type", "g12v1", "--index", "0", "--code", "LATCH_ON",
-			"--mode", "direct-no-ack", "--broadcast")
-		if eventLine(events, "broadcast", "function") != "6" {
-			t.Errorf("events %v", events)
-		}
-		r, _ := ok(t, out, c, "read", "--group", "10", "--variation", "2", "--start", "0", "--stop", "0")
-		if !strings.Contains(fmt.Sprint(r["iin"]), "BROADCAST") {
-			t.Errorf("iin %v", r["iin"])
-		}
-	})
 	t.Run("keep-alive", func(t *testing.T) {
 		_, events := ok(t, out, c, "monitor", "--duration-ms", "700", "--keep-alive-ms", "200")
 		if eventLine(events, "link-status", "event") == "" {
 			t.Errorf("no link-status event in %v", events)
 		}
 	})
+}
+
+// TestBroadcast runs on an outstation without unsolicited responses. With
+// them, the outstation sends a null unsolicited response on the read's new
+// connection and answers the READ only once that is confirmed (IEEE 1815-2012
+// 4.6.6 Rule 16): the unsolicited response is the next response, so it carries
+// IIN1.0, and the READ's response does not.
+func TestBroadcast(t *testing.T) {
+	out := capture(t)
+	s := startServerFixture(t, out, strings.Replace(testFixture, `"unsolicited": true`, `"unsolicited": false`, 1))
+	out.take(t)
+	_, events := ok(t, out, s.common, "operate", "--type", "g12v1", "--index", "0", "--code", "LATCH_ON",
+		"--mode", "direct-no-ack", "--broadcast")
+	if eventLine(events, "broadcast", "function") != "6" {
+		t.Errorf("events %v", events)
+	}
+	r, _ := ok(t, out, s.common, "read", "--group", "10", "--variation", "2", "--start", "0", "--stop", "0")
+	if !strings.Contains(fmt.Sprint(r["iin"]), "BROADCAST") {
+		t.Errorf("iin %v", r["iin"])
+	}
 }
 
 func TestFileAuthentication(t *testing.T) {
@@ -580,8 +596,11 @@ func TestSecureAuthentication(t *testing.T) {
 	out.take(t)
 	c := append(slices.Clone(s.common), "--sa-update-key", updateKey)
 	r, events := ok(t, out, c, "operate", "--type", "g12v1", "--index", "0", "--code", "LATCH_ON")
-	// The master clears the restart bit with a WRITE (2), also authenticated.
-	if r["commandStatus"] != "SUCCESS" || !strings.HasPrefix(eventLine(events, "auth", "user", "function"), "1:5") {
+	// The master clears the restart bit with a WRITE (2), also authenticated;
+	// since go-dnp3 v1.11.0 it does so before the control, on the IIN of the
+	// session key exchange.
+	if auth := strings.Fields(eventLine(events, "auth", "user", "function")); r["commandStatus"] != "SUCCESS" ||
+		!slices.Contains(auth, "1:5") || !slices.Contains(auth, "1:2") {
 		t.Errorf("result %v, events %v", r, events)
 	}
 	r, _ = ok(t, out, c, "read", "--group", "121", "--variation", "1", "--start", "0", "--stop", "17")

@@ -80,7 +80,8 @@ func parseSecurity(a args) (security, error) {
 	if err != nil {
 		return security{}, err
 	}
-	threshold, err := a.integer("sa-statistics-threshold", 10, 1, 1000000)
+	// At most 65 535 (IEEE 1815-2012 7.6.1.4.2), which go-dnp3 enforces.
+	threshold, err := a.integer("sa-statistics-threshold", 10, 1, 65535)
 	if err != nil {
 		return security{}, err
 	}

@@ -95,7 +95,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install jsonschema
+      - run: "pip install --require-hashes --only-binary=:all: -r scripts/requirements.txt"
 
       - name: Build from go-dnp3 ${{ needs.version.outputs.upstream }}
         run: |
@@ -138,6 +138,10 @@ jobs:
 
       - name: Smoke, cross-stack and feature self-tests against the references, document schemas
         working-directory: harness
+        env:
+          # Known bugs of the references that show only against this image,
+          # from this checkout (harness releases from v0.12.0 read it).
+          EXTRA_KNOWN_BUGS: ${{ github.workspace }}/own/go-dnp3/known-bugs.tsv
         run: |
           set -o pipefail
           mkdir -p reports

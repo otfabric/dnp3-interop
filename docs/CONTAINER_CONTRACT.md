@@ -517,7 +517,12 @@ An entry (`file-ls`, `file-info`) is
 `directory`, `size` in octets (what the outstation reports for a
 directory), `permissions` the nine permission bits as `rwxr-x---`, `time` the
 creation time the outstation reports. `name` is the entry's name as the
-outstation sends it (the last path element). `content` is lower-case hex.
+outstation sends it: in a directory listing the last path element; in the
+answer to `file-info` the name of the request (`/readme.txt`): IEEE 1815-2012
+4.4.18 has the file name of the answer's descriptor filled in with the same
+data as in the request. An outstation that answers `file-info` with the last
+path element differs from 4.4.18; the self-tests count that as a known
+difference. `content` is lower-case hex.
 `file-get` of a directory fails with whatever status the outstation answers.
 
 `fileStatus` (string or null): the file status of the outstation's last
@@ -591,7 +596,7 @@ grown by a threshold.
 | `server` flag | Default | Meaning |
 |---------------|---------|---------|
 | `--sa-statistics-class N` | 1 | The class (1..3) of the g122 events |
-| `--sa-statistics-threshold N` | 10 | How many increments of a statistic raise an event |
+| `--sa-statistics-threshold N` | 10 | How many increments of a statistic raise an event, 1..65535 (IEEE 1815-2012 7.6.1.4.2: at most 65 535) |
 
 Both need `--sa-update-key`. Features: `securityStatisticsServer` (the
 outstation serves them), `securityStatisticsClient` (the master reports

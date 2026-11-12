@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"schemaVersion\":\"1.0\",\"name\":\"x\",\"outstation\":{\"address\":1024,\"masterAddress\":1},\"binaryInputs\":[{\"index\":0,\"value\":true},{\"index\":0,\"value\":false}]}")

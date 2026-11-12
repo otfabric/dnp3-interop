@@ -113,7 +113,7 @@ def main(argv):
     doc = convert(load(argv[0]), versions_yaml(), image_of)
     interop_result.write(out, doc)
     bad = ["schema: " + e for e in interop_result.schema_errors(doc)] + interop_result.problems(doc)
-    print("%s: %s" % (out, ", ".join("%d %s" % (doc["summary"][o], o) for o in interop_result.OUTCOMES)), file=sys.stderr)
+    print(f"{out}: " + ", ".join(f"{doc['summary'][o]} {o}" for o in interop_result.OUTCOMES), file=sys.stderr)
     for p in bad:
         print("FAIL " + p, file=sys.stderr)
     return 1 if bad else 0

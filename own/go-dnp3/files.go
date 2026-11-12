@@ -425,8 +425,7 @@ func parseFileOperation(op string, a args, creds *fileCredentials) (fileRequest,
 
 // fileStatusOf is the file status of a refused file operation.
 func fileStatusOf(err error) (app.FileStatus, bool) {
-	var fe *dnp3.FileError
-	if errors.As(err, &fe) {
+	if fe, ok := errors.AsType[*dnp3.FileError](err); ok {
 		return fe.Status, true
 	}
 	return 0, false

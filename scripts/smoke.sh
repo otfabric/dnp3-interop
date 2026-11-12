@@ -294,4 +294,36 @@ code=$?
 if [[ "${code}" != 0 ]]; then ok "second server on a busy port fails (exit ${code})"; else fail "second server on a busy port exited 0"; fi
 stop_server "${name}"
 
+# ---- faults: what a broken or vanished master leaves behind ----
+# Three connections from inside the server's container (bash's /dev/tcp, so
+# nothing but the image is needed), one after the other, each closed before
+# the next opens: line noise and a frame whose header CRC is wrong; a frame
+# that stops in the middle of its user data; a REQUEST_LINK_STATUS whose
+# answer is left unread, so that the close is a TCP reset rather than a FIN
+# (when the outstation answers; otherwise a FIN after the read times out).
+# Afterwards the outstation must still run and answer an integrity poll on a
+# new connection. The frames are to the baseline's outstation 1024 from
+# master 1 (IEEE 1815-2012 clause 9.2: 0x0564, length, control, destination,
+# source, CRC).
+name=$(start_server "${ADAPTER}" "${FIXTURE_ARGS[@]}")
+if wait_ready "${name}"; then
+    # shellcheck disable=SC2016 # expanded by the bash of the container
+    docker exec "${name}" bash -c '
+        send() { exec 3<>/dev/tcp/127.0.0.1/20000 || exit 1; printf "$1" >&3; }
+        send "\x00\xff\x05\x05\x64\x05\xc9\x00\x04\x01\x00\x00\x00\x05\x64"; sleep 0.3; exec 3>&-
+        send "\x05\x64\x14\xc4\x00\x04\x01\x00\xe9\xb6\xc0\xc1\x01\x3c\x02"; sleep 0.3; exec 3>&-
+        send "\x05\x64\x05\xc9\x00\x04\x01\x00\x98\x81"; read -r -t 3 -N 1 _ <&3; exec 3>&-
+        exit 0' >/dev/null 2>&1
+    sent=$?
+    if [[ "${sent}" == 0 ]]; then ok "faults: the three connections were made"; else fail "faults: could not connect from inside the server (exit ${sent})"; fi
+    state=$(docker inspect --format '{{.State.Status}}' "${name}" 2>/dev/null)
+    if [[ "${state}" == running ]]; then ok "faults: the server still runs"; else fail "faults: the server is ${state} after the faults"; fi
+    doc=$(run_client "${ADAPTER}" integrity-poll --host "${name}")
+    if jq -e '.ok' <<<"${doc}" >/dev/null 2>&1; then ok "faults: an integrity poll afterwards succeeds"
+    else fail "faults: an integrity poll after the faults: ${doc}"; docker logs --tail 20 "${name}" >&2 2>/dev/null; fi
+else
+    fail "faults: the server did not become ready"
+fi
+stop_server "${name}"
+
 finish

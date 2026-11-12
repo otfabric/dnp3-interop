@@ -29,6 +29,54 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.12.0
+
+**Date:** 2026-11-11
+**Previous release:** v0.11.2
+
+Container contract 1.5 and fixture format 1.0 are unchanged. A minor release: the cbsigma adapter moves to a new upstream version, and every image to new base images.
+
+### Changed
+
+- **cbsigma: cB-Sigma dnp3 v0.3.1** (commit `91f2f33c`), with cB-Sigma iotsec v0.2.0 (commit `c84d6be1`). v0.3.1 changes the four behaviours of v0.3.0 the self-tests reported (cB-Sigma/dnp3#2 to #5): FREEZE AND CLEAR now makes counter events; a repeated READ, and a request on a new connection, get a new response instead of the cached one; GET_FILE_INFO answers with the base name of the file; idle keep-alives come at the keep-alive interval. Their four rows of v0.3.0 have left `tests/known-bugs.tsv`. The GET_FILE_INFO report was mistaken: v0.3.0 answered with the name of the request, as IEEE 1815-2012 4.4.18 asks ("filled in with the same data as in the request"), and v0.3.1 deviates from it; that is now a row of v0.3.1 (see Fixed). v0.3.1 adds no API, so the capabilities of the adapter are unchanged. iotsec v0.2.0 only adds implementations of its interfaces; cB-Sigma dnp3 uses none of them.
+- **Why the v0.3.1 candidate failed** (Upstream workflow, #77): two rows of `tests/known-bugs.tsv` record behaviour of the outstation that differs from the contract but not, as far as could be established, from IEEE 1815-2012 (FREEZE AT TIME with a time already past is done at once; the class 0 response with secure authentication includes the g121 statistics). A row names one upstream version, and these named v0.3.0, so on v0.3.1, which keeps both behaviours, five feature checks failed. Both rows now name v0.3.1, with links into its source; the notes of the Upstream issue and CONTRIBUTING.md say to carry such rows over with a pin.
+- **Base images**: `golang:1.27.4-trixie` (from 1.27.2, whose standard library has GO-2026-6809, in crypto/x509, which govulncheck finds reachable in the cbsigma and dscsystems adapters, and GO-2026-6859, in net/http, which none reaches), `python:3.14.10-slim-trixie` (from 3.14.8) and a new `debian:trixie-slim` digest. govulncheck finds nothing in the three Go modules with Go 1.27.4.
+- **Debian packages are pinned**: the Debian stages install from the snapshot of the Debian archive their base image was built from (`DEBIAN_SNAPSHOT`, 20261104T212339Z) at fixed versions, mirrored in `versions.yaml` (`debian_snapshot`, `debian_packages`) and checked by `scripts/check-versions.sh`.
+- **Dockerfiles**: `USER 10001` (the uid of the contract) instead of the user name, the HEALTHCHECK in exec form, and `pipefail` for every `RUN` with a pipe. The images behave as before.
+- **Own image (`own/go-dnp3`, not in the release): go-dnp3 v1.12.0** (from v1.6.0) in `go.mod`. v1.12.0 adds caller-supplied dialers and a redial jitter and fixes the 32-bit build, with no protocol change; `go fix` modernised the adapter's code (no change in behaviour). The changes below came with v1.11.0. The master turns off the new startup integrity poll (`client.WithStartup(client.Startup{})`) and keeps automatic time synchronization off, so it still does nothing on its own but clear IIN1.7. The outstation's frozen event policy is now `always`: since v1.11.0 a freeze raises a frozen event also for an unchanged value (IEEE 1815-2012 11.9.5.2), and `--frozen-event-policy on-change` is a usage error. `--sa-statistics-threshold` takes 1..65535, the range of IEEE 1815-2012 7.6.1.4.2, which go-dnp3 now enforces. The security statistics carry Association ID 0, as DSC go-dnp3's do, so that permitted difference is gone; GET_FILE_INFO is answered with the requested name (4.4.18), which the `[files] file-info` check now asks for.
+- **Policy 1.5**: `.otfabric/policy.yaml`, the policy workflow (`otfabric-policy@v1.5.0`) and AGENTS.md move from otfabric/engineering policy 1.2 to 1.5. For the interoperability profile, 1.3 adds GO-014 (MAY; no golangci-lint here) and the review rule TEST-R01 (SHOULD), 1.4 adds DOC-008 (not applicable to the profile), 1.5 adds API-R03 (not applicable). The checker reports the repository compliant.
+
+### Added
+
+- **Static checks in CI**, every tool pinned by version and digest and listed in `versions.yaml` (`tooling`): hadolint on every Dockerfile, shellcheck on every shell script at its default severity (instead of `warning`), ruff and bandit on the Python files (`make lint`), and govulncheck on the cbsigma, dscsystems and own/go-dnp3 modules in the golang image of the adapters (`make vulncheck`). The Python packages of the workflows and of `make validate` are pinned with their hashes (`scripts/requirements.txt`, `scripts/requirements-lint.txt`), and so is the Python image of the Makefile's fallback.
+- **Tests of the tooling**: bats tests of the helpers of `scripts/lib.sh`, of `scripts/check-versions.sh` (each kind of pin changed in a copy of the build files) and of `scripts/check-known-bugs.sh` (`make test-scripts`); Go tests and fuzz targets of the Go adapters' own parsing (fixtures and command lines in both, the link frames the dscsystems adapter sniffs), seeded from `fixtures/` and `testdata/fuzz/` (`make test-go fuzz`). The CI job **Go tests, fuzzing, govulncheck** runs them.
+- **Fault checks in the smoke test**: every outstation gets line noise and a frame with a bad header CRC, a frame cut off in its user data, and a connection reset with its answer unread, and must still run and answer an integrity poll afterwards.
+- **`scripts/check-known-bugs.sh`**: fails when an upstream issue that `tests/known-bugs.tsv` cites is closed. The CI validate job runs it; `make validate` skips it without `GH_TOKEN`.
+- **`EXTRA_KNOWN_BUGS`** for `scripts/interop.sh` and `scripts/features.sh`: a further table of known bugs, in the format of `tests/known-bugs.tsv`, for an image outside the release. `own/go-dnp3/known-bugs.tsv` has the one bug that shows only against the own image: opendnp3's master takes the g52v2 delay that IEEE 1815-2012 4.4.12 asks for in the answer to SAVE CONFIGURATION as a failure (`PerformFunction`, `EmptyResponseTask`). A row in `tests/known-bugs.tsv` would be stale in every release run.
+
+### Fixed
+
+- **`scripts/check-versions.sh`** could stop half-way, now and then: `sed ... | head -1` under `pipefail` ended with SIGPIPE when an `ARG` appears twice in a Dockerfile. sed now stops at the first match itself.
+- **Feature checks that asked more than IEEE 1815-2012**, found with the own image on go-dnp3 v1.11.0: the `[sa]` checks leave out the Authentication Failures statistic event that Table 7-6 has the outstation report at every session key change, and no longer require error 11 for an unknown user, whose key status request A.45.5 answers with the key status AUTH_FAIL; they ask for a statistics threshold of 65535, the most 7.6.1.4.2 allows, instead of 1000000. The contract (still 1.5) says so for `--sa-statistics-threshold`.
+- **`[files] file-info` follows IEEE 1815-2012 4.4.18**: the filename offset, file name size, request ID and file name octets of the answer are filled in with the same data as in the request, so the check wants `/readme.txt file 43 rw-r--r--`; it took the last path element too. The agreement of the masters of one outstation compares the name as reported, no longer without its leading slash; for that, the cbsigma adapter's master reports the name of a descriptor as the outstation sent it, as the contract asks, instead of its last path element (the slash-stripping hid this), so every master now reports the same name. Two outstations answer with the last path element, now rows of `tests/known-bugs.tsv`: `cbsigma-file-info-base-name` (cB-Sigma dnp3 v0.3.1, `outfile.go`, `fileInfo`; v0.3.0 answered with the requested name) and `dscsystems-file-info-base-name` (DSC go-dnp3 v0.8.2, `outstation/file.go`, `onGetFileInfo`, with the name of its directory handler). The dnp3py outstation serves no files.
+- shellcheck findings at the default severity (`scripts/features.sh`: a pattern expansion that was not quoted), ruff findings in the Python scripts and the dnp3py adapter (no change in behaviour); `scripts/latest-upstream.py` fetches https URLs only.
+
+### Tooling
+
+- Trivy 0.76.2 (from 0.76.0) for the release qualification.
+- The shared `otfabric/.github` upstream actions v3.6.0 (from v3.1.1; their inputs are unchanged).
+- The Upstream workflow's base-image check reports a digest that moved for the same tag, not a newer patch tag of the same minor: that check lives in `otfabric/.github`.
+
+### Docs
+
+- docs/COMPATIBILITY.md: cB-Sigma dnp3 v0.3.1 and what it changed; the own image is built from the latest go-dnp3 release when its workflow runs, not from a version pinned here, with the counts of a local run on go-dnp3 v1.11.0; its permitted differences (the association of security statistics and the GET_FILE_INFO name are no longer differences; two secure authentication behaviours are new); the GET_FILE_INFO name of cB-Sigma v0.3.1 and DSC go-dnp3 as known differences from 4.4.18; the management functions against the own outstation.
+- own/go-dnp3/README.md: the master runs no startup poll and no automatic time synchronization; the frozen event policy `always`; the permitted differences; GET_FILE_INFO with the requested name.
+- docs/CONTAINER_CONTRACT.md (contract still 1.5): the name in the `file-info` answer is the requested one (IEEE 1815-2012 4.4.18), and a last path element is a known difference; `--sa-statistics-threshold` is 1..65535 (7.6.1.4.2).
+- SECURITY.md: v0.12.x supported; the static checks; Trivy sees the Go modules of the dscsystems and cbsigma binaries and the Python packages of the dnp3py and nfmdnp3 images.
+- README.md, THIRD_PARTY_NOTICES.md, CONTRIBUTING.md: the new pins, targets and how to move the Debian snapshot.
+
+---
+
 ## v0.11.2
 
 **Date:** 2026-11-03

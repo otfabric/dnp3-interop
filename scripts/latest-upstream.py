@@ -27,8 +27,11 @@ AGENT = "dnp3-interop latest-upstream (https://github.com/otfabric/dnp3-interop)
 
 
 def fetch(url):
+    if not url.startswith("https://"):
+        raise ValueError(f"not an https URL: {url}")
     request = urllib.request.Request(url, headers={"User-Agent": AGENT, "Accept": "application/json, */*"})
-    with urllib.request.urlopen(request, timeout=30) as response:
+    # B310: https only, checked above.
+    with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310
         return response.read().decode()
 
 

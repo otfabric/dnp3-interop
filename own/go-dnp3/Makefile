@@ -16,6 +16,8 @@ UPSTREAM_SHA ?= $(shell git ls-remote --tags https://github.com/otfabric/go-dnp3
 
 export VERSION
 export ADAPTER_IMAGE_otfabric = $(IMAGE)
+# Known bugs of the references that show only against this image.
+export EXTRA_KNOWN_BUGS = $(CURDIR)/own/go-dnp3/known-bugs.tsv
 
 .PHONY: image smoke interop features
 

@@ -344,11 +344,10 @@ func entry(d dnp3.FileDescriptor) object {
 	if d.Type == 0 {
 		kind = "directory"
 	}
-	name := d.Name
-	if i := strings.LastIndexAny(name, "/\\"); i >= 0 && i < len(name)-1 {
-		name = name[i+1:]
-	}
-	return object{{"name", name}, {"type", kind}, {"size", d.Size}, {"permissions", permissions(d.Permissions)},
+	// The name as the outstation sent it (contract: file transfer): the
+	// last path element in a listing, the requested name in the answer to
+	// GET_FILE_INFO (IEEE 1815-2012 4.4.18).
+	return object{{"name", d.Name}, {"type", kind}, {"size", d.Size}, {"permissions", permissions(d.Permissions)},
 		{"time", formatTime(d.Created)}}
 }
 

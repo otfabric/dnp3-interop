@@ -35,16 +35,23 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install jsonschema
+      - run: "pip install --require-hashes --only-binary=:all: -r scripts/requirements.txt"
       - name: Unit tests of the result scripts
         run: python3 -m unittest discover -q -s scripts -p 'test_*.py'
+      - name: Unit tests of the shell helpers and check-versions.sh (bats)
+        run: make test-scripts
       - name: versions.yaml matches the build files
         run: scripts/check-versions.sh
       - name: RELEASE.md has the notes of interop_version
         run: scripts/release-notes.sh > /dev/null
+      - name: The upstream issues of tests/known-bugs.tsv are open
+        # A closed one may be fixed: its row, and maybe the pin, need a look.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/check-known-bugs.sh
       - name: Fixtures
         run: python3 scripts/validate-fixtures.py --require-schema
-      - name: Shellcheck
+      - name: Shellcheck, hadolint, ruff and bandit (pinned, in containers)
         run: make lint
       - name: The dnp3c image is never published
         # It is built here, but no target may push it, even when asked to on
@@ -65,6 +72,22 @@ jobs:
             echo "::error::consumer-specific reference found"; exit 1
           fi
 
+  # The Go modules (the cbsigma and dscsystems adapters, own/go-dnp3) in the
+  # golang image the adapters are built with: vet and tests, the fuzz targets
+  # for a short while, and govulncheck with the Go of the images.
+  go:
+    name: Go tests, fuzzing, govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Vet and test
+        run: make test-go
+      - name: Fuzz
+        run: make fuzz FUZZTIME=20s
+      - name: govulncheck
+        run: make vulncheck
+
   # Built and self-tested natively on both architectures: no emulation.
   selftest:
     name: Build, smoke, cross-stack (${{ matrix.arch }})
@@ -84,7 +107,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install jsonschema
+      - run: "pip install --require-hashes --only-binary=:all: -r scripts/requirements.txt"
 
       - name: Build images
         run: make -j4 --output-sync=target images

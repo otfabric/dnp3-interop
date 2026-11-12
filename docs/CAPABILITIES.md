@@ -301,7 +301,7 @@ an adapter-built g70v8.
 confirms every response and unsolicited response that asks for it; none of
 this can be changed.
 
-⁴⁵ cB-Sigma dnp3 v0.3.0. Each "no" has its reason in the image's
+⁴⁵ cB-Sigma dnp3 v0.3.1. Each "no" has its reason in the image's
 `unsupportedReasons` (`print-capabilities`). In short: the outstation records no
 command events (so it cannot serve the `extended` fixture, which also rules out
 testing the analog freeze it can do), answers a READ of g34 OBJECT_UNKNOWN,

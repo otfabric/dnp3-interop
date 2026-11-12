@@ -44,7 +44,7 @@ const usage = `usage: dnp3-interop <command>
          [--select-timeout-ms N] [--confirm-timeout-ms N] [--outstations N] [LINK] [TRANSPORT] [SA]
          [--tls-cert PATH --tls-key PATH --tls-ca PATH] [--udp-peer HOST:PORT]
          [--connect HOST:PORT [--tls-server-name NAME]] [--file-user U --file-password P] [--link-confirms]
-         [--control-socket PATH] [--frozen-event-policy on-change]
+         [--control-socket PATH] [--frozen-event-policy always]
   counter-increment --index N [--by D] [--control-socket PATH] [--timeout-ms N]
   client <operation> --host HOST [--port N] [--connect-timeout-ms N] [--timeout-ms N]
          [--collect-ms N] [--link-confirms] [--keep-alive-ms N] [--no-confirm] [LINK] [TRANSPORT] [SA] [operation flags]
@@ -207,9 +207,10 @@ func printCapabilities() int {
 			{"noConfirmClient", true},
 			{"noUnsolicitedConfirmClient", true},
 		}},
-		// A freeze raises a frozen counter event when the frozen value or its
-		// flags change, by the library's design; there is no setting for it.
-		{"frozenEventPolicies", []string{"on-change"}},
+		// A freeze raises a frozen counter event at every freeze, also for an
+		// unchanged value (go-dnp3 v1.11.0, IEEE 1815-2012 11.9.5.2); there is
+		// no setting for it.
+		{"frozenEventPolicies", []string{"always"}},
 		// Every event stays buffered until confirmed.
 		{"frozenEventRetention", "all"},
 		{"pointTypes", append(slices.Clone(pointTypes), "timeAndIntervals")},

@@ -13,7 +13,7 @@ integrating third-party protocol stacks into production applications.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.2 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
-| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.0 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.1 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
 | `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) 1.0.1 ² | Python | no | yes | `ghcr.io/otfabric/dnp3-interop-nfmdnp3` |
 
 The stacks do not all do the same: the opendnp3 master sends no `_NR`
@@ -250,7 +250,9 @@ dnp3-interop/
 make help        # all targets
 make ci          # validate, lint, build, smoke, cross-stack and feature self-tests, document schemas
 make features    # cross-stack self-test of the contract 1.1..1.5 features (TLS, UDP, serial, files, SAv5, ...)
-make validate    # fixtures against the schema and the cross-field rules
+make validate    # fixtures against the schema and the cross-field rules, versions.yaml against the build files
+make lint        # shellcheck, hadolint, ruff and bandit, pinned, in containers
+make test-scripts test-go fuzz vulncheck   # bats tests of the scripts; Go tests, fuzz targets and govulncheck of the Go modules
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
 make candidate-dnp3py CANDIDATE_VERSION=0.7.0      # self-test an adapter on another upstream release

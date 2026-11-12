@@ -27,18 +27,18 @@ SCHEMA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 
 
 def now():
-    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def version_field(root, key):
     """A top-level "key: value" of versions.yaml, or None."""
     with open(os.path.join(root, "versions.yaml")) as f:
-        m = re.search(r'^%s: "([^"]+)"' % re.escape(key), f.read(), re.M)
+        m = re.search(rf'^{re.escape(key)}: "([^"]+)"', f.read(), re.MULTILINE)
     return m.group(1) if m else None
 
 
 def git_sha(root):
-    p = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"], capture_output=True, text=True)
+    p = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
     return p.stdout.strip() if p.returncode == 0 else "0000000"
 
 
@@ -53,7 +53,7 @@ def repo_digest(image, docker=("docker",)):
     """The image@sha256 reference of a pulled image; None for a local build,
     which has no registry digest."""
     p = subprocess.run(list(docker) + ["image", "inspect", "--format", "{{json .RepoDigests}}", image],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     if p.returncode != 0:
         return None
     digests = json.loads(p.stdout or "[]")
@@ -73,13 +73,13 @@ def problems(doc, floor=1):
     out = []
     for r in doc["results"]:
         if r["outcome"] in ("fail", "infra-error") and (not gate or gate in r["roles"].values()):
-            out.append("%s %s (%s): %s" % (r["outcome"], r["id"], ", ".join(r["roles"].values()), r.get("reason", "")[:200]))
+            out.append(f"{r['outcome']} {r['id']} ({', '.join(r['roles'].values())}): {r.get('reason', '')[:200]}")
     for w in doc.get("waivers", []):
         if not w["reproduced"]:
-            out.append("stale waiver %s: it no longer reproduces; remove it" % w["id"])
+            out.append(f"stale waiver {w['id']}: it no longer reproduces; remove it")
     passes = sum(1 for r in doc["results"] if r["outcome"] == "pass")
     if passes < floor:
-        out.append("%d passing results, the floor is %d: this run proves nothing" % (passes, floor))
+        out.append(f"{passes} passing results, the floor is {floor}: this run proves nothing")
     return out
 
 
@@ -100,7 +100,7 @@ def schema_errors(doc):
     with open(SCHEMA) as f:
         schema = json.load(f)
     validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
-    return ["%s: %s" % ("/".join(str(p) for p in e.absolute_path), e.message) for e in validator.iter_errors(doc)]
+    return [f"{'/'.join(str(p) for p in e.absolute_path)}: {e.message}" for e in validator.iter_errors(doc)]
 
 
 def main(argv):
@@ -111,7 +111,7 @@ def main(argv):
     with open(argv[0]) as f:
         doc = json.load(f)
     bad = ["schema: " + e for e in schema_errors(doc)] + problems(doc, floor)
-    print("%s: %s" % (argv[0], ", ".join("%d %s" % (doc["summary"][o], o) for o in OUTCOMES)))
+    print(f"{argv[0]}: " + ", ".join(f"{doc['summary'][o]} {o}" for o in OUTCOMES))
     for p in bad:
         print("FAIL " + p, file=sys.stderr)
     return 1 if bad else 0

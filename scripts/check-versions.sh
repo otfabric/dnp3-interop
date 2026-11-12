@@ -23,7 +23,10 @@ same() {  # same <description> <a> <b>
     fi
 }
 
-arg() { sed -nE "s/^ARG $2=(.*)$/\1/p" "$1" | head -1; }
+# arg <Dockerfile> <name>: the default of the first "ARG <name>=". sed stops
+# there itself: "| head -1" would end sed with SIGPIPE when the ARG comes
+# twice, and pipefail would end this script, now and then.
+arg() { sed -nE "/^ARG $2=/{s/^ARG $2=(.*)$/\1/p;q;}" "$1"; }
 
 # opendnp3
 need "opendnp3 version"  "version: \"$(arg adapters/opendnp3/Dockerfile UPSTREAM_VERSION)\""
@@ -71,5 +74,36 @@ need "dnp3c version"     "version: \"${dockerfile_dnp3c}\""
 same "dnp3c in Dockerfile and pom.xml" "${dockerfile_dnp3c}" "${pom_dnp3c}"
 need "maven digest"      "$(arg conformance/dnp3c/Dockerfile MAVEN_DIGEST)"
 need "jre digest"        "$(arg conformance/dnp3c/Dockerfile JRE_DIGEST)"
+
+# Tooling: the images and versions of the Makefile and scripts/qualify.sh
+mk() { sed -nE "/^$1 +[?:]?= /{s|^$1 +[?:]?= (.*)$|\1|p;q;}" Makefile; }
+for tool in SHELLCHECK HADOLINT PYTHON BATS; do
+    image="$(mk "${tool}_IMAGE")"
+    need "Makefile ${tool}_IMAGE" "\"${image#"\$(TOOLS_REGISTRY)/"}\""
+done
+need "Makefile GO_IMAGE digest" "$(mk GO_IMAGE | sed -E 's|^.*@||')"
+need "Makefile govulncheck" "govulncheck@$(mk GOVULNCHECK_VERSION)\""
+need "qualify.sh Trivy" "\"$(sed -nE 's|^TRIVY_IMAGE="\$\{TRIVY_IMAGE:-(.*)\}"$|\1|p' scripts/qualify.sh)\""
+
+# Debian packages: every Debian stage installs from the snapshot in
+# versions.yaml, and every package at a version listed there.
+# apt_packages <Dockerfile>: the words after "apt-get install" up to the next
+# "&&" of every RUN instruction, one per line, options left out.
+apt_packages() {
+    awk '/\\$/ { sub(/\\$/, ""); line = line $0; next } { print line $0; line = "" }' "$1" \
+        | grep 'apt-get install' | sed -E 's/.*apt-get install//; s/&&.*//' | tr ' ' '\n' | grep -E '^[^-]' || true
+}
+for dockerfile in adapters/*/Dockerfile own/*/Dockerfile; do
+    grep -q 'apt-get install' "${dockerfile}" || continue
+    need "${dockerfile} Debian snapshot" "debian_snapshot: \"$(arg "${dockerfile}" DEBIAN_SNAPSHOT)\""
+    while read -r word; do
+        if [[ "${word}" == *=* ]]; then
+            need "${dockerfile} ${word%%=*}" "  ${word%%=*}: \"${word#*=}\""
+        else
+            echo "FAIL ${dockerfile}: Debian package ${word} has no version"
+            status=1
+        fi
+    done < <(apt_packages "${dockerfile}")
+done
 
 exit "${status}"
