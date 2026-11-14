@@ -6,7 +6,7 @@ Independent DNP3 (IEEE 1815) master and outstation implementations (opendnp3, ds
 
 ## Organisation standards
 
-This repository follows **otfabric/engineering policy 1.5**, profile **interoperability** (`.otfabric/policy.yaml`, mode `enforce`). Where this file and the organisation standards disagree, this file wins here — say so in your report.
+This repository follows **otfabric/engineering policy 1.6**, profile **interoperability** (`.otfabric/policy.yaml`, mode `enforce`). Where this file and the organisation standards disagree, this file wins here — say so in your report.
 
 ## Where the truth lives
 
