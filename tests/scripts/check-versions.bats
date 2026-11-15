@@ -88,3 +88,60 @@ change() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"FAIL qualify.sh Trivy"* ]]
 }
+
+@test "a base image digest of own/ that versions.yaml does not record fails" {
+    change own/go-dnp3/Dockerfile 's/^ARG GOLANG_DIGEST=sha256:.*/ARG GOLANG_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000/'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL own/go-dnp3/Dockerfile base image"* ]]
+}
+
+@test "a base image whose used_by does not name an image that pins it fails" {
+    change versions.yaml 's/^    used_by: \[dscsystems, cbsigma, otfabric\]$/    used_by: [dscsystems, cbsigma]/'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL own/go-dnp3/Dockerfile: the used_by of the base image"*"does not name otfabric"* ]]
+}
+
+@test "a used_by that names an image which does not pin that base image fails" {
+    change versions.yaml 's/^    used_by: \[dnp3py, nfmdnp3\]$/    used_by: [dnp3py, nfmdnp3, opendnp3]/'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"used_by names opendnp3, whose Dockerfile does not pin it"* ]]
+}
+
+@test "an implementation without published fails" {
+    change versions.yaml '/^    published: false  *# on hold/d'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL tmw: no published: true or false"* ]]
+}
+
+@test "published that disagrees with PUBLISHED_ADAPTERS fails" {
+    change Makefile 's/^override PUBLISHED_ADAPTERS := \(.*\) nfmdnp3$/override PUBLISHED_ADAPTERS := \1 tmw/'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL nfmdnp3: published: true, but not in PUBLISHED_ADAPTERS"* ]]
+    [[ "$output" == *"FAIL tmw: published: false, but in PUBLISHED_ADAPTERS"* ]]
+}
+
+@test "a wheel hash that requirements.txt does not pin fails" {
+    change adapters/dnp3py/requirements.txt 's/--hash=sha256:[0-9a-f]*/--hash=sha256:0000000000000000000000000000000000000000000000000000000000000000/'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL dnp3py wheel_sha256 and requirements.txt"* ]]
+}
+
+@test "a module sum that go.sum does not record fails" {
+    change adapters/dscsystems/go.sum 's|^github.com/dscsystems/go-dnp3 \(v[0-9.]*\) h1:.*$|github.com/dscsystems/go-dnp3 \1 h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=|'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL dscsystems module_sum and go.sum"* ]]
+}
+
+@test "an implementation without a source hash fails" {
+    change versions.yaml '/^    source_sha256: /d'
+    run "${COPY}/scripts/check-versions.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAIL opendnp3: no wheel_sha256, module_sum or source_sha256"* ]]
+}

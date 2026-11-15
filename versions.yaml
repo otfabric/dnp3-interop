@@ -1,10 +1,17 @@
 # Machine-readable version manifest for dnp3-interop.
 # Upstream pins and base image digests are release inputs; nothing floats.
-# The Dockerfiles, adapters/{dnp3py,nfmdnp3}/requirements.txt and
-# adapters/{dscsystems,cbsigma}/go.mod are the source of truth for a build: scripts/check-versions.sh fails when this
-# file disagrees with them.
+# The Dockerfiles, adapters/{dnp3py,nfmdnp3}/requirements.txt,
+# adapters/{dscsystems,cbsigma}/go.mod and go.sum and PUBLISHED_ADAPTERS of the
+# Makefile are the source of truth for a build: scripts/check-versions.sh fails
+# when this file disagrees with them.
+#
+# Per implementation: published (may its image be redistributed; true exactly
+# for the adapters of PUBLISHED_ADAPTERS) and the hash its source is verified
+# with: wheel_sha256 (requirements.txt, checked by pip), module_sum (go.sum,
+# checked by the go command) or source_sha256 (the GitHub archive of the
+# commit, for a source fetched by commit with git).
 
-interop_version: "0.12.1"
+interop_version: "0.12.2"
 contract_version: "1.5"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -20,10 +27,14 @@ implementations:
     repository: "https://github.com/dnp3/opendnp3"
     version: "3.1.2"             # last release; the repository is archived (2022)
     revision: "26b4c01e4839bbbda8866655e086471c4917ee53"
+    # The build fetches the commit with git and checks it against revision;
+    # this is the SHA-256 of the GitHub archive of that commit.
+    source_sha256: "92a378907dde3856f1c8cd33ed391398df2865282a261448f0e710b87363e2f1"
     license: "Apache-2.0"
     language: "C++"
     independent_engine: true
     roles: [server, client]
+    published: true
     # Fetched by opendnp3's own CMake (deps/*.cmake) at configure time and
     # verified there against these SHA-1 hashes.
     dependencies:
@@ -39,10 +50,12 @@ implementations:
     package: "dnp3py"
     version: "0.6.0"             # latest release (PyPI)
     revision: "c00d5df22e779df72f7caa4402c3f34957eb276d"
+    wheel_sha256: "6721e1167d83f99e5a5a3a13bb51b05b23cf7c83f3c6d3b6873611ef64b5d6ab"   # requirements.txt
     license: "MIT"
     language: "Python"
     independent_engine: true
     roles: [server, client]
+    published: true
     note: >-
       The outstation serves only the dnp3py fixture: it cannot serve the
       baseline fixture (no double-bit inputs, octet strings or per-point
@@ -56,10 +69,12 @@ implementations:
     module: "github.com/dscsystems/go-dnp3"
     version: "v0.8.2"            # latest release
     revision: "1fcec1d7881541d794fe257d2ede3ba46587b500"
+    module_sum: "h1:akDLzx3nf+Ld2+iY1j6H+SJzm/ixxy9fpt1WlEFLjQM="   # go.sum
     license: "GPL-3.0-or-later"
     language: "Go"
     independent_engine: true
     roles: [server, client]
+    published: true
     note: "Experimental: the README says the API is not yet stable."
 
   cbsigma:
@@ -70,10 +85,12 @@ implementations:
     module: "github.com/cB-Sigma/dnp3"
     version: "v0.3.1"            # latest release
     revision: "91f2f33c90e978e48bf67d20bca1022e769ed4d6"
+    module_sum: "h1:QM5X8TSQlxSXx7j4Xs0aKsD3d6IInxfW4HTv6bCIK+M="   # go.sum
     license: "Apache-2.0"
     language: "Go"
     independent_engine: true
     roles: [server, client]
+    published: true
     dependencies:
       iotsec: "github.com/cB-Sigma/iotsec v0.2.0 c84d6be103419e74e4598c2c24458f346f7718dd (Apache-2.0)"
       serial: "github.com/goburrow/serial v0.1.0 (MIT)"
@@ -86,10 +103,12 @@ implementations:
     package: "nfm-dnp3"          # PyPI; imported as dnp3py
     version: "1.0.1"             # latest release (PyPI)
     revision: "8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6"
+    wheel_sha256: "aafb2416e3ad52cc1812bfd6a6dc2ee7459a92a0c95da94b6da62c70a69c3cc0"   # requirements.txt
     license: "MIT"               # declared in the package metadata; the repository has no LICENSE file
     language: "Python"
     independent_engine: true
     roles: [client]
+    published: true
     note: >-
       A master over TCP only. 1.0.1 has data link and application layer
       defects that break most exchanges with a confirming outstation; they
@@ -103,6 +122,7 @@ implementations:
     license: "commercial"
     language: "C"
     independent_engine: true
+    published: false             # on hold, and commercial source: no image is built or published
 
 # OT Fabric's own stacks. Not independent implementations, not in a release of
 # this repository or its manifest.json: see own/<library>/README.md.
@@ -140,10 +160,18 @@ debian_packages:
   socat: "1.8.0.3-1+deb13u1"
 
 base_images:
-  # Digests recorded 2026-11-11; the Dockerfiles pin these by digest.
-  debian_trixie_slim: "docker.io/library/debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2"
-  python_3_14_10_slim_trixie: "docker.io/library/python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f"
-  golang_1_27_4_trixie: "docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9"
+  # Digests recorded 2026-11-11; the Dockerfiles pin these by digest. used_by:
+  # the images whose Dockerfile pins it (adapters/<name>/, and otfabric for
+  # own/go-dnp3/). scripts/check-versions.sh checks both ways.
+  debian_trixie_slim:
+    image: "docker.io/library/debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2"
+    used_by: [opendnp3, dscsystems, cbsigma, otfabric]
+  python_3_14_10_slim_trixie:
+    image: "docker.io/library/python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f"
+    used_by: [dnp3py, nfmdnp3]
+  golang_1_27_4_trixie:
+    image: "docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9"
+    used_by: [dscsystems, cbsigma, otfabric]
 
 # The tooling of the Makefile and the workflows, pinned by version and digest
 # (multi-arch indexes; the Makefile pulls the images through TOOLS_REGISTRY).

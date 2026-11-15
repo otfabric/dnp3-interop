@@ -85,6 +85,37 @@ wait_ready() {
     done
 }
 
+# wait_for <seconds> <command...>: runs the command every 0.1 s until it
+# succeeds, for at most that many seconds (a whole number). Returns 1 when the
+# time is up. A wait for a condition, instead of a fixed delay.
+wait_for() {
+    local limit=$(( $1 * 10 )) tries=0
+    shift
+    until "$@"; do
+        tries=$((tries + 1))
+        (( tries >= limit )) && return 1
+        sleep 0.1
+    done
+    return 0
+}
+
+# log_has <container> <jq condition> [count]: the server's stdout has at least
+# count (default 1) events for which the condition holds.
+log_has() {
+    docker logs "$1" 2>/dev/null \
+        | jq -e -s --argjson n "${3:-1}" "[.[] | select($2)] | length >= \$n" >/dev/null 2>&1
+}
+
+# wait_log <container> <jq condition> [count]: waits until log_has, at most
+# WAIT_LOG_TIMEOUT seconds. When the time is up it says so and returns 1; the
+# check that follows reads the log and reports what is there.
+WAIT_LOG_TIMEOUT="${WAIT_LOG_TIMEOUT:-5}"
+wait_log() {
+    wait_for "${WAIT_LOG_TIMEOUT}" log_has "$@" && return 0
+    log "no ${3:-1} event(s) '$2' in the log of $1 after ${WAIT_LOG_TIMEOUT}s"
+    return 1
+}
+
 stop_server() { docker rm -f "$1" >/dev/null 2>&1; return 0; }
 
 # run_client <adapter> <args...>: prints the result document and returns the

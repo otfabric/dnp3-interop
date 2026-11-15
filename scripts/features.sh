@@ -674,7 +674,7 @@ coverage() {
             client "${client}" -- operate --type g41v1 --index 1 --value 7 --mode direct-no-ack --host "${name}" >/dev/null
             want+=" direct-operate-no-ack:g41v1:1:7:-/-/-:SUCCESS"
         fi
-        sleep 0.3
+        wait_log "${name}" '.event == "command"' "$(wc -w <<<"${want}" | tr -d ' ')"
         at_pair "coverage.command-event-fields" "${pair}"
         check "${pair}: [commands] the server's command events" "${want}" "$(command_events "${name}")"
     else
@@ -793,7 +793,7 @@ coverage() {
                     "$(client dnp3py -- integrity-poll --host "${name}" | jq -r '.iin | index("DEVICE_RESTART") != null')"
             fi
             client "${client}" -- restart --type cold --host "${name}" >/dev/null
-            sleep 0.3
+            wait_log "${name}" '.event == "restart"'
             at_pair "coverage.cold-restart-event" "${pair}"
             check "${pair}: [restart] the cold restart event" "cold" \
                 "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "restart") | .type' | paste -sd' ' -)"
@@ -807,7 +807,7 @@ coverage() {
         start "${server}" "${name}" -- --fixture "${CONTROLS}"
         if wait_ready "${name}"; then
             client "${client}" -- assign-class --class 2 --group 30 --start 0 --stop 1 --host "${name}" >/dev/null
-            sleep 0.3
+            wait_log "${name}" '.event == "assign-class"'
             at_pair "coverage.assign-class-event" "${pair}"
             check "${pair}: [assign-class] the server event" "analogInputs:2:0:1" \
                 "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "assign-class") | "\(.pointType):\(.class):\(.start):\(.stop)"' | paste -sd' ' -)"
@@ -835,7 +835,8 @@ coverage() {
         docker rm -f "gm-${server}-${RUN_ID}" >/dev/null 2>&1
         docker run -d --name "gm-${server}-${RUN_ID}" --network "${NETWORK}" --label "dnp3-interop.run=${RUN_ID}" \
             "$(image_of dnp3py)" client monitor --duration-ms 5000 --host "${name}" >/dev/null
-        sleep 1.5
+        # The poll is the second connection only once the monitor's is open.
+        wait_log "${name}" '.event == "connection-opened"'
         doc=$(client "${client}" -- integrity-poll --host "${name}")
         at_pair "coverage.second-connection-is-served" "${pair}"
         check "${pair}: [connection] a second connection is served" "ok=true error=-" "$(outcome "${doc}")"
@@ -913,7 +914,7 @@ coverage() {
             if has "${server}" activateConfigServer; then
                 at_pair "coverage.activate-config" "${pair}"
                 check "${pair}: [manage] ACTIVATE_CONFIG" "ok=true error=-" "$(outcome "${doc}")"
-                sleep 0.3
+                wait_log "${name}" '.event == "manage"'
                 at_pair "coverage.activate-config-event" "${pair}"
                 check "${pair}: [manage] the server's ACTIVATE_CONFIG event" "31" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "manage") | .function' | paste -sd' ' -)"
@@ -1098,7 +1099,8 @@ suite() {
                     at_pair "skipped.file-delete" "${pair}"
                     skip "${pair}: file-delete (needs client:fileDeleteClient)"
                 fi
-                sleep 0.3
+                wait_log "${name}" '.event == "file"' 5
+                has "${client}" fileDeleteClient && wait_log "${name}" '.event == "file" and .action == "delete"'
                 at_pair "files.server-file-events" "${pair}"
                 check "${pair}: [files] server file events" \
                     "read:/readme.txt:SUCCESS read:/data/blocks.bin:SUCCESS list:/:SUCCESS info:/readme.txt:SUCCESS write:/logs/new.txt:SUCCESS" \
@@ -1140,7 +1142,7 @@ suite() {
                 at_pair "files.adds-to-the-end-of-the-file" "${pair}"
                 check "${pair}: [files] adds to the end of the file" "61626364" \
                     "$(client "${client}" -- file-get --name /logs/a.txt --host "${name}" | jq -r '.file.content')"
-                sleep 0.3
+                wait_log "${name}" '.event == "file" and (.action == "write" or .action == "append")' 2
                 at_pair "files.server-append-event" "${pair}"
                 check "${pair}: [files] the server's append event" "write:/logs/a.txt:SUCCESS append:/logs/a.txt:SUCCESS" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "file" and (.action == "write" or .action == "append")) | "\(.action):\(.name):\(.status)"' | paste -sd' ' -)"
@@ -1175,7 +1177,7 @@ suite() {
                 doc=$(client "${client}" -- file-put --name /logs/auth.txt --content 00 "${creds[@]}" --host "${name}")
                 at_pair "files.file-put-with-credentials" "${pair}"
                 check "${pair}: [files] file-put with credentials" "ok=true error=-" "$(outcome "${doc}")"
-                sleep 0.3
+                wait_log "${name}" '.event == "file" and .action == "authenticate"' 2
                 at_pair "files.server-authenticate-events" "${pair}"
                 check "${pair}: [files] server authenticate events" \
                     "authenticate:operator:SUCCESS authenticate:operator:PERMISSION_DENIED" \
@@ -1376,7 +1378,7 @@ suite() {
                     done
                     at_pair "manage.five-functions" "${pair}"
                     check "${pair}: [manage] the five functions" "$(printf 'ok=true error=- %.0s' 1 2 3 4 5)" "${got}"
-                    sleep 0.3
+                    wait_log "${name}" '.event == "manage"' 5
                     at_pair "manage.servers-events" "${pair}"
                     check "${pair}: [manage] the server's events" "15 16 17 18 19" \
                         "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "manage") | .function' | paste -sd' ' -)"
@@ -1403,7 +1405,8 @@ suite() {
                 doc=$(client "${client}" -- operate --type g41v1 --index 0 --value 77 --mode direct-no-ack --broadcast --host "${name}")
                 at_pair "broadcast.control-to-0xffff" "${pair}"
                 check "${pair}: [broadcast] a control to 0xFFFF" "ok=true error=-" "$(outcome "${doc}")"
-                sleep 0.3
+                # Nothing answers a broadcast: its command event says it was carried out.
+                wait_log "${name}" '.event == "command"'
                 # Read by opendnp3's master, which sends nothing first: DSC go-dnp3's
                 # writes IIN at start, and that response carries IIN1.0.
                 doc=$(client opendnp3 -- read --group 40 --variation 0 --start 0 --stop 0 --host "${name}")
@@ -1580,7 +1583,7 @@ suite() {
                 doc=$(client "${client}" -- attribute-write --set 1 --variation 1 --text no --host "${name}")
                 at_pair "attributes.read-only-attribute-refuses-a-write" "${pair}"
                 check "${pair}: [attributes] a read-only attribute refuses a write" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
-                sleep 0.3
+                wait_log "${name}" '.event == "attribute-write"' 7
                 at_pair "attributes.server-events" "${pair}"
                 check "${pair}: [attributes] server events" "10:changed 11:99 12:-300 13:1.5 14:a0b1c2 15:80 16:2025-06-07T08:09:10.123Z" \
                     "$(docker logs "${name}" 2>/dev/null | jq -r 'select(.event == "attribute-write") | "\(.variation):\(.value)"' | paste -sd' ' -)"
@@ -1664,7 +1667,7 @@ suite() {
             if wait_ready "${name}"; then
                 sa_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" "${SA[@]}" | without_statistic_events; }
                 basics "${pair}" sa "sa_run ${client} ${name}"
-                sleep 0.3
+                wait_log "${name}" '.event == "auth" and .user == 3 and .function == 5'
                 at_pair "sa.outstation-authenticated-the-control" "${pair}"
                 check "${pair}: [sa] the outstation authenticated the control" "true" \
                     "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "auth" and .user == 3 and .function == 5)')"
@@ -1689,7 +1692,7 @@ suite() {
                 doc=$(client "${client}" -- operate --type g12v1 --index 0 --code LATCH_OFF --host "${name}" --timeout-ms 2000)
                 at_pair "sa.master-without-authentication-cannot-operate" "${pair}"
                 check "${pair}: [sa] a master without authentication cannot operate" "false" "$(jq -r '.ok' <<<"${doc}" 2>/dev/null)"
-                sleep 0.3
+                wait_log "${name}" '.event == "auth-error" and .code == 1'
                 at_pair "sa.outstation-reported-the-refusals" "${pair}"
                 # The wrong update key: error 1. The unknown user may get an
                 # error 11 (UNKNOWN_USER) or the key status AUTH_FAIL, which
@@ -1725,7 +1728,7 @@ suite() {
                 # shellcheck disable=SC2329 # called by basics, through its run argument
                 sa256_run() { local a="$1" h="$2"; shift 2; client "${a}" -- "$@" --host "${h}" --sa-update-key "${SA_KEY_256}" --sa-user 3 | without_statistic_events; }
                 basics "${pair}" sa-aes-256 "sa256_run ${client} ${name}"
-                sleep 0.3
+                wait_log "${name}" '.event == "auth" and .user == 3 and .function == 5'
                 at_pair "sa-aes-256.outstation-authenticated-the-control" "${pair}"
                 check "${pair}: [sa-aes-256] the outstation authenticated the control" "true" \
                     "$(docker logs "${name}" 2>/dev/null | jq -s 'any(.[]; .event == "auth" and .user == 3 and .function == 5)')"

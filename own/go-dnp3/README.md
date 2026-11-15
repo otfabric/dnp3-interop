@@ -27,7 +27,7 @@ docker run -d --name go-dnp3 -p 127.0.0.1:20000:20000 ghcr.io/otfabric/dnp3-inte
 until docker exec go-dnp3 test -f /run/dnp3-interop/ready; do sleep 0.1; done
 ```
 
-`<tag>` is a go-dnp3 version such as `v1.13.0`, or `latest`, the newest one
+`<tag>` is a go-dnp3 version such as `v1.15.0`, or `latest`, the newest one
 published. A rebuild of a version replaces its tag, so pin the digest if you need
 an exact build. The digest is in the summary of the
 [workflow run](https://github.com/otfabric/dnp3-interop/actions/workflows/own-go-dnp3.yml),
@@ -59,8 +59,10 @@ harness release or `manifest.json`.
 Run the **Own stack (go-dnp3)** workflow by hand, from `main`. It finds the
 latest go-dnp3 release and the latest harness release, and prints them. It
 builds the image, runs the smoke test, the cross-stack self-test on the
-baseline and the dnp3py fixture, and the feature self-test against opendnp3,
-DSC go-dnp3 and dnp3py on both architectures, then publishes
+baseline and the dnp3py fixture, and the feature self-test against every
+adapter that harness release publishes (`make -s print-published-adapters`:
+opendnp3, DSC go-dnp3, dnp3py, cB-Sigma dnp3 and nfm-dnp3) on both
+architectures, then publishes
 `:<go-dnp3 version>` and `:latest`. Run from a branch, it stops before
 publishing. Nothing runs it automatically, so after a go-dnp3 release the image
 stays on the old version until someone does.

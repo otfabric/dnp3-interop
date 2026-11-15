@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # SPDX-License-Identifier: MIT
-# Unit tests of the helpers of scripts/lib.sh that need neither Docker nor jq.
+# Unit tests of the helpers of scripts/lib.sh that need neither Docker nor jq
+# (the tests of log_has and wait_log stub docker, and are skipped without jq).
 # Run with "make test-scripts".
 #
 # Every @test runs in a subshell of its own, so that what one test sets never
@@ -108,4 +109,58 @@ setup() {
     [ "${RESULT_ID}" = "smoke.integrity-poll" ]
     [ "${RESULT_CLIENT}" = "opendnp3" ]
     [ "${RESULT_SERVER}" = "cbsigma" ]
+}
+
+# third_time: fails twice, then succeeds (a count in a file, so that it also
+# counts in the subshell of "run").
+third_time() {
+    local n
+    n=$(( $(cat "${BATS_TEST_TMPDIR}/count" 2>/dev/null || echo 0) + 1 ))
+    echo "${n}" > "${BATS_TEST_TMPDIR}/count"
+    [ "${n}" -ge 3 ]
+}
+
+@test "wait_for returns once the command succeeds" {
+    run wait_for 5 third_time
+    [ "$status" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/count")" -eq 3 ]
+}
+
+@test "wait_for returns 1 when the time is up" {
+    run wait_for 1 false
+    [ "$status" -eq 1 ]
+}
+
+@test "log_has counts the server events for which the condition holds" {
+    command -v jq >/dev/null || skip "jq is not installed"
+    # shellcheck disable=SC2329,SC2032 # called by log_has; stands in for docker logs only, not for the docker of xargs in lib.sh
+    docker() { [ "$1" = logs ] && printf '%s\n' '{"event":"ready"}' '{"event":"manage","function":15}' '{"event":"manage","function":16}'; }
+    run log_has srv '.event == "manage"'
+    [ "$status" -eq 0 ]
+    run log_has srv '.event == "manage"' 2
+    [ "$status" -eq 0 ]
+    run log_has srv '.event == "manage"' 3
+    [ "$status" -ne 0 ]
+    run log_has srv '.event == "restart"'
+    [ "$status" -ne 0 ]
+}
+
+@test "wait_log waits for an event that is logged after the first look" {
+    command -v jq >/dev/null || skip "jq is not installed"
+    # The restart event is in the log from the third "docker logs" on.
+    # shellcheck disable=SC2329,SC2032 # called by log_has; stands in for docker logs only, not for the docker of xargs in lib.sh
+    docker() { [ "$1" = logs ] && echo '{"event":"ready"}' && { ! third_time || echo '{"event":"restart","type":"cold"}'; }; }
+    run wait_log srv '.event == "restart"'
+    [ "$status" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/count")" -eq 3 ]
+}
+
+@test "wait_log returns 1 and says so when the event does not come" {
+    command -v jq >/dev/null || skip "jq is not installed"
+    # shellcheck disable=SC2329,SC2032 # called by log_has; stands in for docker logs only, not for the docker of xargs in lib.sh
+    docker() { [ "$1" = logs ] && echo '{"event":"ready"}'; }
+    WAIT_LOG_TIMEOUT=1
+    run wait_log srv '.event == "restart"'
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"no 1 event(s) '.event == \"restart\"' in the log of srv after 1s"* ]]
 }
