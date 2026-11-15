@@ -42,18 +42,22 @@ framework.
 
 ## R2 - Reference implementations
 
-- R2.1 Exactly these four are in scope, in this order of priority:
+- R2.1 Exactly these six are in scope, in this order of priority (the
+  implementations of [versions.yaml](versions.yaml)):
 
   | Priority | Implementation | Language | Licence | Independent engine |
   |----------|----------------|----------|---------|:------------------:|
   | P0 | opendnp3 (`dnp3/opendnp3`, archived) | C++ | Apache-2.0 | yes |
   | P1 | dnp3py (`craigpnnl/dnp3py`) | Python | MIT | yes |
   | P1 | DSC Systems go-dnp3 (`dscsystems/go-dnp3`), experimental | Go | GPL-3.0-or-later | yes |
+  | P1 | cB-Sigma dnp3 (`cB-Sigma/dnp3`) | Go | Apache-2.0 | yes |
+  | P2 | nfm-dnp3 (`fxodell/dnp3py`), a master only | Python | MIT | yes |
   | P2 | Triangle MicroWorks DNP3 Source Code Library | C | commercial | yes |
 
   P0 adapters are mandatory, P1 strongly recommended (dnp3py) or recommended
-  (DSC go-dnp3), P2 is industry validation. The P2 adapter is on hold (see
-  [PLAN.md](PLAN.md)).
+  (DSC go-dnp3, cB-Sigma dnp3), P2 adds a master (nfm-dnp3) or is industry
+  validation (Triangle MicroWorks). The Triangle MicroWorks adapter is on hold
+  (see [PLAN.md](PLAN.md)); the other five are implemented and published.
 
 - R2.2 Each is its own image. No image contains two implementations.
 - R2.3 An adapter that wraps another adapter's protocol engine says so

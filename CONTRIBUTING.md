@@ -28,7 +28,7 @@ Keep the `SPDX-License-Identifier` header of each adapter source: `MIT`, except 
 
 ## Moving an upstream pin
 
-1. Change the pin in the Dockerfile (and `requirements.txt`, or `go.mod` with `go mod tidy`) and in `versions.yaml`; `scripts/check-versions.sh` must pass. A row of `tests/known-bugs.tsv` names one upstream version: carry the rows whose behaviour the new version keeps over to it, and drop those it fixes.
+1. Change the pin in the Dockerfile (and `requirements.txt`, or `go.mod` with `go mod tidy`) and in `versions.yaml`: the version, the revision and the hash of the source (`wheel_sha256` from `requirements.txt`, `module_sum` from `go.sum`, `source_sha256` of the GitHub archive of the commit for opendnp3); `scripts/check-versions.sh` must pass. A row of `tests/known-bugs.tsv` names one upstream version: carry the rows whose behaviour the new version keeps over to it, and drop those it fixes.
 2. `make ci`.
 3. Record the new version, and anything it changed, in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [RELEASE.md](RELEASE.md).
 
@@ -40,7 +40,7 @@ Every Dockerfile names its pin `ARG UPSTREAM_VERSION` and `ARG UPSTREAM_SHA`. Th
 
 ## Base images and Debian packages
 
-A base image moves with its digest in every Dockerfile that pins it and in `versions.yaml`. The Debian stages install their packages from the snapshot of the Debian archive the `debian:trixie-slim` image was built from (its `/etc/apt/sources.list.d/debian.sources` names it), at pinned versions, so that a build installs the same packages every time. With a new `debian:trixie-slim` digest, move `DEBIAN_SNAPSHOT` to the date in its `debian.sources` and the package versions to those of that snapshot (`apt-cache policy <package>` in the image after the snapshot `apt-get update`), in the Dockerfiles and in `versions.yaml`.
+A base image moves with its digest in every Dockerfile that pins it and in `versions.yaml`, whose `used_by` names those images. The Debian stages install their packages from the snapshot of the Debian archive the `debian:trixie-slim` image was built from (its `/etc/apt/sources.list.d/debian.sources` names it), at pinned versions, so that a build installs the same packages every time. With a new `debian:trixie-slim` digest, move `DEBIAN_SNAPSHOT` to the date in its `debian.sources` and the package versions to those of that snapshot (`apt-cache policy <package>` in the image after the snapshot `apt-get update`), in the Dockerfiles and in `versions.yaml`.
 
 ## Registries and retries
 
@@ -74,7 +74,7 @@ See [docs/FIXTURES.md](docs/FIXTURES.md#adding-a-fixture).
 2. Create `adapters/<name>/` with a Dockerfile built from the repository root, following the existing ones: pinned build stage, minimal runtime stage, non-root user, `/fixtures`, `/licenses`, the readiness file, the health check, `ENTRYPOINT ["/usr/local/bin/dnp3-interop"]`.
 3. Implement the contract. For a role the upstream does not support, the command exits 2 with a message and `roles` says `false`. What the upstream cannot do within a role is a feature declared `false`, and the cases that need it name it in their `needs` column: never fake a behaviour the library does not have.
 4. `scripts/smoke.sh <name>` must pass, then `scripts/interop.sh opendnp3 dscsystems dnp3py <name>`.
-5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml`, `scripts/check-versions.sh`, the notices and the documentation tables. Add it to `PUBLISHED_ADAPTERS` as well only if its upstream's licence permits distributing the library in an image; otherwise it is built and self-tested like the others but never pushed, and the README says how to build it.
+5. Add it to `ADAPTERS` in the Makefile, to the workflows, `versions.yaml` (with `published` and the hash of its source), `scripts/check-versions.sh`, the notices and the documentation tables. Add it to `PUBLISHED_ADAPTERS` as well only if its upstream's licence permits distributing the library in an image (and `published: true`); otherwise it is built and self-tested like the others but never pushed, and the README says how to build it.
 
 Do not build a shared adapter framework. Adapters in different languages share a contract, not code.
 
@@ -98,6 +98,6 @@ By contributing you agree that your contributions are licensed as the part of th
 | Push to a branch | none | nothing; dispatch `ci.yml` to test a branch without a pull request |
 | Push to `main` | `policy.yml` | the light checks; the merged commit was tested as the pull request's merge commit |
 | Schedule | `ci.yml`, `upstream.yml` | the scheduled runs, on `main` |
-| Release | `release.yml` | the release workflow tests the release commit again |
+| Release | `release.yml` | on a pushed `vX.Y.Z` tag or by hand: `check-versions.sh`, the fixtures and the release notes, then on amd64 and arm64 every image is built and self-tested (`make documents`: smoke, cross-stack and feature self-tests, document schemas) before the published ones are pushed; `qualify.yml` then runs `make documents` again against the images in the registry, with Trivy and SBOMs. The Go tests, govulncheck, bats and the linters of `ci.yml` do not run again |
 
 Documentation means an added or modified `*.md` file outside `.github/`, `testdata/` and `vendor/`, other than `AGENTS.md` and `CLAUDE.md`. A deleted or renamed document, or any other file, runs everything. `OT Fabric Required Checks` fails unless every job that applies succeeded; its summary lists them.

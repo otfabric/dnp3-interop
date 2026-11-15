@@ -14,7 +14,7 @@ Vulnerabilities in the bundled implementations themselves (opendnp3, dnp3py, DSC
 
 | Version | Supported |
 |---------|-----------|
-| v0.12.x (latest, v0.12.0) | Yes |
+| v0.12.x (latest, v0.12.2) | Yes |
 | < v0.12 | No; pull the latest images (and build the dnp3c image locally) |
 
 ## Security Considerations
@@ -37,7 +37,7 @@ The images run **DNP3 outstations, unauthenticated and unencrypted by default,**
 
 ### Supply chain
 
-- Upstream sources are fetched during the image build at pinned versions: opendnp3 from GitHub (verified against the pinned commit hash), dnp3py and nfm-dnp3 from PyPI (hash-pinned `requirements.txt`), DSC Systems go-dnp3 and cB-Sigma dnp3 through the Go module proxy (checksums in `go.sum`).
+- Upstream sources are fetched during the image build at pinned versions: opendnp3 from GitHub (verified against the pinned commit hash), dnp3py and nfm-dnp3 from PyPI (hash-pinned `requirements.txt`), DSC Systems go-dnp3 and cB-Sigma dnp3 through the Go module proxy (checksums in `go.sum`). `versions.yaml` records per implementation whether its image is published and the hash of its source: `wheel_sha256` and `module_sum`, which `scripts/check-versions.sh` compares with `requirements.txt` and `go.sum`, and for opendnp3 `source_sha256`, the SHA-256 of the GitHub archive of the pinned commit.
 - CI runs static checks on every pull request: govulncheck on the three Go modules with the Go of the images, hadolint on every Dockerfile, shellcheck on every shell script, ruff and bandit on the Python files. The tools are pinned by version and digest, their Python packages by hash.
 - SAST of the Go code: gosec findings are fixed in the code. gosec does not run in this repository's public lint or CI (otfabric/engineering policy GO-014, ADR-0011): before each release a maintainer scans on their own machine with the `sast` target of the otfabric/engineering Makefile, run in that repository with `REPO=dnp3-interop`, and accepted findings are kept in a private repository.
 - Base images are pinned by digest. CI and the release workflow pull them from `mirror.gcr.io/library`, a mirror of Docker Hub's official images, because anonymous Docker Hub pulls are rate limited; the digest makes the source irrelevant to the content (`BASE_REGISTRY`, default `docker.io/library`). The build tooling images (BuildKit, QEMU handlers) come from the same mirror by tag, the linters and test tools by version and digest (`TOOLS_REGISTRY`)

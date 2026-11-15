@@ -7,7 +7,9 @@
 IMAGE ?= ghcr.io/otfabric/dnp3-interop-otfabric:dev
 # The harness release of the reference images to test against.
 VERSION ?= $(shell git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
-REFERENCES ?= opendnp3 dscsystems dnp3py
+# The references: every adapter the harness publishes (PUBLISHED_ADAPTERS of
+# the top-level Makefile), as the workflow takes them.
+REFERENCES ?= $(shell sed -nE 's/^override PUBLISHED_ADAPTERS := //p' Makefile)
 BASE_REGISTRY ?= docker.io/library
 
 # The latest go-dnp3 release, as the workflow builds it.

@@ -29,6 +29,32 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.12.2
+
+**Date:** 2026-11-15
+**Previous release:** v0.12.1
+
+Container contract 1.5, fixture format 1.0, every upstream pin and every base image are unchanged, and so are the images. A patch release: `versions.yaml` records per implementation whether its image is published and the hash its source is verified with, `scripts/check-versions.sh` checks both and the base images of `own/go-dnp3`, and the feature self-test waits for the server events it checks instead of sleeping a fixed time.
+
+### Changed
+
+- **versions.yaml**: every implementation has `published` (true for the five adapters of `PUBLISHED_ADAPTERS`, false for Triangle MicroWorks) and the hash of its source: `wheel_sha256` for dnp3py and nfm-dnp3 (the hash pip checks, from `requirements.txt`), `module_sum` for DSC go-dnp3 and cB-Sigma dnp3 (the `h1:` of `go.sum`), and `source_sha256` for opendnp3 (the SHA-256 of the GitHub archive of the pinned commit; the build fetches that commit with git and checks it). Each base image is an `image` with `used_by`, the images whose Dockerfile pins it (`otfabric` for `own/go-dnp3`).
+- **scripts/check-versions.sh** also fails when `published` disagrees with `PUBLISHED_ADAPTERS`, a `wheel_sha256` or `module_sum` disagrees with `requirements.txt` or `go.sum`, a built implementation records no source hash, a base image digest of `own/go-dnp3/Dockerfile` is not in `versions.yaml`, or a `used_by` and the Dockerfiles disagree. Eight bats cases in `tests/scripts/check-versions.bats` cover these.
+- **own/go-dnp3** builds on go-dnp3 v1.15.0 (from v1.13.0); the adapter's options are unchanged. `make -f own/go-dnp3/Makefile interop features` tests against every published adapter by default (`REFERENCES` is `PUBLISHED_ADAPTERS`), as the Own stack workflow does, instead of opendnp3, DSC go-dnp3 and dnp3py only.
+
+### Fixed
+
+- **Feature self-test** (`scripts/features.sh`): the checks of server events (commands, restart, assign-class, ACTIVATE_CONFIG and the management functions, files, broadcast, device attributes, secure authentication) wait until the outstation has logged the events they read, at most `WAIT_LOG_TIMEOUT` seconds (default 5), instead of 0.3 s; "a second connection is served" waits for the outstation's `connection-opened` event of the dnp3py monitor instead of 1.5 s, so that the poll is always the second connection. A check whose event does not come waits up to that time and then reports what the log holds, as before. The helpers are `wait_for`, `log_has` and `wait_log` in `scripts/lib.sh`, with bats cases in `tests/scripts/lib.bats`.
+
+### Docs
+
+- REQUIREMENTS.md R2.1: the six implementations in scope, cB-Sigma dnp3 (P1) and nfm-dnp3 (P2) added.
+- SECURITY.md: v0.12.2 is the supported release; what `versions.yaml` records of each source.
+- own/go-dnp3/README.md: the publishing run tests against every adapter the harness release publishes.
+- CONTRIBUTING.md: what the release workflow runs; a pin moves with its source hash, a base image with its `used_by`, and a new adapter needs `published`.
+
+---
+
 ## v0.12.1
 
 **Date:** 2026-11-12
