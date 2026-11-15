@@ -133,7 +133,7 @@ third_time() {
 
 @test "log_has counts the server events for which the condition holds" {
     command -v jq >/dev/null || skip "jq is not installed"
-    # shellcheck disable=SC2329 # called by log_has
+    # shellcheck disable=SC2329,SC2032 # called by log_has; stands in for docker logs only, not for the docker of xargs in lib.sh
     docker() { [ "$1" = logs ] && printf '%s\n' '{"event":"ready"}' '{"event":"manage","function":15}' '{"event":"manage","function":16}'; }
     run log_has srv '.event == "manage"'
     [ "$status" -eq 0 ]
@@ -148,7 +148,7 @@ third_time() {
 @test "wait_log waits for an event that is logged after the first look" {
     command -v jq >/dev/null || skip "jq is not installed"
     # The restart event is in the log from the third "docker logs" on.
-    # shellcheck disable=SC2329 # called by log_has
+    # shellcheck disable=SC2329,SC2032 # called by log_has; stands in for docker logs only, not for the docker of xargs in lib.sh
     docker() { [ "$1" = logs ] && echo '{"event":"ready"}' && { ! third_time || echo '{"event":"restart","type":"cold"}'; }; }
     run wait_log srv '.event == "restart"'
     [ "$status" -eq 0 ]
@@ -157,7 +157,7 @@ third_time() {
 
 @test "wait_log returns 1 and says so when the event does not come" {
     command -v jq >/dev/null || skip "jq is not installed"
-    # shellcheck disable=SC2329 # called by log_has
+    # shellcheck disable=SC2329,SC2032 # called by log_has; stands in for docker logs only, not for the docker of xargs in lib.sh
     docker() { [ "$1" = logs ] && echo '{"event":"ready"}'; }
     WAIT_LOG_TIMEOUT=1
     run wait_log srv '.event == "restart"'
