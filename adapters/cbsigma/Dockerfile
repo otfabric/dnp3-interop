@@ -13,7 +13,7 @@
 # Where the base images come from. They are pinned by digest, so a mirror of
 # Docker Hub serves exactly the same images.
 ARG BASE_REGISTRY=docker.io/library
-ARG GOLANG_DIGEST=sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9
+ARG GOLANG_DIGEST=sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d
 ARG DEBIAN_DIGEST=sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 # The snapshot of the Debian archive that debian:trixie-slim at that digest was
 # built from (its /etc/apt/sources.list.d/debian.sources names it). Packages
@@ -28,9 +28,9 @@ FROM ${BASE_REGISTRY}/golang:1.27.4-trixie@${GOLANG_DIGEST} AS build
 
 # The release pin. "make candidate-cbsigma CANDIDATE_VERSION=<version>"
 # overrides it to try another upstream version without touching the pin.
-ARG UPSTREAM_VERSION=v0.3.1
+ARG UPSTREAM_VERSION=v0.3.2
 # The commit of the release tag, for print-capabilities.
-ARG UPSTREAM_SHA=91f2f33c90e978e48bf67d20bca1022e769ed4d6
+ARG UPSTREAM_SHA=3f917d8b36e5a782d8efd809f3dfced44e7dd572
 ARG ADAPTER_VERSION=dev
 
 ENV CGO_ENABLED=0 GOFLAGS=-mod=mod

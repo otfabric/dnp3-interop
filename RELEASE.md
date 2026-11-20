@@ -29,6 +29,27 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.12.3
+
+**Date:** 2026-11-20
+**Previous release:** v0.12.2
+
+Container contract 1.5 and fixture format 1.0 are unchanged. The cbsigma image moves to cB-Sigma dnp3 v0.3.2, which answers GET_FILE_INFO with the file name of the request again (IEEE 1815-2012 4.4.18), so its known difference for `[files] file-info` is gone; the Go images move to the new digest of `golang:1.27.4-trixie`.
+
+### Changed
+
+- **cbsigma: cB-Sigma dnp3 v0.3.2** (commit `3f917d8b`, from v0.3.1), with cB-Sigma iotsec v0.2.0 as before. v0.3.2 answers GET_FILE_INFO (g70v7) with the file name of the request, as v0.3.0 did, and keeps the last path element in directory entries (5.3.6) (cB-Sigma/dnp3#4, #10). It adds no API: the adapter's capabilities are unchanged.
+- **tests/known-bugs.tsv**: the `[files] file-info` row of cB-Sigma (`cbsigma-file-info-base-name`) is removed; the other two rows of cB-Sigma (FREEZE AT TIME with a time already past, g121 in class 0 with secure authentication), behaviours v0.3.2 keeps, move to v0.3.2. The DSC go-dnp3 v0.8.2 row for `[files] file-info` stays (dscsystems/go-dnp3#24).
+- **Base image**: `golang:1.27.4-trixie` at `sha256:f18c3d73a184` (the tag moved), in the dscsystems, cbsigma and own/go-dnp3 Dockerfiles, the Makefile's `GO_IMAGE` and `versions.yaml`.
+- **own/go-dnp3** builds on go-dnp3 v1.16.0 (from v1.15.0, #89).
+
+### Docs
+
+- README.md, THIRD_PARTY_NOTICES.md, docs/COMPATIBILITY.md, docs/CAPABILITIES.md and own/go-dnp3/README.md name cB-Sigma v0.3.2; COMPATIBILITY.md says v0.3.2 answers GET_FILE_INFO with the name of the request.
+- SECURITY.md: v0.12.3 is the supported release.
+
+---
+
 ## v0.12.2
 
 **Date:** 2026-11-15

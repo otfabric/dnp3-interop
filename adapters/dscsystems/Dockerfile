@@ -12,7 +12,7 @@
 # Docker Hub serves exactly the same images; CI uses one to stay clear of
 # Docker Hub's pull rate limit (see the Makefile).
 ARG BASE_REGISTRY=docker.io/library
-ARG GOLANG_DIGEST=sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9
+ARG GOLANG_DIGEST=sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d
 ARG DEBIAN_DIGEST=sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 # The snapshot of the Debian archive that debian:trixie-slim at that digest was
 # built from (its /etc/apt/sources.list.d/debian.sources names it). Packages

@@ -11,7 +11,7 @@
 # checked by the go command) or source_sha256 (the GitHub archive of the
 # commit, for a source fetched by commit with git).
 
-interop_version: "0.12.2"
+interop_version: "0.12.3"
 contract_version: "1.5"        # docs/CONTAINER_CONTRACT.md; documents carry schemaVersion "1.0", the compatible line
 fixture_schema: "1.0"          # fixtures/schema/dnp3-fixture.schema.json
 
@@ -83,9 +83,9 @@ implementations:
     upstream: "cB-Sigma dnp3"
     repository: "https://github.com/cB-Sigma/dnp3"
     module: "github.com/cB-Sigma/dnp3"
-    version: "v0.3.1"            # latest release
-    revision: "91f2f33c90e978e48bf67d20bca1022e769ed4d6"
-    module_sum: "h1:QM5X8TSQlxSXx7j4Xs0aKsD3d6IInxfW4HTv6bCIK+M="   # go.sum
+    version: "v0.3.2"            # latest release
+    revision: "3f917d8b36e5a782d8efd809f3dfced44e7dd572"
+    module_sum: "h1:wCEExBcbym1U7EQvQ4gEUq5v/HxijcgNdHaZiM3DKew="   # go.sum
     license: "Apache-2.0"
     language: "Go"
     independent_engine: true
@@ -160,7 +160,7 @@ debian_packages:
   socat: "1.8.0.3-1+deb13u1"
 
 base_images:
-  # Digests recorded 2026-11-11; the Dockerfiles pin these by digest. used_by:
+  # Digests recorded 2026-11-11 (golang 2026-11-20, the tag moved); the Dockerfiles pin these by digest. used_by:
   # the images whose Dockerfile pins it (adapters/<name>/, and otfabric for
   # own/go-dnp3/). scripts/check-versions.sh checks both ways.
   debian_trixie_slim:
@@ -170,7 +170,7 @@ base_images:
     image: "docker.io/library/python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f"
     used_by: [dnp3py, nfmdnp3]
   golang_1_27_4_trixie:
-    image: "docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9"
+    image: "docker.io/library/golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d"
     used_by: [dscsystems, cbsigma, otfabric]
 
 # The tooling of the Makefile and the workflows, pinned by version and digest

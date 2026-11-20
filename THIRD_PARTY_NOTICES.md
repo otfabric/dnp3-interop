@@ -100,7 +100,7 @@ Licence in the image: `/licenses/dnp3py/LICENSE`.
 
 | Component | Version | Licence | Source |
 |-----------|---------|---------|--------|
-| cB-Sigma dnp3 (Abhinav Gautam) | v0.3.1, commit `91f2f33c90e978e48bf67d20bca1022e769ed4d6` | Apache-2.0 | https://github.com/cB-Sigma/dnp3 |
+| cB-Sigma dnp3 (Abhinav Gautam) | v0.3.2, commit `3f917d8b36e5a782d8efd809f3dfced44e7dd572` | Apache-2.0 | https://github.com/cB-Sigma/dnp3 |
 | cB-Sigma iotsec (Abhinav Gautam), linked by cB-Sigma dnp3 | v0.2.0, commit `c84d6be103419e74e4598c2c24458f346f7718dd` | Apache-2.0 | https://github.com/cB-Sigma/iotsec |
 | goburrow/serial (Quoc-Viet Nguyen), linked by cB-Sigma dnp3 | v0.1.0 | MIT | https://github.com/goburrow/serial |
 | Go standard library and runtime | 1.27.4 | BSD-3-Clause | https://go.dev |

@@ -13,7 +13,7 @@ integrating third-party protocol stacks into production applications.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.2 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
-| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.1 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.2 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
 | `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) 1.0.1 ² | Python | no | yes | `ghcr.io/otfabric/dnp3-interop-nfmdnp3` |
 
 The stacks do not all do the same: the opendnp3 master sends no `_NR`
