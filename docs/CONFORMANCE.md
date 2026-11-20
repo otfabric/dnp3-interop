@@ -25,7 +25,7 @@ certification: only the DNP Users Group certifies devices.
 dnp3c is licensed under the GNU General Public License v3.0 only. The
 integration plugin and runner in `conformance/dnp3c/` link it, so they are
 GPL-3.0-only too ([conformance/LICENSE](../conformance/LICENSE)). The image
-build fetches dnp3c 0.2.0 and its dependencies from Maven Central, with
+build fetches dnp3c 0.3.0 and its dependencies from Maven Central, with
 strict checksums.
 
 The image is **built locally and not published**.

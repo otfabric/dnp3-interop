@@ -10,6 +10,11 @@ run-name: "Upstream check (${{ github.event_name }})"
 # up) and closed once every pin is current. Pins are never changed here: a
 # bump is a reviewed change.
 #
+# dnp3c, the runner of the DNP3 IED Certification Procedure, is a test tool
+# (Maven Central), not an adapter: its candidate is the runner built on the
+# latest release (the integration plugin compiles against it), without the
+# adapter images; the procedures themselves run in the consumers.
+#
 # opendnp3's repository is archived: its latest tag is the pin, and commits
 # after it that were never tagged are not releases, so it is never built here.
 #
@@ -54,6 +59,10 @@ jobs:
       fail-fast: false
       matrix:
         adapter: [opendnp3, dscsystems, dnp3py, cbsigma, nfmdnp3]
+        kind: [library]
+        include:
+          - adapter: dnp3c
+            kind: tool
     steps:
       - uses: actions/checkout@v7
 
@@ -71,9 +80,9 @@ jobs:
           name: ${{ matrix.adapter }}
           pinned: ${{ steps.resolve.outputs.pin }}
           latest: ${{ steps.resolve.outputs.latest }}
-          result-pattern: '^\[interop\] [0-9]+ passed'
+          result-pattern: '^\[(interop\] [0-9]+ passed|dnp3c\] )'
           command: >-
-            make -j4 --output-sync=target images &&
+            ${{ matrix.kind == 'tool' && 'true' || 'make -j4 --output-sync=target images' }} &&
             make "candidate-${{ matrix.adapter }}"
             CANDIDATE_VERSION="${{ steps.resolve.outputs.latest }}"
             CANDIDATE_SHA="${{ steps.resolve.outputs.latest_sha }}"
@@ -91,6 +100,7 @@ jobs:
         uses: otfabric/.github/actions/upstream-row@v3.8.0
         with:
           component: ${{ matrix.adapter }}
+          kind: ${{ matrix.kind }}
           source: ${{ steps.resolve.outputs.source }}
           pinned: ${{ steps.resolve.outputs.pin }}
           latest: ${{ steps.resolve.outputs.latest }}
@@ -127,5 +137,10 @@ jobs:
               whose behaviour the new release keeps (a difference from the contract, say) does
               not cover the candidate, which then fails on it until the row is copied for the
               new version.
+            - **Tool (dnp3c):** move `ARG DNP3C_VERSION` (both stages) in
+              `conformance/dnp3c/Dockerfile`, `dnp3c.version` in `conformance/dnp3c/pom.xml`
+              and `tools.dnp3c` (version, tag commit) in `versions.yaml`; build it with
+              `make candidate-dnp3c CANDIDATE_VERSION=<version>`, and run go-dnp3's
+              `make conformance` on the image before the release that carries it.
             - **Base image:** replace the digest in every file that pins it.
             - Record the change in `docs/COMPATIBILITY.md` and `RELEASE.md`.

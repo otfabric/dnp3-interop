@@ -177,6 +177,7 @@ image-dnp3c: FORCE ## Build the dnp3c runner image (DNP3 IED Certification Proce
 	@echo "Building dnp3c image ($(VERSION))..."
 	@$(RETRY) docker build \
 		--build-arg BASE_REGISTRY=$(BASE_REGISTRY) --build-arg ADAPTER_VERSION=$(VERSION) \
+		$(if $(DNP3C_VERSION),--build-arg DNP3C_VERSION=$(DNP3C_VERSION)) \
 		--tag $(call image,dnp3c):$(VERSION) \
 		--file conformance/dnp3c/Dockerfile \
 		.
@@ -212,6 +213,17 @@ features: ## Cross-stack self-test of contracts 1.1 to 1.5: TLS, UDP, serial, fi
 CANDIDATE_VERSION ?=
 # opendnp3 is pinned by commit: give the commit of CANDIDATE_VERSION.
 CANDIDATE_SHA ?=
+
+# An explicit rule, so it takes precedence over candidate-%: dnp3c is a test
+# tool, not an adapter. The integration plugin compiles with -Werror against
+# the candidate; the certification procedures run in the consumers (go-dnp3's
+# make conformance).
+candidate-dnp3c: FORCE ## Build the dnp3c runner on CANDIDATE_VERSION, e.g. candidate-dnp3c CANDIDATE_VERSION=0.4.0
+	@test -n "$(CANDIDATE_VERSION)" || { echo "Error: CANDIDATE_VERSION=<version> is required"; exit 1; }
+	@$(MAKE) --no-print-directory image-dnp3c VERSION=candidate DNP3C_VERSION=$(CANDIDATE_VERSION)
+	@test "$$(docker image inspect -f '{{ index .Config.Labels "io.otfabric.dnp3c.version" }}' $(call image,dnp3c):candidate)" = "$(CANDIDATE_VERSION)" \
+		|| { echo "Error: the candidate image does not carry dnp3c $(CANDIDATE_VERSION)"; exit 1; }
+	@echo "[dnp3c] the runner builds on dnp3c $(CANDIDATE_VERSION)"
 
 candidate-%: FORCE ## Build one adapter on CANDIDATE_VERSION (opendnp3: and CANDIDATE_SHA) and self-test it, e.g. candidate-dnp3py CANDIDATE_VERSION=0.7.0
 	@test -n "$(CANDIDATE_VERSION)" || { echo "Error: CANDIDATE_VERSION=<version> is required"; exit 1; }

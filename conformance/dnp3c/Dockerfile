@@ -21,16 +21,29 @@ ARG JRE_DIGEST=sha256:39d618b8fda3408cfe792db2b666c0e3db8ea4ae263ab4d0c3805933e5
 # ---------------------------------------------------------------------------
 FROM ${BASE_REGISTRY}/maven:3.9.12-eclipse-temurin-17-noble@${MAVEN_DIGEST} AS build
 
-ARG DNP3C_VERSION=0.2.0
+ARG DNP3C_VERSION=0.3.0
 
 WORKDIR /src
 COPY conformance/dnp3c/pom.xml ./
-# Strict checksums: every artifact must match the checksum Maven Central
-# publishes for it.
-RUN mvn -B -q -C -Ddnp3c.version=${DNP3C_VERSION} dependency:go-offline
+# Strict checksums (-C): every artifact must match the checksum Maven Central
+# publishes for it. A download from Maven Central that stalls or fails on the
+# runner is retried by the resolver (bounded request timeout), and the
+# resolution and packaging steps are each tried three times; a real failure (a missing
+# artifact, a checksum mismatch) fails all three.
+ENV MAVEN_ARGS="-B -C -Daether.connector.connectTimeout=30000 -Daether.connector.requestTimeout=120000 -Daether.connector.http.retryHandler.count=5"
+RUN for attempt in 1 2 3; do \
+        mvn -q -Ddnp3c.version=${DNP3C_VERSION} dependency:go-offline && exit 0; \
+        echo "dependency:go-offline: attempt ${attempt} failed" >&2; sleep 20; \
+    done; exit 1
 COPY conformance/dnp3c/src ./src
-RUN mvn -B -q -C -Ddnp3c.version=${DNP3C_VERSION} package \
-        dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/lib \
+# go-offline does not gather every artifact the build plugins load (slf4j-api
+# of the Scala plugin, say), so packaging is online and retried the same way.
+RUN for attempt in 1 2 3; do \
+        mvn -q -Ddnp3c.version=${DNP3C_VERSION} package \
+            dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/lib && break; \
+        [ "${attempt}" -lt 3 ] || exit 1; \
+        echo "package: attempt ${attempt} failed" >&2; sleep 20; \
+    done \
     && cp target/dnp3-interop-dnp3c-*.jar target/lib/
 
 # ---------------------------------------------------------------------------
@@ -38,7 +51,7 @@ RUN mvn -B -q -C -Ddnp3c.version=${DNP3C_VERSION} package \
 # ---------------------------------------------------------------------------
 FROM ${BASE_REGISTRY}/eclipse-temurin:17.0.20_8-jre-noble@${JRE_DIGEST}
 
-ARG DNP3C_VERSION=0.2.0
+ARG DNP3C_VERSION=0.3.0
 ARG ADAPTER_VERSION=dev
 LABEL org.opencontainers.image.title="dnp3-interop-dnp3c" \
       org.opencontainers.image.description="dnp3c (DNP3 IED Certification Procedure) with dnp3-interop's integration plugin; not published" \

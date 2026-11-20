@@ -28,9 +28,10 @@ The pins live in the Dockerfiles, the adapters' `go.mod` and `requirements.txt`,
 workflow (`.github/workflows/upstream.yml`, daily and on demand) resolves
 the latest stable release of every stack with `scripts/latest-upstream.py`:
 opendnp3's tags on GitHub, DSC go-dnp3 and cB-Sigma dnp3 on the Go
-module proxy and dnp3py and nfm-dnp3 on PyPI, and checks the digest of every pinned base
-image. It builds the adapter on each release that differs from its pin (once
-per pin and latest version), runs the smoke and cross-stack self-tests,
+module proxy and dnp3py and nfm-dnp3 on PyPI, and the dnp3c runner's release on
+Maven Central, and checks the digest of every pinned base image. It builds the adapter on each release that differs from its pin (once
+per pin and latest version), runs the smoke and cross-stack self-tests (dnp3c: builds the runner on it, so
+that its integration plugin compiles against the release),
 writes one pin-vs-latest table, a row per stack and per base image, to its
 job summary, and keeps an issue open while a pin is behind. It never changes a pin. opendnp3's
 repository is archived: commits after its last tag were never released and

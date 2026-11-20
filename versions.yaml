@@ -191,8 +191,8 @@ tools:
     upstream: "Step Function I/O dnp3c"
     repository: "https://github.com/stepfunc/dnp3c"
     maven: "io.stepfunc:dnp3c"
-    version: "0.2.0"             # latest release (Maven Central, 2026-10-16)
-    revision: "881209943b670cc59b16301346dffa7d5523ab72"   # tag 0.2.0
+    version: "0.3.0"             # latest release (Maven Central, 2026-10-22)
+    revision: "babe28f96e4cc375966f3bca51af579dd693efd4"   # tag 0.3.0
     license: "GPL-3.0-only"
     language: "Scala"
     published: false
