@@ -29,6 +29,30 @@ manual workflow and no releases (`own/go-dnp3/README.md`).
 
 ---
 
+## v0.12.3
+
+**Date:** 2026-11-20
+**Previous release:** v0.12.2
+
+Container contract 1.5 and fixture format 1.0 are unchanged. The cbsigma image moves to cB-Sigma dnp3 v0.3.2, which answers GET_FILE_INFO with the file name of the request again (IEEE 1815-2012 4.4.18), so its known difference for `[files] file-info` is gone; the Go images move to the new digest of `golang:1.27.4-trixie`; the dnp3c runner moves to dnp3c 0.3.0.
+
+### Changed
+
+- **cbsigma: cB-Sigma dnp3 v0.3.2** (commit `3f917d8b`, from v0.3.1), with cB-Sigma iotsec v0.2.0 as before. v0.3.2 answers GET_FILE_INFO (g70v7) with the file name of the request, as v0.3.0 did, and keeps the last path element in directory entries (5.3.6) (cB-Sigma/dnp3#4, #10). It adds no API: the adapter's capabilities are unchanged.
+- **tests/known-bugs.tsv**: the `[files] file-info` row of cB-Sigma (`cbsigma-file-info-base-name`) is removed; the other two rows of cB-Sigma (FREEZE AT TIME with a time already past, g121 in class 0 with secure authentication), behaviours v0.3.2 keeps, move to v0.3.2. The DSC go-dnp3 v0.8.2 row for `[files] file-info` stays (dscsystems/go-dnp3#24).
+- **Base image**: `golang:1.27.4-trixie` at `sha256:f18c3d73a184` (the tag moved), in the dscsystems, cbsigma and own/go-dnp3 Dockerfiles, the Makefile's `GO_IMAGE` and `versions.yaml`.
+- **own/go-dnp3** builds on go-dnp3 v1.16.0 (from v1.15.0, #89).
+- **Upstream workflow: dnp3c.** The daily check also resolves the dnp3c runner's pin (`ARG DNP3C_VERSION`) against Maven Central (`io.stepfunc:dnp3c`) and, when it is behind, builds the runner on the latest release, a row of kind `tool` in the table and the tracking issue. dnp3c 0.3.0 (2026-10-22) had gone unnoticed because only the adapters were checked. `scripts/latest-upstream.py dnp3c` and `make candidate-dnp3c CANDIDATE_VERSION=<version>` run the same locally; `make image-dnp3c` takes `DNP3C_VERSION`.
+- **dnp3c runner: dnp3c 0.3.0** (tag commit `babe28f9`, from 0.2.0; `conformance/dnp3c/Dockerfile`, `pom.xml`, `versions.yaml`). 0.3.0 adds technical bulletins (`outstation.bulletins`, none by default) and an optional `IntegrationPlugin.timeQuality`; the integration plugin does not implement it, so the event tests accept either way of reporting an event, as with 0.2.0. The runner and its plugin code are unchanged.
+- **dnp3c runner build: Maven Central retries.** A download that stalls or fails is retried by the resolver with a bounded request timeout (`MAVEN_ARGS`), `dependency:go-offline` and packaging are each tried three times. An amd64 build of #90 failed after 453 s in `dependency:go-offline` on a Maven Central fetch; a missing artifact or a checksum mismatch still fails the build.
+
+### Docs
+
+- README.md, THIRD_PARTY_NOTICES.md, docs/COMPATIBILITY.md, docs/CAPABILITIES.md and own/go-dnp3/README.md name cB-Sigma v0.3.2; README.md, THIRD_PARTY_NOTICES.md and docs/CONFORMANCE.md name dnp3c 0.3.0; README.md, CONTRIBUTING.md and docs/COMPATIBILITY.md describe the dnp3c check of the Upstream workflow; COMPATIBILITY.md says v0.3.2 answers GET_FILE_INFO with the name of the request.
+- SECURITY.md: v0.12.3 is the supported release.
+
+---
+
 ## v0.12.2
 
 **Date:** 2026-11-15

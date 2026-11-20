@@ -93,12 +93,29 @@ def nfmdnp3():
     return newest(live), "", "PyPI"
 
 
+def dnp3c():
+    # A test tool on Maven Central (io.stepfunc:dnp3c); the git tag of the
+    # release gives its commit, which versions.yaml records.
+    metadata = fetch("https://repo1.maven.org/maven2/io/stepfunc/dnp3c/maven-metadata.xml")
+    match = re.search(r"<release>([^<]+)</release>", metadata)
+    if not match:
+        raise SystemExit("maven-metadata.xml of io.stepfunc:dnp3c names no release")
+    latest = match.group(1).strip()
+    return latest, git_tags("https://github.com/stepfunc/dnp3c.git").get(latest, ""), "Maven Central"
+
+
 RESOLVERS = {
     "opendnp3": opendnp3,
     "dscsystems": dscsystems,
     "dnp3py": dnp3py,
     "cbsigma": cbsigma,
     "nfmdnp3": nfmdnp3,
+    "dnp3c": dnp3c,
+}
+
+# Where each pin is: the adapter's ARG UPSTREAM_VERSION, unless listed here.
+PINS = {
+    "dnp3c": ("conformance/dnp3c/Dockerfile", "DNP3C_VERSION"),
 }
 
 
@@ -106,10 +123,11 @@ def main():
     if len(sys.argv) != 2 or sys.argv[1] not in RESOLVERS:
         raise SystemExit(f"usage: latest-upstream.py {'|'.join(RESOLVERS)}")
     adapter = sys.argv[1]
-    dockerfile = (ROOT / "adapters" / adapter / "Dockerfile").read_text()
-    match = re.search(r"^ARG UPSTREAM_VERSION=(.+)$", dockerfile, re.MULTILINE)
+    path, arg = PINS.get(adapter, (f"adapters/{adapter}/Dockerfile", "UPSTREAM_VERSION"))
+    dockerfile = (ROOT / path).read_text()
+    match = re.search(rf"^ARG {arg}=(.+)$", dockerfile, re.MULTILINE)
     if not match:
-        raise SystemExit(f"adapters/{adapter}/Dockerfile has no ARG UPSTREAM_VERSION=<pin>")
+        raise SystemExit(f"{path} has no ARG {arg}=<pin>")
     pin = match.group(1).strip()
     latest, latest_sha, source = RESOLVERS[adapter]()
     print(f"pin={pin}")

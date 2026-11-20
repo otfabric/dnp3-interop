@@ -13,7 +13,7 @@ integrating third-party protocol stacks into production applications.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) 3.1.2 | C++ | yes | yes | `ghcr.io/otfabric/dnp3-interop-opendnp3` |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) v0.8.2 (experimental) | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-dscsystems` |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) 0.6.0 | Python | yes ¹ | yes | `ghcr.io/otfabric/dnp3-interop-dnp3py` |
-| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.1 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) v0.3.2 | Go | yes | yes | `ghcr.io/otfabric/dnp3-interop-cbsigma` |
 | `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) 1.0.1 ² | Python | no | yes | `ghcr.io/otfabric/dnp3-interop-nfmdnp3` |
 
 The stacks do not all do the same: the opendnp3 master sends no `_NR`
@@ -154,7 +154,7 @@ version              adapter and upstream versions
 
 `make image-dnp3c` builds `dnp3-interop-dnp3c`, which runs the DNP Users
 Group's DNP3 IED Certification Procedure against an outstation. It uses Step
-Function I/O's [dnp3c](https://github.com/stepfunc/dnp3c) 0.2.0 (3.1 rev 1 at
+Function I/O's [dnp3c](https://github.com/stepfunc/dnp3c) 0.3.0 (3.1 rev 1 at
 subset levels 1 to 3, and 2.7). The outstation under test implements a small
 control protocol for the steps dnp3c cannot do over DNP3, such as restarts,
 input changes and checks of outputs; no adapter here implements it. dnp3c and
@@ -256,6 +256,7 @@ make test-scripts test-go fuzz vulncheck   # bats tests of the scripts; Go tests
 make buildx      # check the other architecture locally, under emulation (CI builds both natively)
 scripts/latest-upstream.py dnp3py                  # the pin and the latest upstream release
 make candidate-dnp3py CANDIDATE_VERSION=0.7.0      # self-test an adapter on another upstream release
+make candidate-dnp3c CANDIDATE_VERSION=0.4.0       # build the dnp3c runner on another dnp3c release
 make documents report                              # self-tests with every document kept, then the compatibility report
 VERSION=v0.5.1 make qualify                        # Trivy scan and SBOMs of a release's published images, into qualify/
 ```

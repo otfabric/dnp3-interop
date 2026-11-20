@@ -17,7 +17,7 @@ self-tested as a candidate.
 | `opendnp3` | [opendnp3](https://github.com/dnp3/opendnp3) | 3.1.2 | 3.1.2 (archived) | commit `26b4c01e4839bbbda8866655e086471c4917ee53` | independent, C++ |
 | `dnp3py` | [dnp3py](https://github.com/craigpnnl/dnp3py) (both roles; outstation on the dnp3py fixture) | 0.6.0 | 0.6.0 | PyPI wheel `dnp3py==0.6.0`, hash in `requirements.txt` (tag commit `c00d5df22e779df72f7caa4402c3f34957eb276d`) | independent, Python |
 | `dscsystems` | [DSC Systems go-dnp3](https://github.com/dscsystems/go-dnp3) | v0.8.2 | v0.8.2 | Go module `github.com/dscsystems/go-dnp3@v0.8.2` (commit `1fcec1d7881541d794fe257d2ede3ba46587b500`), checksum in `go.sum` | independent, Go |
-| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) | v0.3.1 | v0.3.1 | Go module `github.com/cB-Sigma/dnp3@v0.3.1` (commit `91f2f33c90e978e48bf67d20bca1022e769ed4d6`), checksum in `go.sum` | independent, Go |
+| `cbsigma` | [cB-Sigma dnp3](https://github.com/cB-Sigma/dnp3) | v0.3.2 | v0.3.2 | Go module `github.com/cB-Sigma/dnp3@v0.3.2` (commit `3f917d8b36e5a782d8efd809f3dfced44e7dd572`), checksum in `go.sum` | independent, Go |
 | `nfmdnp3` | [nfm-dnp3](https://github.com/fxodell/dnp3py) (master only) | 1.0.1 | 1.0.1 | PyPI wheel `nfm-dnp3==1.0.1`, hash in `requirements.txt` (tag commit `8d1dc7f50d319a8dbb90e1c3091754d6ab02d1a6`) | independent, Python |
 
 Everything else is on its latest release as of 2026-10-19: Debian 13
@@ -28,9 +28,10 @@ The pins live in the Dockerfiles, the adapters' `go.mod` and `requirements.txt`,
 workflow (`.github/workflows/upstream.yml`, daily and on demand) resolves
 the latest stable release of every stack with `scripts/latest-upstream.py`:
 opendnp3's tags on GitHub, DSC go-dnp3 and cB-Sigma dnp3 on the Go
-module proxy and dnp3py and nfm-dnp3 on PyPI, and checks the digest of every pinned base
-image. It builds the adapter on each release that differs from its pin (once
-per pin and latest version), runs the smoke and cross-stack self-tests,
+module proxy and dnp3py and nfm-dnp3 on PyPI, and the dnp3c runner's release on
+Maven Central, and checks the digest of every pinned base image. It builds the adapter on each release that differs from its pin (once
+per pin and latest version), runs the smoke and cross-stack self-tests (dnp3c: builds the runner on it, so
+that its integration plugin compiles against the release),
 writes one pin-vs-latest table, a row per stack and per base image, to its
 job summary, and keeps an issue open while a pin is behind. It never changes a pin. opendnp3's
 repository is archived: commits after its last tag were never released and
@@ -412,7 +413,7 @@ eight bits of each octet.
 
 ## Findings
 
-### cB-Sigma dnp3 (v0.3.1)
+### cB-Sigma dnp3 (v0.3.2)
 
 The self-tests found four behaviours of v0.3.0 that differed from the other
 stacks, each changed in v0.3.1 (cB-Sigma/dnp3#2 to #5, pull requests #6 to
@@ -429,17 +430,20 @@ have left [tests/known-bugs.tsv](../tests/known-bugs.tsv):
   1815-2012 4.4.18 has the filename offset, file name size, request ID and
   file name octets of the answer filled in with the same data as in the
   request, so the answer for `/readme.txt` names `/readme.txt`. The report
-  was mistaken, and v0.3.1 now answers with the last path element
-  (`readme.txt`, `outfile.go`, `fileInfo`). Since v0.12.0 the `[files]
-  file-info` check asks for the name of the request, and the answer of v0.3.1
-  is a known difference (`cbsigma-file-info-base-name`).
+  was mistaken, and v0.3.1 answered with the last path element
+  (`readme.txt`, `outfile.go`, `fileInfo`), a known difference of v0.3.1
+  (`cbsigma-file-info-base-name`) once the `[files] file-info` check asked for
+  the name of the request (v0.12.0). v0.3.2 answers with the name of the
+  request again (cB-Sigma/dnp3#10); directory entries keep the last path
+  element (5.3.6). The row has left the known bugs.
 - After a keep-alive the master waited its response timeout before it started
   the keep-alive timer again, so keep-alives came at the interval plus that
   timeout.
 
-v0.3.1 adds no API, so the adapter's capabilities are those of v0.3.0.
+v0.3.1 and v0.3.2 add no API, so the adapter's capabilities are those of
+v0.3.0.
 
-Two behaviours, unchanged in v0.3.1 and still rows of the known bugs, differ
+Two behaviours, unchanged in v0.3.2 and still rows of the known bugs, differ
 from this contract and not, as far as could be established, from
 IEEE 1815-2012: FREEZE AT TIME with a time already past is done at once
 instead of refused, and the class 0 response with secure authentication
@@ -764,8 +768,9 @@ time of a relative-time object null: such an object is taken at its value.
 v1.11.0 the File Descriptor (g70v7) of the answer carries the file name of the
 request (`/readme.txt`), as IEEE 1815-2012 4.4.18 asks, and since v0.12.0 the
 `[files] file-info` checks of `scripts/features.sh` ask for exactly that. The
-DSC go-dnp3 and cB-Sigma v0.3.1 outstations answer with the last path element
-(`readme.txt`), which are known differences in `tests/known-bugs.tsv`.
+DSC go-dnp3 v0.8.2 outstation answers with the last path element
+(`readme.txt`), a known difference in `tests/known-bugs.tsv`; cB-Sigma v0.3.2
+answers with the name of the request.
 
 **The order of the attributes of a set.** The contract keeps the attributes in
 the order they arrived and does not fix that order: go-dnp3 serves g0v254 from

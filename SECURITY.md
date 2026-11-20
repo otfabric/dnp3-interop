@@ -14,7 +14,7 @@ Vulnerabilities in the bundled implementations themselves (opendnp3, dnp3py, DSC
 
 | Version | Supported |
 |---------|-----------|
-| v0.12.x (latest, v0.12.2) | Yes |
+| v0.12.x (latest, v0.12.3) | Yes |
 | < v0.12 | No; pull the latest images (and build the dnp3c image locally) |
 
 ## Security Considerations

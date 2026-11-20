@@ -139,8 +139,8 @@ checks accept them:
 
 GET_FILE_INFO is answered with the file name of the request (`/readme.txt`),
 as IEEE 1815-2012 4.4.18 asks and the `[files] file-info` check requires; the
-DSC go-dnp3 and cB-Sigma v0.3.1 outstations answer with the last path element,
-which are known differences in `tests/known-bugs.tsv`.
+DSC go-dnp3 outstation answers with the last path element, a known difference
+in `tests/known-bugs.tsv`; cB-Sigma v0.3.2 answers with the name of the request.
 
 With secure authentication, the Authentication Failures statistic is reported
 as an event at every session key change (IEEE 1815-2012 Table 7-6), and a key
